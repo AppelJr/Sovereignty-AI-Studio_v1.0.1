@@ -17,7 +17,7 @@ jobs:
   python-audit:
     
     name: Python — CVE audit (pip-audit)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 60
     steps:
       - name: Checkout exact commit
@@ -41,7 +41,7 @@ jobs:
 
   python-outdated:
     name: Python — requirements validation
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 60
     steps:
       - name: Checkout exact commit
@@ -60,7 +60,7 @@ jobs:
 
   node-audit:
     name: Node.js — CVE audit (npm audit)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 60
     steps:
       - name: Checkout exact commit
