@@ -49,14 +49,9 @@ concurrency:
 
 permissions: {}
 
-defaults:
-  run:
-    shell: bash --noprofile --norc -euo pipefail {0}
-
 env:
   PYTHONPATH: .:./backend
-  PIP_DISABLE_PIP_VERSION_CHECK: "1"
-  PIP_NO_CACHE_DIR: "1"
+
 
 jobs:
 
