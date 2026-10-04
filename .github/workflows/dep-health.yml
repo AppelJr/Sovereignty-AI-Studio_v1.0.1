@@ -2,20 +2,20 @@ name: Dependency Health
 
 on:
   push:
-    branches: [main, Claude, GPT/Codex, ara-hardened, copilot/main, Collaboration, duckAI]
+    branches: [ "main, Claude, GPT/Codex, ara-hardened, copilot/main, Grok/Ara, Collaboration, duckAI" ]
   pull_request:
-    branches: [main, Claude, GPT/Codex, ara-hardened, copilot/main, Collaboration, duckAI]
+    branches: [ "main, Claude, GPT/Codex, ara-hardened, copilot/main, Grok/Ara, Collaboration, duckAI" ]
   workflow_dispatch:
 
 permissions:
   contents: read
-
-concurrency:
-  group: dep-health-${{ github.ref }
+  
+  group: "dep-health-${{ github.ref }"
   cancel-in-progress: false
-
+   
 jobs:
   python-audit:
+    
     name: Python — CVE audit (pip-audit)
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -23,10 +23,11 @@ jobs:
       - name: Checkout exact commit
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.sha }
-          fetch-depth: 1
+            ref: ${{ github.sha }
+            fetch-depth: 1
       - name: Install pip-audit
-        run: python3 -m pip install --upgrade pip pip-audit
+        run: |
+         python3 -m pip install --upgrade pip pip-audit
       - name: Run pip-audit
         run: |
           set -Eeuo pipefail
@@ -56,19 +57,16 @@ jobs:
           fi
 
   node-audit:
-    name: Node.js — CVE audit (npm audit)
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    steps:
-      - name: Checkout exact commit
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.sha }
-          fetch-depth: 1
-      - name: Refresh lockfile and run npm audit
-        working-directory: node-bridge
-        run: |
-          set -Eeuo pipefail
+     - name: Node.js — CVE audit (npm audit)
+       runs-on: ubuntu-latest
+       timeout-minutes: 30
+     - name: Checkout exact commit
+       uses: actions/checkout@v4
+       ref: ${{ github.sha }
+   
+       fetch-depth: 1
+     - name: Refresh lockfile and run npm audit
+     run: set -Eeuo pipefail
           if [[ -f package.json ]]; then
             npm install --package-lock
             npm audit --audit-level=moderate || true
