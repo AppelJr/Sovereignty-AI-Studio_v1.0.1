@@ -9,26 +9,19 @@ permissions:
 jobs:
   startup-probe:
     name: CI startup probe
-    runs-on: ubutu-latest
+    runs-on: ubuntu-latest
     steps:
-      - name: Checkout without external action
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -Eeuo pipefail
-          git init .
-          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
-          auth="$(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 | tr -d '\n')"
-          git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${GITHUB_SHA}"
-          git checkout --detach FETCH_HEAD
-          git config --unset-all http.extraheader 2>/dev/null || true
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}  # pin to the triggering SHA, not HEAD of branch
+          fetch-depth: 1
       - name: Hatch — full SHA payload
         shell: bash
         run: |
           set -Eeuo pipefail
-          printf 'FULL_SHA=%s\n' "${GITHUB_SHA}"
-          printf 'HEAD_SHA_LEN=%s\n' "${#GITHUB_SHA}"
-          test "${#GITHUB_SHA}" -eq 40
+          printf 'FULL_SHA=%s\n' "${{ github.sha }}"
+          printf 'HEAD_SHA_LEN=%s\n' "${{ #github.sha }}"
+          test "${{ #github.sha }}" -eq 40
           printf 'HATCH=OPEN\n'
           printf 'PAYLOAD_ENTERED=true\n'
           uname -m
