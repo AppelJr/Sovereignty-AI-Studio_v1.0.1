@@ -2,7 +2,7 @@
 [![Repository Watchdog](https://github.com/AppelJr/Sovereignty-AI-Studio_v1.0.1/actions/workflows/repository-watchdog.yml/badge.svg)](https://github.com/AppelJr/Sovereignty-AI-Studio_v1.0.1/actions/workflows/repository-watchdog.yml)
 [![Pylint](https://github.com/AppelJr/Sovereignty-AI-Studio_v1.0.1/actions/workflows/pylint.yml/badge.svg)](https://github.com/AppelJr/Sovereignty-AI-Studio_v1.0.1/actions/workflows/pylint.yml)
 [![Python CI](https://github.com/AppelJr/Sovereignty-AI-Studio_v1.0.1/actions/workflows/python-ci.yml/badge.svg)](https://github.com/AppelJr/Sovereignty-AI-Studio_v1.0.1/actions/workflows/python-ci.yml) [![Quart App CI](https://github.com/AppelJr/Sovereignty-AI-Studio_v1.0.1/actions/workflows/Quart.yml/badge.svg)](https://github.com/AppelJr/Sovereignty-AI-Studio_v1.0.1/actions/workflows/Quart.yml)
-[![ara-hardened-unit-ci-local](https://github.com/AppelJr/Sovereignty-AI-Studio_v1.0.1/actions/workflows/ara-hardened-ci.yml/badge.svg)](https://github.com/AppelJr/Sovereignty-AI-Studio_v1.0.1/actions/workflows/ara-hardened-ci.yml)
+[![ara-hardened-unit-ci-local](https://github.com/AppelJr/Sovereignty-AI-Studio_v1.0.1/actions/workflows/ara-hardened-ci.yml/badge.svg)](https://github.com/AppelJr/Sovereignty-AI-Studio_v1.0.1/actions/workflows/ara-hardened-ci.yml) [![Diamond Lattice 5D Core v0.1](https://github.com/AppelJr/Sovereignty-AI-Studio_v1.0.1/actions/workflows/Diamond_Lattice_5D_Core.yml/badge.svg)](https://github.com/AppelJr/Sovereignty-AI-Studio_v1.0.1/actions/workflows/Diamond_Lattice_5D_Core.yml)
 # Sovereignty AI Studio 
 
 @claude @codex @copilot @grok @duckai
