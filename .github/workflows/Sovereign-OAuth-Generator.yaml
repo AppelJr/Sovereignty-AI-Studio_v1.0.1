@@ -101,7 +101,7 @@ jobs:
         run: |
           safety check -r .github/workflows/Requirements.txt --output text || true
           safety check -r requirements.txt --output text || true
-        continue-on-error: true
+        continue-on-error: false
 
   # =========================================================
   # NODE CHECK
@@ -115,10 +115,10 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           fetch-depth: 1
-          persist-credentials: false
+          persist-credentials: true
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 25
 
@@ -147,10 +147,10 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           fetch-depth: 1
-          persist-credentials: false
+          persist-credentials: true
 
-      - uses: docker/setup-qemu-action@v3
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25
+      - uses: docker/setup-build-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
 
       - uses: docker/login-action@v3
         with:
@@ -184,7 +184,7 @@ jobs:
           echo "REGISTRY_LC=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
 
       - name: Build Multi-Arch Image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25
         with:
           context: .
           platforms: linux/amd64,linux/arm64
@@ -196,7 +196,7 @@ jobs:
             ${{ env.REGISTRY_LC }}:${{ github.sha }}
 
       - name: Install cosign
-        uses: sigstore/cosign-installer@v3
+        uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac
 
       - name: Sign Image (Keyless — Fulcio + Rekor)
         run: |
@@ -217,8 +217,8 @@ jobs:
       pull-requests: read
     steps:
       - name: Dependency Review
-        continue-on-error: true
-        uses: actions/dependency-review-action@v4
+        continue-on-error: false
+        uses: actions/dependency-review-action@2031cfc080254a8a887f58cffee85186f0e49e48
         # Advisory only: some repositories do not have dependency graph / GHAS
         # enabled, so this should not block regulated-use CI execution.
 
@@ -238,22 +238,22 @@ jobs:
           persist-credentials: false
 
       - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@0.35.0
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1
         with:
           scan-type: fs
           scan-ref: .
           skip-dirs: external,frontend
           format: table
           severity: CRITICAL,HIGH
-          ignore-unfixed: true
-          hide-progress: true
+          ignore-unfixed: false
+          hide-progress: false
           exit-code: 1
 
       - name: OWASP dependency check
         run: |
           pip install pip-audit
           pip-audit -r requirements.txt || true
-        continue-on-error: true
+        continue-on-error: false
 
 # =========================================================
 # SECURITY HARDENING HEADERS (enforced in nginx + FastAPI)
