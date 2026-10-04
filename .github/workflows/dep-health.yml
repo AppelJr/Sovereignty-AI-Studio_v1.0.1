@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: dep-health-${{ github.ref }
+  group: dep-health-${{ github.ref }}  # one run per ref; do not cancel in-flight runs
   cancel-in-progress: false
 
 jobs:
@@ -23,7 +23,7 @@ jobs:
       - name: Checkout exact commit
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.sha }
+          ref: ${{ github.sha }}  # pin to the triggering SHA, not HEAD of branch
           fetch-depth: 1
       - name: Install pip-audit
         run: python3 -m pip install --upgrade pip pip-audit
@@ -44,7 +44,7 @@ jobs:
       - name: Checkout exact commit
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.sha }
+          ref: ${{ github.sha }}  # pin to the triggering SHA, not HEAD of branch
           fetch-depth: 1
       - name: Validate requirements syntax
         run: |
@@ -63,7 +63,7 @@ jobs:
       - name: Checkout exact commit
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.sha }
+          ref: ${{ github.sha }}  # pin to the triggering SHA, not HEAD of branch
           fetch-depth: 1
       - name: Refresh lockfile and run npm audit
         working-directory: node-bridge
@@ -84,7 +84,7 @@ jobs:
       - name: Checkout exact commit
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.sha }
+          ref: ${{ github.sha }}  # pin to the triggering SHA, not HEAD of branch
           fetch-depth: 1
       - name: Validate requirements files
         run: |
@@ -103,18 +103,18 @@ jobs:
 
   summary:
     name: Honesty and integrity — summary
-    if: always()
+    if: always()  # report even when an audit job fails
     needs: [python-audit, python-outdated, node-audit, requirements-lint]
     runs-on: ubuntu-latest
     steps:
       - name: Report verdict
         run: |
           set -Eeuo pipefail
-          echo "## Dependency Health — Honesty and integrity" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Check | Result |" >> $GITHUB_STEP_SUMMARY
-          echo "| --- | --- |" >> $GITHUB_STEP_SUMMARY
-          echo "| Python CVE audit (pip-audit) | ${{ needs.python-audit.result }} |" >> $githubusercontent_step_summary
+          echo "## Dependency Health — Honesty and integrity" >> $github_step_summary
+          echo "" >> $github_step_summary
+          echo "| Check | Result |" >> $github_step_summary
+          echo "| --- | --- |" >> $github_step_summary
+          echo "| Python CVE audit (pip-audit) | ${{ needs.python-audit.result }} |" >> $github_step_summary
           echo "| Python requirements validation | ${{ needs.python-outdated.result }} |" >> $github_step_summary
           echo "| Node.js CVE audit (npm audit) | ${{ needs.node-audit.result }} |" >> $github_step_summary
           echo "| Requirements lint | ${{ needs.requirements-lint.result }} |" >> $github_step_summary
