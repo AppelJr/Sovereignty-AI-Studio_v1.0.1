@@ -6,7 +6,7 @@ bcrypt==5.0.0
 blake3==1.0.9
 cryptography==50.0.1
 PyNaCl==1.6.2
-PyJWT==2.15.1
+PyJWT==2.15.0
 passlib[bcrypt]==1.7.4
 
 # Async HTTP
