@@ -17,7 +17,7 @@ concurrency:
 jobs:
   python-audit:
     name: Python — CVE audit (pip-audit)
-    runs-on: ubuntu-26
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 60
     steps:
       - name: Checkout exact commit (native git, no external action)
@@ -32,7 +32,7 @@ jobs:
           git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${GITHUB_SHA}"
           git checkout --detach FETCH_HEAD
       - name: Install pip-audit
-        run: python3 -m pip install --upgrade pip pip-audit
+        run: python3 -m pip install --upgrade pip pip-audit "pyjwt>=2.15.0"
       - name: Run pip-audit
         run: |
           set -Eeuo pipefail
@@ -44,7 +44,7 @@ jobs:
 
   python-outdated:
     name: Python — requirements validation
-    runs-on: ubuntu-26
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 60
     steps:
       - name: Checkout exact commit (native git, no external action)
@@ -70,7 +70,7 @@ jobs:
 
   node-audit:
     name: Node.js — CVE audit (npm audit)
-    runs-on: ubuntu-26
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 60
     steps:
       - name: Checkout exact commit (native git, no external action)
@@ -97,7 +97,7 @@ jobs:
 
   requirements-lint:
     name: Lint requirements files
-    runs-on: ubuntu-26
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 60
     steps:
       - name: Checkout exact commit (native git, no external action)
