@@ -17,7 +17,7 @@ concurrency:
 jobs:
   python-audit:
     name: Python — CVE audit (pip-audit)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26
     timeout-minutes: 60
     steps:
       - name: Checkout exact commit (native git, no external action)
@@ -44,7 +44,7 @@ jobs:
 
   python-outdated:
     name: Python — requirements validation
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26
     timeout-minutes: 60
     steps:
       - name: Checkout exact commit (native git, no external action)
@@ -70,7 +70,7 @@ jobs:
 
   node-audit:
     name: Node.js — CVE audit (npm audit)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26
     timeout-minutes: 60
     steps:
       - name: Checkout exact commit (native git, no external action)
@@ -97,7 +97,7 @@ jobs:
 
   requirements-lint:
     name: Lint requirements files
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26
     timeout-minutes: 60
     steps:
       - name: Checkout exact commit (native git, no external action)
