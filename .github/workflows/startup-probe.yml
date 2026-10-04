@@ -9,7 +9,7 @@ permissions:
 jobs:
   startup-probe:
     name: CI startup probe
-    runs-on: [self-hosted, linux, arm64]
+    runs-on: ubutu-latest
     steps:
       - name: Checkout without external action
         env:
