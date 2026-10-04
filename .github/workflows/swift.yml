@@ -17,8 +17,8 @@ jobs:
 
     - name: Build
       working-directory: ios
-      run: swift build -v --triple arm64-apple-ios16.0-simulator
+      run: swift build -v
 
     - name: Run tests
       working-directory: ios
-      run: swift test -v --triple arm64-apple-ios16.0-simulator
+      run: swift test -v
