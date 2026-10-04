@@ -2,20 +2,20 @@ name: Dependency Health
 
 on:
   push:
-    branches: [main, Claude, GPT/Codex, ara-hardened, copilot/main, Collaboration, duckAI]
+    branches: [ "main, Claude, GPT/Codex, ara-hardened, copilot/main, Grok/Ara, Collaboration, duckAI" ]
   pull_request:
-    branches: [main, Claude, GPT/Codex, ara-hardened, copilot/main, Collaboration, duckAI]
+    branches: [ "main, Claude, GPT/Codex, ara-hardened, copilot/main, Grok/Ara, Collaboration, duckAI" ]
   workflow_dispatch:
 
 permissions:
   contents: read
-
-concurrency:
-  group: dep-health-${{ github.ref }}  # one run per ref; do not cancel in-flight runs
+  
+  group: "dep-health-${{ github.ref }"
   cancel-in-progress: false
-
+   
 jobs:
   python-audit:
+    
     name: Python — CVE audit (pip-audit)
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -23,11 +23,14 @@ jobs:
       - name: Checkout exact commit
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.sha }}  # pin to the triggering SHA, not HEAD of branch
-          fetch-depth: 1
+            ref: ${{ github.sha }
+            fetch-depth: 1
       - name: Install pip-audit
-        run: python3 -m pip install --upgrade pip pip-audit
+        run: |
+         python3 -m pip install --upgrade pip pip-audit
       - name: Run pip-audit
+        id: pip_audit
+        continue-on-error: false
         run: |
           set -Eeuo pipefail
           if [[ -f requirements.txt ]]; then
@@ -66,6 +69,8 @@ jobs:
           ref: ${{ github.sha }}  # pin to the triggering SHA, not HEAD of branch
           fetch-depth: 1
       - name: Refresh lockfile and run npm audit
+        id: npm_audit
+        continue-on-error: false
         working-directory: node-bridge
         run: |
           set -Eeuo pipefail
@@ -79,7 +84,7 @@ jobs:
   requirements-lint:
     name: Lint requirements files
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes:30
     steps:
       - name: Checkout exact commit
         uses: actions/checkout@v4
@@ -103,24 +108,24 @@ jobs:
 
   summary:
     name: Honesty and integrity — summary
-    if: always()  # report even when an audit job fails
+    if: always()
     needs: [python-audit, python-outdated, node-audit, requirements-lint]
     runs-on: ubuntu-latest
     steps:
       - name: Report verdict
         run: |
           set -Eeuo pipefail
-          echo "## Dependency Health — Honesty and integrity" >> $github_step_summary
-          echo "" >> $github_step_summary
-          echo "| Check | Result |" >> $github_step_summary
-          echo "| --- | --- |" >> $github_step_summary
-          echo "| Python CVE audit (pip-audit) | ${{ needs.python-audit.result }} |" >> $github_step_summary
-          echo "| Python requirements validation | ${{ needs.python-outdated.result }} |" >> $github_step_summary
-          echo "| Node.js CVE audit (npm audit) | ${{ needs.node-audit.result }} |" >> $github_step_summary
-          echo "| Requirements lint | ${{ needs.requirements-lint.result }} |" >> $github_step_summary
-          echo "" >> $github_step_summary
+          echo "## Dependency Health — Honesty and integrity" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | Result |" >> $GITHUB_STEP_SUMMARY
+          echo "| --- | --- |" >> $GITHUB_STEP_SUMMARY
+          echo "| Python CVE audit (pip-audit) | ${{ needs.python-audit.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Python requirements validation | ${{ needs.python-outdated.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Node.js CVE audit (npm audit) | ${{ needs.node-audit.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Requirements lint | ${{ needs.requirements-lint.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
           if [[ "${{ needs.python-audit.result }}" != "success" || "${{ needs.python-outdated.result }}" != "success" || "${{ needs.node-audit.result }}" != "success" || "${{ needs.requirements-lint.result }}" != "success" ]]; then
-            echo "One or more checks failed. This gate reports real findings — no fake greens." >> $github_step_summary
+            echo "One or more checks failed. This gate reports real findings — no fake greens." >> $GITHUB_STEP_SUMMARY
             exit 1
           fi
-          echo "All checks passed." >> $github_step_summary
+          echo "All checks passed." >> $GITHUB_STEP_SUMMARY
