@@ -4,10 +4,11 @@ on:
   push:
     branches: [ "main", "Collaboration" ]
   pull_request:
-    branches: [ "main", "Collaboration" ]
-
-permissions:
-  contents: read
+    branches: 
+    - main
+    - Collaboration
+permissions: 
+ contents: read
 
 jobs:
   build:
@@ -17,11 +18,8 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: Build
-      run: |
-        - swift build -v
+      run: swift build -v
     - name: package
-      run: |
-        - package.swift -v
+      run: swift package describe
     - name: Run tests
-      run: |
-        - swift test -v
+      run: swift test -v
