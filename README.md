@@ -1,14 +1,7 @@
 [![CI](https://github.com/AppelJr/Sovereignty-AI-Studio_v1.0.1/actions/workflows/ci.yml/badge.svg)](https://github.com/AppelJr/Sovereignty-AI-Studio_v1.0.1/actions/workflows/ci.yml)
-
 [![Repository Watchdog](https://github.com/AppelJr/Sovereignty-AI-Studio_v1.0.1/actions/workflows/repository-watchdog.yml/badge.svg)](https://github.com/AppelJr/Sovereignty-AI-Studio_v1.0.1/actions/workflows/repository-watchdog.yml)
-
 [![Pylint](https://github.com/AppelJr/Sovereignty-AI-Studio_v1.0.1/actions/workflows/pylint.yml/badge.svg)](https://github.com/AppelJr/Sovereignty-AI-Studio_v1.0.1/actions/workflows/pylint.yml)
-
-[![Python CI](https://github.com/AppelJr/Sovereignty-AI-Studio_v1.0.1/actions/workflows/python-ci.yml/badge.svg)](https://github.com/AppelJr/Sovereignty-AI-Studio_v1.0.1/actions/workflows/python-ci.yml)
-
-[![Quart App CI](https://github.com/AppelJr/Sovereignty-AI-Studio_v1.0.1/actions/workflows/Quart.yml/badge.svg)](https://github.com/AppelJr/Sovereignty-AI-Studio_v1.0.1/actions/workflows/Quart.yml)
-
-
+[![Python CI](https://github.com/AppelJr/Sovereignty-AI-Studio_v1.0.1/actions/workflows/python-ci.yml/badge.svg)](https://github.com/AppelJr/Sovereignty-AI-Studio_v1.0.1/actions/workflows/python-ci.yml) [![Quart App CI](https://github.com/AppelJr/Sovereignty-AI-Studio_v1.0.1/actions/workflows/Quart.yml/badge.svg)](https://github.com/AppelJr/Sovereignty-AI-Studio_v1.0.1/actions/workflows/Quart.yml)
 [![ara-hardened-unit-ci-local](https://github.com/AppelJr/Sovereignty-AI-Studio_v1.0.1/actions/workflows/ara-hardened-ci.yml/badge.svg)](https://github.com/AppelJr/Sovereignty-AI-Studio_v1.0.1/actions/workflows/ara-hardened-ci.yml)
 # Sovereignty AI Studio 
 
@@ -16,7 +9,7 @@
 
 This is the main dedicated branch. All changes by Claude Grok/Ara DuckAI GPT/Codex Copilot must be made in their dedicated branch. Do not push directly to main. Create a Pull Request for review.
 
-Sovereignty AI Studio is a self-hosted, offline-first AI control surface and supporting service stack. The primary user interface is the KODER dashboard in [`SGHv119.html`](SGHv119.html); Python and Node services provide local routing, agent orchestration, and optional self-hosted integrations.
+Sovereignty AI Studio is a self-hosted, offline-first AI control surface and supporting service stack. The primary user interface is the KODER dashboard in [`DevAssist420SGHv119.html`](DevAssist420SGHv119.html); Python and Node services provide local routing, agent orchestration, and optional self-hosted integrations.
 
 ## Runtime governance
 
