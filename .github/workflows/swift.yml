@@ -19,6 +19,8 @@ jobs:
     - name: Build
       run: |
         - swift build -v
+    - name: package
+      run: |
         - package.swift -v
     - name: Run tests
       run: |
