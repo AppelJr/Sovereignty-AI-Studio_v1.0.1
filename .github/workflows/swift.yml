@@ -1,25 +1,24 @@
-# This workflow will build a Swift project
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-swift
-
-name: Swift
+name: Swift Build
 
 on:
   push:
-    branches: [ "Collaboration" ]
+    branches: [ "main", "Collaboration" ]
   pull_request:
-    branches: [ "Collaboration" ]
-
+    branches: [ "main", "Collaboration" ]
 permissions:
   contents: read
 
 jobs:
   build:
-
     runs-on: macos-latest
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
     - name: Build
+      working-directory: ios
       run: swift build -v
+
     - name: Run tests
+      working-directory: ios
       run: swift test -v
