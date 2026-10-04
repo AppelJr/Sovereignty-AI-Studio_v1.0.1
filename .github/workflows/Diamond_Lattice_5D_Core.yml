@@ -6,7 +6,7 @@ on:
       - 'diamond-core/**'
       - '.github/workflows/diamond-core-v0.1.yml'
   pull_request:
-    branches: [Collaboration]
+    branches: [ "Collaboration", "main"]
     paths:
       - 'diamond-core/**'
       - '.github/workflows/diamond-core-v0.1.yml'
@@ -17,7 +17,7 @@ permissions:
 
 concurrency:
   group: diamond-core-v0.1-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   contract:

@@ -2,38 +2,35 @@ name: Dependency Health
 
 on:
   push:
-    branches: [main, Claude, GPT/Codex, ara-hardened, copilot/main, Collaboration, duckAI, devassist420]
+    branches: [ "main, Claude, GPT/Codex, ara-hardened, copilot/main, Grok/Ara, Collaboration, duckAI" ]
   pull_request:
-    branches: [main, Claude, GPT/Codex, ara-hardened, copilot/main, Collaboration, duckAI, devassist420]
+    branches: [ "main, Claude, GPT/Codex, ara-hardened, copilot/main, Grok/Ara, Collaboration, duckAI" ]
   workflow_dispatch:
 
 permissions:
   contents: read
-
-concurrency:
-  group: dep-health-${{ github.ref }}
+  
+  group: "dep-health-${{ github.ref }"
   cancel-in-progress: false
-
+   
 jobs:
   python-audit:
+    
     name: Python — CVE audit (pip-audit)
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-      - name: Checkout exact commit (native git, no external action)
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          git init .
-          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
-          auth="$(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 | tr -d '\n')"
-          git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${GITHUB_SHA}"
-          git checkout --detach FETCH_HEAD
+      - name: Checkout exact commit
+        uses: actions/checkout@v4
+        with:
+            ref: ${{ github.sha }
+            fetch-depth: 1
       - name: Install pip-audit
-        run: python3 -m pip install --upgrade pip pip-audit "pyjwt>=2.15.0"
+        run: |
+         python3 -m pip install --upgrade pip pip-audit
       - name: Run pip-audit
+        id: pip_audit
+        continue-on-error: false
         run: |
           set -Eeuo pipefail
           if [[ -f requirements.txt ]]; then
@@ -44,84 +41,91 @@ jobs:
 
   python-outdated:
     name: Python — requirements validation
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-      - name: Checkout exact commit (native git, no external action)
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          git init .
-          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
-          auth="$(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 | tr -d '\n')"
-          git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${GITHUB_SHA}"
-          git checkout --detach FETCH_HEAD
-          git config --unset-all http.extraheader 2>/dev/null || true
+      - name: Checkout exact commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }
+          fetch-depth: 1
       - name: Validate requirements syntax
         run: |
           set -Eeuo pipefail
           if [[ -f requirements.txt ]]; then
-            python3 -m pip install  -r requirements.txt
+            python3 -m pip install --dry-run -r requirements.txt
           else
-            echo "requirements.txt present — validation"
+            echo "No requirements.txt present — validation skipped"
           fi
 
   node-audit:
     name: Node.js — CVE audit (npm audit)
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-      - name: Checkout exact commit (native git, no external action)
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          git init .
-          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
-          auth="$(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 | tr -d '\n')"
-          git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${GITHUB_SHA}"
-          git checkout --detach FETCH_HEAD
+      - name: Checkout exact commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }
+          fetch-depth: 1
       - name: Refresh lockfile and run npm audit
+        id: npm_audit
+        continue-on-error: false
         working-directory: node-bridge
         run: |
           set -Eeuo pipefail
           if [[ -f package.json ]]; then
             npm install --package-lock
-            npm audit --audit-level=moderate || true
+            npm audit --audit-level=moderate
           else
-            echo "package.json in node-bridge — audit"
+            echo "No package.json in node-bridge — audit skipped"
           fi
 
   requirements-lint:
     name: Lint requirements files
-    runs-on: ubuntu-24.04-arm
-    timeout-minutes: 60
+    runs-on: ubuntu-latest
+    timeout-minutes:30
     steps:
-      - name: Checkout exact commit (native git, no external action)
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          git init .
-          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
-          auth="$(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 | tr -d '\n')"
-          git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${GITHUB_SHA}"
-          git checkout --detach FETCH_HEAD
+      - name: Checkout exact commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }
+          fetch-depth: 1
       - name: Validate requirements files
         run: |
           set -Eeuo pipefail
           python3 - <<'PY'
           import pathlib
-          for name in ('requirements.txt', '.github/workflows/Requirements.txt'):
+          for name in ('requirements.txt',):
               path = pathlib.Path(name)
               if not path.exists():
                   continue
               for number, line in enumerate(path.read_text(encoding='utf-8').splitlines(), 1):
                   if '\t' in line:
-                      raise SystemExit(f'{name}:{number}: tab character is allowed')
+                      raise SystemExit(f'{name}:{number}: tab character is not allowed')
           print('requirements files are structurally valid')
           PY
+
+  summary:
+    name: Honesty and integrity — summary
+    if: always()
+    needs: [python-audit, python-outdated, node-audit, requirements-lint]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report verdict
+        run: |
+          set -Eeuo pipefail
+          echo "## Dependency Health — Honesty and integrity" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | Result |" >> $GITHUB_STEP_SUMMARY
+          echo "| --- | --- |" >> $GITHUB_STEP_SUMMARY
+          echo "| Python CVE audit (pip-audit) | ${{ needs.python-audit.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Python requirements validation | ${{ needs.python-outdated.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Node.js CVE audit (npm audit) | ${{ needs.node-audit.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Requirements lint | ${{ needs.requirements-lint.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [[ "${{ needs.python-audit.result }}" != "success" || "${{ needs.python-outdated.result }}" != "success" || "${{ needs.node-audit.result }}" != "success" || "${{ needs.requirements-lint.result }}" != "success" ]]; then
+            echo "One or more checks failed. This gate reports real findings — no fake greens." >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
+          echo "All checks passed." >> $GITHUB_STEP_SUMMARY
