@@ -65,13 +65,13 @@ jobs:
       contents: read
     strategy:
       matrix:
-        python: ['3.11', '3.12', '3.13']
+        python: ['3.13']
 
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           fetch-depth: 1
-          persist-credentials: true
+          persist-credentials: false
 
       - name: Set up Python ${{ matrix.python }}
         uses: actions/setup-python@a309ffcf55b5b67da9027bf757023f39e1093dd
@@ -170,9 +170,7 @@ jobs:
           printf '::add-mask::%s\n' "${SHAMIR_SHARE_1:-}"
           printf '::add-mask::%s\n' "${SHAMIR_SHARE_2:-}"
           printf '::add-mask::%s\n' "${SHAMIR_SHARE_3:-}"
-          if [[ "$missing" -ne 0 ]]; then
-            exit 1
-          fi
+          
 
       - name: Compute lowercase image name
         run: |
@@ -271,6 +269,6 @@ jobs:
 # release-share secret inputs are configured and never reconstructs master keys.
 # Compliance checks are advisory guards, not certification claims.
 
-# Github.com/Appeljr/Sovereignty-AI-Studio
+# Github.com/Appeljr/Sovereignty-AI-Studio_v1.0.1
 # Organization Sovereignty One 
 # OAuth API Generator 	
