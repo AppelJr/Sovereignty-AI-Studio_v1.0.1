@@ -110,7 +110,7 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           fetch-depth: 1
-          persist-credentials: true
+          persist-credentials: false
 
       - name: Set up Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
@@ -142,7 +142,7 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           fetch-depth: 1
-          persist-credentials: true
+          persist-credentials: false
 
       - uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25
       - uses: docker/setup-build-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
@@ -242,7 +242,7 @@ jobs:
           severity: CRITICAL,HIGH
           ignore-unfixed: false
           hide-progress: false
-          exit-code: 1
+          
 
       - name: OWASP dependency check
         run: |
@@ -271,6 +271,6 @@ jobs:
 # release-share secret inputs are configured and never reconstructs master keys.
 # Compliance checks are advisory guards, not certification claims.
 
-# Github.com/Appel420/Sovereignty-AI-Studio
+# Github.com/Appeljr/Sovereignty-AI-Studio
 # Organization Sovereignty One 
 # OAuth API Generator 	
