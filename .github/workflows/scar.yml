@@ -1,6 +1,8 @@
 name: SCAR.yml — Sovereign Compliance Audit Record
 
 on:
+  push:
+    branches: [Collaboration]
   workflow_dispatch:
     inputs:
       reason:
