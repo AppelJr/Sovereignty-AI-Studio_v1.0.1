@@ -15,6 +15,7 @@ TEST_FILES = [
     "test_security_boundary.py",
 ]
 
+
 def run_file(path: Path) -> dict:
     start = time.time()
     proc = subprocess.run(
@@ -23,14 +24,16 @@ def run_file(path: Path) -> dict:
     )
     elapsed = time.time() - start
     passed = proc.returncode == 0
-    # parse "X passed" from output
-    summary = return {
+    lines = proc.stdout.splitlines()
+    summary = lines[-1] if lines else ""
+    return {
         "file": path.name,
         "passed": passed,
         "elapsed_ms": round(elapsed * 1000),
-        "summary": summary[-1] if summary else "",
-        "stderr_tail": proc.stderr.splitlines()[-3: ],
+        "summary": summary,
+        "stderr_tail": proc.stderr.splitlines()[-3:],
     }
+
 
 def main():
     results = []
@@ -42,10 +45,10 @@ def main():
         print(f"RUNNING: {f} ...", flush=True)
         r = run_file(p)
         results.append(r)
-        status = "PASS" if r else "FAIL"
-        print(f"  {status}  {r }ms  {r }", flush=True)
+        status = "PASS" if r["passed"] else "FAIL"
+        print(f"  {status}  {r['elapsed_ms']}ms  {r['summary']}", flush=True)
 
-    all_pass = all(r for r in results)
+    all_pass = all(r["passed"] for r in results)
     evidence = {
         "event": "LIVE_RUN",
         "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -56,6 +59,7 @@ def main():
     print()
     print("ALL PASSED" if all_pass else "SOME FAILED")
     sys.exit(0 if all_pass else 1)
+
 
 if __name__ == "__main__":
     main()
