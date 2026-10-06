@@ -45,7 +45,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: oauth-api-generator-${{ github.ref }}
+  group: oauth-api-generator-${{ github.ref }
   cancel-in-progress: false
 
 permissions: {}
@@ -139,7 +139,7 @@ jobs:
     steps:
       - name: Checkout exact commit (native git, no external action)
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -182,15 +182,19 @@ jobs:
   # =========================================================
   # NODE CHECK - native git + system node
   # =========================================================
-  node-check:
+  build-sign:
+    needs: [build-test]
+    if: github.event_name == 'release' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     permissions:
+      packages: write
       contents: read
+      id-token: write
     steps:
       - name: Checkout exact commit (native git, no external action)
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -201,16 +205,11 @@ jobs:
           git checkout --detach FETCH_HEAD
           git config --unset-all http.extraheader 2>/dev/null || true
 
-      - name: Use system Node.js and run checks
-        shell: bash
+      - name: Require Dockerfile for image build
         run: |
-          set -Eeuo pipefail
-          node --version
-          npm --version
-          if [[ -f package-lock.json || -f npm-shrinkwrap.json ]]; then
-            npm ci --ignore-scripts --no-audit --no-fund || npm install --ignore-scripts --no-audit --no-fund
-          elif [[ -f package.json ]]; then
-            npm install --ignore-scripts --no-audit --no-fund
+          if [ ! -f Dockerfile ]; then
+            echo "::warning::No Dockerfile at repo root - skipping image build/sign"
+            echo "SKIP_DOCKER=1" >> "$BASH_ENV"
           else
             echo "No package.json - Node job skipped"
             exit 0

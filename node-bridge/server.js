@@ -55,6 +55,7 @@ const PORT = parseInt(process.env.NODE_BRIDGE_PORT || '9899', 10);
 const BACKEND_URL = process.env.BACKEND_URL || 'http://127.0.0.1:8002';
 const WEATHER_URL = process.env.WEATHER_URL || 'http://127.0.0.1:8001';
 const GATEWAY_URL = process.env.GATEWAY_URL || 'http://127.0.0.1:9001';
+const EXEC_CODE_TOKEN = process.env.EXEC_CODE_TOKEN || '';
 const ALLOW_UNTRUSTED_CODE_EXEC = process.env.ALLOW_UNTRUSTED_CODE_EXEC === 'true';
 const SG_BRIDGE_URL = (process.env.SG_BRIDGE_URL || '').trim();
 const SG_BRIDGE_HTTP_URL = (process.env.SG_BRIDGE_HTTP_URL || (SG_BRIDGE_URL ? SG_BRIDGE_URL.replace(/^ws(s?):\/\//, 'http$1://') : '')).trim();
@@ -414,6 +415,17 @@ app.post('/exec/code', (req, res) => {
   }
   if (!ALLOW_UNTRUSTED_CODE_EXEC) {
     return res.status(403).json({ error: 'Code execution endpoint is disabled' });
+  }
+  if (!EXEC_CODE_TOKEN) {
+    return res.status(403).json({ error: 'Code execution endpoint is not configured' });
+  }
+  const authHeader = req.headers && req.headers.authorization;
+  const bearerPrefix = 'Bearer ';
+  const providedToken = (typeof authHeader === 'string' && authHeader.startsWith(bearerPrefix))
+    ? authHeader.slice(bearerPrefix.length)
+    : '';
+  if (providedToken !== EXEC_CODE_TOKEN) {
+    return res.status(403).json({ error: 'Forbidden' });
   }
   const lang = ((req.body && req.body.lang) || 'node').toLowerCase();
   const code = (req.body && req.body.code) || '';
