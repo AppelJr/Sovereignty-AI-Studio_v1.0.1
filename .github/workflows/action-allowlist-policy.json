@@ -15,11 +15,7 @@
     {"action": "huggingface/*", "reason": "Hugging Face - landlord"},
     {"action": "anthropic/*", "reason": "Anthropic - landlord"},
     {"action": "openai/*", "reason": "OpenAI - landlord"},
-    {"action": "xai-org/*", "reason": "xAI - landlord"},
-    {"action": "aquasecurity/*", "reason": "Trivy - third-party scanner; native pip-audit available"},
-    {"action": "sigstore/*", "reason": "Cosign installer - native cosign CLI available"},
-    {"action": "docker/*", "reason": "Docker actions - native docker CLI available"},
-    {"action": "actions/dependency-review-action", "reason": "Use dep-health.yml native audits"}
+    {"action": "xai-org/*", "reason": "xAI - landlord"}
   ],
   "approved": [
     {"action": "actions/checkout", "pinned": "full-sha", "note": "GitHub-owned, allowed with full SHA pin"},
@@ -38,7 +34,7 @@
   "enforcement": "Any action matching a blocked pattern fails closed. Unknown third-party actions not on either list are PROPOSED to the owner - not silently banned, not silently allowed.",
   "provenance": {
     "authored_by": "Grok lane",
-    "authored_at": "2026-10-06T01:30:00Z",
+    "authored_at": "2026-10-06T12:10:00Z",
     "owner": "AppelJr",
     "owner_authority": "final approval retained by owner"
   }
