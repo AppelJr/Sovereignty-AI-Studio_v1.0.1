@@ -65,7 +65,7 @@ jobs:
           set -Eeuo pipefail
           python3 -m pip install --upgrade pip
           python3 -m pip install -r .github/workflows/Requirements.txt
-          python3 -m pip install flake8 pytest pytest-cov pip-audit
+          python3 -m pip install flake8 pytest pytest-cov pip-audit cryptography
       - name: Validate Python syntax
         shell: bash
         run: |
@@ -128,6 +128,41 @@ jobs:
           if [ -f unified_server.js ]; then
             node --check unified_server.js
           fi
+  oauth-generator:
+    name: OAuth Generator — real execution
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact commit (native git)
+        env:
+          GH_TOKEN: ${{ github.token}}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git init .
+          git remote add origin "https://github.com/${{ GITHUB_REPOSITORY}}.git"
+          auth="$(printf 'x-access-token:%s' "${{ GH_TOKEN}}" | base64 | tr -d '\n')"
+          git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${{ GITHUB_SHA}}"
+          git checkout --detach FETCH_HEAD
+          git config --unset-all http.extraheader 2>/dev/null || true
+          git rev-parse --short HEAD
+      - name: Set up Python (system)
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq python3 python3-pip
+          python3 --version
+      - name: Install generator dependency
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m pip install --upgrade pip cryptography
+      - name: Run OAuth generator dry-run
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 scripts/oauth_local_generator.py --dry-run --service sovereignty-ai-studio
+          echo "OAUTH_GENERATOR_DRY_RUN=PASS"
   security-scan:
     name: Security Scan
     needs: build-test
@@ -233,7 +268,7 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          echo "${{ secrets.GH_TOKEN || secrets.PAT_TOKEN || secrets.GH_PAT || secrets.GH_TOKEN_1 || secrets.GH_TOKEN}}" | docker login ghcr.io -u ${{ github.actor}} --password-stdin
+          echo "${{ github.token}}" | docker login ghcr.io -u ${{ github.actor}} --password-stdin
       - name: Compute image name
         shell: bash
         run: |
@@ -344,6 +379,7 @@ jobs:
     name: Final Release Verification
     needs:
       - build-test
+      - oauth-generator
       - security-scan
       - build-sign
       - supply-chain
@@ -356,16 +392,19 @@ jobs:
         shell: bash
         env:
           BUILD_TEST: ${{ needs.build-test.result}}
+          OAUTH_GENERATOR: ${{ needs.oauth-generator.result}}
           SECURITY_SCAN: ${{ needs.security-scan.result}}
           BUILD_SIGN: ${{ needs.build-sign.result}}
           SUPPLY_CHAIN: ${{ needs.supply-chain.result}}
         run: |
           set -Eeuo pipefail
           echo "build-test=${{ BUILD_TEST}}"
+          echo "oauth-generator=${{ OAUTH_GENERATOR}}"
           echo "security-scan=${{ SECURITY_SCAN}}"
           echo "build-sign=${{ BUILD_SIGN}}"
           echo "supply-chain=${{ SUPPLY_CHAIN}}"
           test "${{ BUILD_TEST}}" = "success"
+          test "${{ OAUTH_GENERATOR}}" = "success"
           test "${{ SECURITY_SCAN}}" = "success"
           if [[ "${{ github.event_name}}" == "release" ]] || \
              [[ "${{ github.event_name}}" == "push" && "${{ github.ref}}" == "refs/heads/main" ]]; then
