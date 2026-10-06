@@ -55,6 +55,7 @@ const PORT = parseInt(process.env.NODE_BRIDGE_PORT || '9899', 10);
 const BACKEND_URL = process.env.BACKEND_URL || 'http://127.0.0.1:8002';
 const WEATHER_URL = process.env.WEATHER_URL || 'http://127.0.0.1:8001';
 const GATEWAY_URL = process.env.GATEWAY_URL || 'http://127.0.0.1:9001';
+const ALLOW_UNTRUSTED_CODE_EXEC = process.env.ALLOW_UNTRUSTED_CODE_EXEC === 'true';
 const SG_BRIDGE_URL = (process.env.SG_BRIDGE_URL || '').trim();
 // Derived HTTP base URL for health-check probes against the Python backend bridge
 const SG_BRIDGE_HTTP_URL = (process.env.SG_BRIDGE_HTTP_URL || (SG_BRIDGE_URL ? SG_BRIDGE_URL.replace(/^ws(s?):\/\//, 'http$1://') : '')).trim();
@@ -422,6 +423,9 @@ app.post('/proxy/text', (req, res) => unavailable(res, 'proxy/text'));
 app.post('/proxy', (req, res) => unavailable(res, 'proxy'));
 
 app.post('/exec/code', (req, res) => {
+  if (!ALLOW_UNTRUSTED_CODE_EXEC) {
+    return res.status(403).json({ error: 'Code execution endpoint is disabled' });
+  }
   const lang = ((req.body && req.body.lang) || 'node').toLowerCase();
   const code = (req.body && req.body.code) || '';
   if (!code) return res.status(400).json({ error: 'No code provided' });
