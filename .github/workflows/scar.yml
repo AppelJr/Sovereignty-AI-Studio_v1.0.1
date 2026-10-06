@@ -2,16 +2,28 @@ name: SCAR.yml — Sovereign Compliance Audit Record
 
 on:
   workflow_dispatch:
+    inputs:
+      reason:
+        description: 'Reason for this SCAR attestation run'
+        required: false
+        default: 'manual-attest'
+      force_key_rotation:
+        description: 'EXPLICIT COMPROMISE ONLY: set true to request key rotation (owner must still approve)'
+        required: false
+        default: 'false'
+        type: boolean
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   scar-contract:
-    name: SCAR — Independent Compliance Attestation (manual)
-    runs-on: ubuntu-26.04
+    name: SCAR — Independent Compliance Attestation
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - name: Checkout exact commit
+      - name: Checkout exact commit (native git)
         env:
           GH_TOKEN: ${{ github.token}}
         shell: bash
@@ -23,12 +35,15 @@ jobs:
           git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${{ GITHUB_SHA}}"
           git checkout --detach FETCH_HEAD
           git config --unset-all http.extraheader 2>/dev/null || true
-          git rev-parse --short HEAD
+          echo "CHECKED_OUT=$(git rev-parse --short HEAD)"
 
-      - name: SCAR source gate
+      - name: SCAR source gate + hash-chain integrity
+        id: gate
         shell: bash
         run: |
           set -Eeuo pipefail
+          echo "SCAR_SOURCE_GATE=START"
+          # Compile any SCAR PQC attest scripts if present
           if [ -f scripts/scar_pqc_attest.py ]; then
             python3 -m py_compile scripts/scar_pqc_attest.py
             echo "SCAR_SOURCE_GATE=PASS"
