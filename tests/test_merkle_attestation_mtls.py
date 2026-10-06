@@ -15,7 +15,7 @@ def test_merkle_inclusion_proof_verifies_and_tampering_fails():
     tree.append(b"config-A")
     proof = tree.get_proof(index)
     assert proof.verify(tree.root)
-    assert not MerkleTree.verify_proof(tree.root, b"\\x00" * 32, proof)
+    assert not MerkleTree.verify_proof(tree.root, b"\x00" * 32, proof)
 
 
 def test_signed_merkle_checkpoint_chain_verifies():
@@ -59,10 +59,10 @@ def test_production_mtls_requires_client_ca():
 
 
 def test_production_cannot_disable_certificate_verification(monkeypatch):
-    monkeypatch.setenv("TLS_REJECT_UNAUTHORIZED", "0")
+    monkeypatch.setenv("TLS_REJECT_UNSUPPORTED", "0")
     assert reject_unauthorized(production=True) is True
 
 
 def test_development_mtls_can_use_explicit_disable_only_for_nonproduction(monkeypatch):
-    monkeypatch.setenv("TLS_REJECT_UNAUTHORIZED", "0")
+    monkeypatch.setenv("TLS_REJECT_UNSUPPORTED", "0")
     assert reject_unauthorized(production=False) is False
