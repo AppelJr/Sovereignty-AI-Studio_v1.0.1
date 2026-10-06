@@ -30,11 +30,11 @@ jobs:
         run: |
           set -Eeuo pipefail
           git init .
-          git remote add origin "https://github.com/${{ GITHUB_REPOSITORY}}.git"
-          auth="$(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 -w0)"
-          git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${{ GITHUB_SHA}}"
+          git remote add origin "https://github.com/${{ github.repository}}.git"
+          auth="$(printf 'x-access-token:%s' "${{ github.token}}" | base64 -w0)"
+          git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${{ github.sha}}"
           git checkout --detach FETCH_HEAD
-          git config --unset-all http.extraheader 2>/dev/null || true
+          git config --unset-all http.extraheader
           echo "CHECKED_OUT=$(git rev-parse --short HEAD)"
 
       - name: SCAR source gate + hash-chain integrity
