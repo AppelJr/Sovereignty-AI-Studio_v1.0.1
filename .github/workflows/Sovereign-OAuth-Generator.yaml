@@ -46,9 +46,9 @@ jobs:
         run: |
           set -Eeuo pipefail
           git init .
-          git remote add origin "https://github.com/${{ GITHUB_REPOSITORY}}.git"
-          auth="$(printf 'x-access-token:%s' "${{ GH_TOKEN}}" | base64 | tr -d '\n')"
-          git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${{ GITHUB_SHA}}"
+          git remote add origin "https://github.com/${{ github.repository}}.git"
+          auth="$(printf 'x-access-token:%s' "${{ github.token}}" | base64 | tr -d '\n')"
+          git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${{ github.sha}}"
           git checkout --detach FETCH_HEAD
           git config --unset-all http.extraheader 2>/dev/null || true
           git rev-parse --short HEAD
@@ -139,9 +139,9 @@ jobs:
         run: |
           set -Eeuo pipefail
           git init .
-          git remote add origin "https://github.com/${{ GITHUB_REPOSITORY}}.git"
-          auth="$(printf 'x-access-token:%s' "${{ GH_TOKEN}}" | base64 | tr -d '\n')"
-          git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${{ GITHUB_SHA}}"
+          git remote add origin "https://github.com/${{ github.repository}}.git"
+          auth="$(printf 'x-access-token:%s' "${{ github.token}}" | base64 | tr -d '\n')"
+          git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${{ github.sha}}"
           git checkout --detach FETCH_HEAD
           git config --unset-all http.extraheader 2>/dev/null || true
           git rev-parse --short HEAD
@@ -178,9 +178,9 @@ jobs:
         run: |
           set -Eeuo pipefail
           git init .
-          git remote add origin "https://github.com/${{ GITHUB_REPOSITORY}}.git"
-          auth="$(printf 'x-access-token:%s' "${{ GH_TOKEN}}" | base64 | tr -d '\n')"
-          git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${{ GITHUB_SHA}}"
+          git remote add origin "https://github.com/${{ github.repository}}.git"
+          auth="$(printf 'x-access-token:%s' "${{ github.token}}" | base64 | tr -d '\n')"
+          git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${{ github.sha}}"
           git checkout --detach FETCH_HEAD
           git config --unset-all http.extraheader 2>/dev/null || true
           git rev-parse --short HEAD
@@ -239,9 +239,9 @@ jobs:
         run: |
           set -Eeuo pipefail
           git init .
-          git remote add origin "https://github.com/${{ GITHUB_REPOSITORY}}.git"
-          auth="$(printf 'x-access-token:%s' "${{ GH_TOKEN}}" | base64 | tr -d '\n')"
-          git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${{ GITHUB_SHA}}"
+          git remote add origin "https://github.com/${{ github.repository}}.git"
+          auth="$(printf 'x-access-token:%s' "${{ github.token}}" | base64 | tr -d '\n')"
+          git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${{ github.sha}}"
           git checkout --detach FETCH_HEAD
           git config --unset-all http.extraheader 2>/dev/null || true
           git rev-parse --short HEAD
@@ -273,7 +273,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          echo "REGISTRY_LC=ghcr.io/${{ GITHUB_REPOSITORY,,}}" >> "${{ GITHUB_ENV}}"
+          echo "REGISTRY_LC=ghcr.io/${{ github.repository,,}}" >> "${{ github.env}}"
       - name: Build and push multi-architecture image
         shell: bash
         run: |
@@ -330,9 +330,9 @@ jobs:
         run: |
           set -Eeuo pipefail
           git init .
-          git remote add origin "https://github.com/${{ GITHUB_REPOSITORY}}.git"
-          auth="$(printf 'x-access-token:%s' "${{ GH_TOKEN}}" | base64 | tr -d '\n')"
-          git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${{ GITHUB_SHA}}"
+          git remote add origin "https://github.com/${{ github.repository}}.git"
+          auth="$(printf 'x-access-token:%s' "${{ github.token}}" | base64 | tr -d '\n')"
+          git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${{ github.sha}}"
           git checkout --detach FETCH_HEAD
           git config --unset-all http.extraheader 2>/dev/null || true
           git rev-parse --short HEAD
@@ -340,7 +340,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          echo "REGISTRY_LC=ghcr.io/${{ GITHUB_REPOSITORY,,}}" >> "${{ GITHUB_ENV}}"
+          echo "REGISTRY_LC=ghcr.io/${{ github.repository,,}}" >> "${{ github.env}}"
       - name: Install Cosign (native binary)
         shell: bash
         run: |
