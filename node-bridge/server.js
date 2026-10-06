@@ -44,6 +44,8 @@ const http = require('http');
 const https = require('https');
 const fs = require('fs');
 const path = require('path');
+const vm = require('vm');
+const { execFile } = require('child_process');
 const { WebSocket: WsClient, WebSocketServer } = require('ws');
 
 // ---------------------------------------------------------------------------
@@ -75,7 +77,7 @@ const LOCAL_NETWORK_ALLOWLIST = new Set(
 
 function isLoopbackHost(hostname) {
   const host = String(hostname || '').toLowerCase().replace(/^\[|\]$/g, '');
-  return host === 'localhost' || host === '::1' || /^127(?:\.d{1,3}){3}$/.test(host);
+  return host === 'localhost' || host === '::1' || /^127(?:\.\d{1,3}){3}$/.test(host);
 }
 
 function networkAllowed(target) {
@@ -101,17 +103,17 @@ function recordRemoteAttempt(target, allowed, reason) {
 
 // Reconnect tuning for Python-backend proxy
 const SG_BASE_RECONNECT_MS = 3000;
-const SG_MAX_RECONNECT_MS  = 30000;
+const SG_MAX_RECONNECT_MS = 30000;
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: '2mb' }));
 
 // ---------------------------------------------------------------------------
 // CORS — default to bridge origin
 // ---------------------------------------------------------------------------
 app.use((_req, res, next) => {
   const origin = process.env.CORS_ORIGIN || 'null';
-  res.setHeader('Access-Control-AllowOrigin', origin);
+  res.setHeader('Access-Control-Allow-Origin', origin);
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PATCH,DELETE,OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
   if (_req.method === 'OPTIONS') return res.sendStatus(204);
@@ -210,12 +212,10 @@ app.use('/api/weather', (req, res) => proxyRequest(WEATHER_URL, req, res));
 app.use('/api/forecast', (req, res) => proxyRequest(WEATHER_URL, req, res));
 
 // ---------------------------------------------------------------------------
-// Agent / Gateway proxy — routes agent traffic to the multi-agent gateway
+// Agent / Gateway proxy
 // ---------------------------------------------------------------------------
 
-// POST /ai/:agentId — AI agent bridge (called by SGHv119.html orchestrator)
 app.post('/ai/:agentId', (req, res) => {
-  // Sanitize agent ID to alphanumeric, underscore, hyphen only
   const agentId = (req.params.agentId || '').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 64);
   if (!agentId) {
     return res.status(400).json({ error: 'Invalid agent ID' });
@@ -260,7 +260,6 @@ app.post('/ai/:agentId', (req, res) => {
     proxyRes.on('end', () => {
       try {
         const result = JSON.parse(data);
-        // Wrap in OpenAI-compatible format for SGHv119.html bridge() function
         res.json({
           choices: [{
             message: { content: result.result || result.error || data, role: 'assistant' },
@@ -291,19 +290,12 @@ app.post('/ai/:agentId', (req, res) => {
   proxyReq.end();
 });
 
-// Proxy /api/chat → Gateway
 app.use('/api/chat', (req, res) => proxyRequest(GATEWAY_URL, req, res));
-
-// Proxy /api/voice → Gateway
 app.use('/api/voice', (req, res) => proxyRequest(GATEWAY_URL, req, res));
-
-// Proxy /api/plugins/* → Gateway
 app.use('/api/plugins', (req, res) => proxyRequest(GATEWAY_URL, req, res));
-
-// Proxy /api/judge/* → Gateway
 app.use('/api/judge', (req, res) => proxyRequest(GATEWAY_URL, req, res));
 
-// GET /api/agents/status — aggregated ecosystem agent health
+// GET /api/agents/status
 app.get('/api/agents/status', async (_req, res) => {
   const agents = {
     gateway: { url: GATEWAY_URL, status: 'offline', port: 9001 },
@@ -315,9 +307,7 @@ app.get('/api/agents/status', async (_req, res) => {
   const checkAgent = (key) =>
     new Promise((resolve) => {
       const baseUrl = agents[key].url;
-      if (!baseUrl) {
-        return resolve();
-      }
+      if (!baseUrl) return resolve();
 
       let target;
       try {
@@ -365,14 +355,129 @@ app.get('/api/agents/status', async (_req, res) => {
 });
 
 // ---------------------------------------------------------------------------
-// WebSocket — two servers: /ws/alerts (broadcast) + root / (Python-backend proxy)
+// Metrics / bridge status / notify
+// ---------------------------------------------------------------------------
+app.get('/api/metrics', (_req, res) => {
+  const mem = process.memoryUsage();
+  res.json({
+    uptime_s: process.uptime(),
+    memory: mem,
+    pid: process.pid,
+    node: process.version,
+    websocket_clients: clients.size + rootClients.size,
+    network_mode: NETWORK_MODE,
+    timestamp: new Date().toISOString(),
+  });
+});
+
+app.get('/api/bridge/status', (_req, res) => {
+  res.json({
+    service: 'node-bridge',
+    status: 'online',
+    port: PORT,
+    uptime_s: process.uptime(),
+    backends: { api: BACKEND_URL, weather: WEATHER_URL, gateway: GATEWAY_URL },
+    websocket: { alerts: clients.size, root: rootClients.size },
+    timestamp: new Date().toISOString(),
+  });
+});
+
+app.post('/api/bridge/notify', (req, res) => {
+  const payload = JSON.stringify({ type: 'notify', ...(req.body || {}), ts: new Date().toISOString() });
+  let sent = 0;
+  for (const ws of clients) {
+    if (ws.readyState === 1) {
+      ws.send(payload);
+      sent += 1;
+    }
+  }
+  res.json({ ok: true, delivered: sent });
+});
+
+// Fail-closed stubs for optional capabilities (report UNAVAILABLE, never fake success)
+function unavailable(res, capability) {
+  return res.status(503).json({ status: 'UNAVAILABLE', capability, code: 'REQUIRE_APPROVAL' });
+}
+
+app.post('/validate/step', (_req, res) => unavailable(res, 'validate/step'));
+app.post('/validate/signatures', (_req, res) => unavailable(res, 'validate/signatures'));
+app.post('/tpm/attest', (_req, res) => unavailable(res, 'tpm/attest'));
+app.post('/threats/feed', (_req, res) => unavailable(res, 'threats/feed'));
+app.post('/scan/directory', (_req, res) => unavailable(res, 'scan/directory'));
+app.post('/test/poison', (_req, res) => unavailable(res, 'test/poison'));
+app.post('/keycloak/token', (_req, res) => unavailable(res, 'keycloak/token'));
+app.post('/mtls/handshake', (_req, res) => unavailable(res, 'mtls/handshake'));
+app.post('/spiffe/svid', (_req, res) => unavailable(res, 'spiffe/svid'));
+
+app.post('/proxy/fetch', (req, res) => {
+  const target = req.body && req.body.url;
+  if (!target) return res.status(400).json({ error: 'url required' });
+  if (!networkAllowed(target)) {
+    recordRemoteAttempt(target, false, 'offline policy');
+    return res.status(503).json({ error: 'Outbound network disabled by offline policy', code: 'OFFLINE_NETWORK_BLOCKED' });
+  }
+  return unavailable(res, 'proxy/fetch');
+});
+app.post('/proxy/text', (req, res) => unavailable(res, 'proxy/text'));
+app.post('/proxy', (req, res) => unavailable(res, 'proxy'));
+
+app.post('/exec/code', (req, res) => {
+  const lang = ((req.body && req.body.lang) || 'node').toLowerCase();
+  const code = (req.body && req.body.code) || '';
+  if (!code) return res.status(400).json({ error: 'No code provided' });
+  if (lang === 'node' || lang === 'javascript' || lang === 'js') {
+    try {
+      const logs = [];
+      const sandbox = {
+        console: {
+          log: (...args) => logs.push(args.map(String).join(' ')),
+          error: (...args) => logs.push('[ERR] ' + args.map(String).join(' ')),
+          warn: (...args) => logs.push('[WARN] ' + args.map(String).join(' ')),
+        },
+        Math, Date, JSON, parseInt, parseFloat, String, Number, Boolean, Array, Object,
+      };
+      const ctx = vm.createContext(sandbox);
+      const script = new vm.Script(code, { filename: 'exec-code.js', timeout: 10000 });
+      const result = script.runInContext(ctx, { timeout: 10000 });
+      if (result !== undefined && logs.length === 0) {
+        logs.push(typeof result === 'object' ? JSON.stringify(result, null, 2) : String(result));
+      }
+      return res.json({ output: logs.join('\n') || '(no output)', lang });
+    } catch (err) {
+      return res.status(400).json({ output: '', error: err.message, lang });
+    }
+  }
+  if (lang === 'python' || lang === 'py') {
+    return execFile('python3', ['-c', code], { timeout: 15000, maxBuffer: 512 * 1024 }, (err, stdout, stderr) => {
+      const output = (stdout || '') + (stderr ? '\n[stderr] ' + stderr : '');
+      res.json({
+        output: output || (err ? err.message : '(no output)'),
+        error: err ? err.message : undefined,
+        lang,
+      });
+    });
+  }
+  return res.status(400).json({ error: 'Unsupported lang: ' + lang });
+});
+
+app.get('/satellite/imagery', (_req, res) => unavailable(res, 'satellite/imagery'));
+app.get('/satellite/goes', (_req, res) => unavailable(res, 'satellite/goes'));
+app.get('/alerts/live', (_req, res) => {
+  res.json({ alerts: [], source: 'node-bridge', timestamp: new Date().toISOString() });
+});
+app.post('/error_ping', (req, res) => {
+  console.error('[error_ping]', JSON.stringify(req.body || {}).slice(0, 500));
+  res.json({ ok: true });
+});
+
+// ---------------------------------------------------------------------------
+// WebSocket — /ws/alerts (broadcast) + root (Python-backend proxy)
 // ---------------------------------------------------------------------------
 const useTLS = TLS_CERT && TLS_KEY && fs.existsSync(TLS_CERT) && fs.existsSync(TLS_KEY);
 const tlsOptions = useTLS
   ? {
       cert: fs.readFileSync(TLS_CERT),
       key: fs.readFileSync(TLS_KEY),
-      // mTLS: request a client certificate and verify it against the CA.
       requestCert: TLS_REQUEST_CERT || Boolean(TLS_CA),
       rejectUnauthorized: TLS_REJECT_UNAUTHORIZED,
       ca: TLS_CA && fs.existsSync(TLS_CA) ? fs.readFileSync(TLS_CA) : undefined,
@@ -382,9 +487,8 @@ const server = useTLS
   ? https.createServer(tlsOptions, app)
   : http.createServer(app);
 
-// Both servers use noServer so we can route upgrades manually by path
-const wss = new WebSocketServer({ noServer: true });      // /ws/alerts — broadcast channel
-const wssRoot = new WebSocketServer({ noServer: true });  // /  and all other paths — Python-backend proxy
+const wss = new WebSocketServer({ noServer: true });
+const wssRoot = new WebSocketServer({ noServer: true });
 
 server.on('upgrade', (req, socket, head) => {
   const pathname = (() => {
@@ -399,14 +503,11 @@ server.on('upgrade', (req, socket, head) => {
 });
 
 const clients = new Set();
+const rootClients = new Set();
 
-// ---------------------------------------------------------------------------
-// Shared sandboxed EXEC helper (used by both WS servers)
-// ---------------------------------------------------------------------------
 function handleWsExec(msg, ws) {
   const lang = (msg.lang || 'node').toLowerCase();
   const code = msg.code || '';
-  // Sanitize user to printable ASCII only — prevents log injection
   const user = String(msg.user || 'anon').replace(/[^\x20-\x7E]/g, '').slice(0, 64) || 'anon';
   if (!code) {
     ws.send(JSON.stringify({ type: 'exec_result', output: '', error: 'No code provided' }));
@@ -463,7 +564,92 @@ function handleWsExec(msg, ws) {
   }
 }
 
-// /ws/alerts — legacy broadcast channel for dashboard alerts/notifications
+// /ws/alerts — broadcast channel for dashboard alerts/notifications
 wss.on('connection', (ws) => {
   clients.add(ws);
-  console.log(`[ws/alerts] client connected (${clients.size} to[+39774 bytes at .content[1].resource.text]"}}
+  console.log(`[ws/alerts] client connected (${clients.size} total)`);
+  ws.send(JSON.stringify({ type: 'welcome', channel: 'alerts', clients: clients.size }));
+
+  ws.on('message', (raw) => {
+    let msg;
+    try {
+      msg = JSON.parse(String(raw));
+    } catch {
+      ws.send(JSON.stringify({ type: 'error', error: 'Invalid JSON' }));
+      return;
+    }
+    if (msg.type === 'exec') {
+      handleWsExec(msg, ws);
+      return;
+    }
+    if (msg.type === 'ping') {
+      ws.send(JSON.stringify({ type: 'pong', ts: Date.now() }));
+      return;
+    }
+    // Broadcast other messages to all alert clients
+    const out = JSON.stringify({ type: 'broadcast', ...(msg || {}), ts: new Date().toISOString() });
+    for (const client of clients) {
+      if (client !== ws && client.readyState === 1) client.send(out);
+    }
+  });
+
+  ws.on('close', () => {
+    clients.delete(ws);
+    console.log(`[ws/alerts] client disconnected (${clients.size} total)`);
+  });
+
+  ws.on('error', (err) => {
+    console.error('[ws/alerts] error:', err.message);
+    clients.delete(ws);
+  });
+});
+
+// Root WebSocket — terminal / Python-backend proxy path
+wssRoot.on('connection', (ws) => {
+  rootClients.add(ws);
+  console.log(`[ws/root] client connected (${rootClients.size} total)`);
+  ws.send(JSON.stringify({ type: 'welcome', channel: 'root', clients: rootClients.size }));
+
+  ws.on('message', (raw) => {
+    let msg;
+    try {
+      msg = JSON.parse(String(raw));
+    } catch {
+      ws.send(JSON.stringify({ type: 'error', error: 'Invalid JSON' }));
+      return;
+    }
+    if (msg.type === 'exec') {
+      handleWsExec(msg, ws);
+      return;
+    }
+    if (msg.type === 'ping') {
+      ws.send(JSON.stringify({ type: 'pong', ts: Date.now() }));
+      return;
+    }
+    ws.send(JSON.stringify({ type: 'ack', received: msg.type || 'unknown' }));
+  });
+
+  ws.on('close', () => {
+    rootClients.delete(ws);
+    console.log(`[ws/root] client disconnected (${rootClients.size} total)`);
+  });
+
+  ws.on('error', (err) => {
+    console.error('[ws/root] error:', err.message);
+    rootClients.delete(ws);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Listen
+// ---------------------------------------------------------------------------
+server.listen(PORT, '127.0.0.1', () => {
+  console.log(`[node-bridge] listening on 127.0.0.1:${PORT} (TLS=${Boolean(useTLS)}) mode=${NETWORK_MODE}`);
+});
+
+server.on('error', (err) => {
+  console.error('[node-bridge] server error:', err.message);
+  process.exit(1);
+});
+
+module.exports = { app, server, clients, rootClients };
