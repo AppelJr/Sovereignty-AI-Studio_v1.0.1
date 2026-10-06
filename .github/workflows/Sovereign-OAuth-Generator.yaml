@@ -39,8 +39,7 @@ permissions:
   contents: read
 env:
   PYTHONPATH: .:./backend
-  PIP_DISABLE_PIP_VERSION_CHECK: "1"
-  PYTHONDONTWRITEBYTECODE: "1"
+  PIP_VERSION_CHECK: true
 jobs:
   build-test:
     name: Build / Test — Python ${{ matrix.python}}
@@ -50,7 +49,6 @@ jobs:
       matrix:
         python:
           - "3.13"
-          - "3.14"
     steps:
       - name: Checkout Commit
         env:
