@@ -2,7 +2,7 @@ name: Repository Watchdog
 
 on:
   push:
-    branches: [main, Claude, GPT/Codex, ara-hardened, copilot/main, Collaboration, duckAI, devassist420]
+    branches: [main, Claude, GPT/Codex, ara-hardened, copilot/main, Collaboration, Grok, duckAI, devassist420]
   workflow_dispatch:
 
 permissions:
