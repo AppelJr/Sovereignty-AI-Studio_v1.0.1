@@ -146,7 +146,7 @@ jobs:
       contents: read
       security-events: write
     steps:
-      - name: Checkout exact commit (native git)
+      - name: Checkout commit
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
