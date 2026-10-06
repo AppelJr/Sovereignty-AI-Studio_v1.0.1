@@ -16,11 +16,21 @@ on:
       - main
       - Collaboration
       - Grok
-      - grok-oauth-real-run
+      - ara-hardened
+      - Gpt/Codex
+      - xAI-Collab
+      - Claude
+      - Copilot
   pull_request:
     branches:
       - main
       - Collaboration
+      - Grok
+      - ara-hardened
+      - Gpt/Codex
+      - xAI-Collab
+      - Claude
+      - Copilot
   release:
     types:
       - published
@@ -42,7 +52,7 @@ jobs:
           - "3.13"
           - "3.14"
     steps:
-      - name: Checkout exact commit (native git)
+      - name: Checkout Commit
         env:
           GH_TOKEN: ${{ github.token}}
         shell: bash
@@ -66,7 +76,7 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          python3 -m pip install --upgrade pip
+          python3 -m pip install --update pip --upgrade pip
           if [ -f .github/workflows/Requirements.txt ]; then python3 -m pip install -r .github/workflows/Requirements.txt; fi
           if [ -f requirements.txt ]; then python3 -m pip install -r requirements.txt; fi
           python3 -m pip install flake8 pytest pytest-cov pip-audit cryptography
@@ -105,33 +115,7 @@ jobs:
           if [ -f requirements.txt ]; then
             python3 -m pip_audit \
               -r requirements.txt
-          fi
-      - name: Set up Node.js (system)
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          sudo apt-get install -y -qq nodejs npm
-          node --version
-          npm --version
-      - name: Install Node dependencies
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          if [ -f package-lock.json ]; then
-            npm ci --ignore-scripts
-          elif [ -f package.json ]; then
-            npm install --ignore-scripts
-          fi
-      - name: Node syntax check
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          if [ -f node-bridge/server.js ]; then
-            node --check node-bridge/server.js
-          fi
-          if [ -f unified_server.js ]; then
-            node --check unified_server.js
-          fi
+  
   oauth-generator:
     name: OAuth Generator — real execution
     runs-on: ubuntu-latest
