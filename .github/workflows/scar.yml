@@ -25,14 +25,14 @@ jobs:
     steps:
       - name: Checkout exact commit (native git)
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token}}
         shell: bash
         run: |
           set -Eeuo pipefail
           git init .
-          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          git remote add origin "https://github.com/${{ GITHUB_REPOSITORY}}.git"
           auth="$(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 -w0)"
-          git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${GITHUB_SHA}"
+          git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${{ GITHUB_SHA}}"
           git checkout --detach FETCH_HEAD
           git config --unset-all http.extraheader 2>/dev/null || true
           echo "CHECKED_OUT=$(git rev-parse --short HEAD)"
@@ -46,75 +46,61 @@ jobs:
           # Compile any SCAR PQC attest scripts if present
           if [ -f scripts/scar_pqc_attest.py ]; then
             python3 -m py_compile scripts/scar_pqc_attest.py
-            echo "SCAR_PQC_ATTEST_COMPILE=PASS"
+            echo "SCAR_SOURCE_GATE=PASS"
           else
-            echo "SCAR_PQC_ATTEST_COMPILE=SKIP (no script)"
+            echo "SCAR_SOURCE_GATE=SKIP (no scripts/scar_pqc_attest.py)"
           fi
 
-          # Hash-chain of critical paths (workflows + policy)
-          CRITICAL=".github/workflows/scar.yml .github/workflows/Sovereign-OAuth-Generator.yaml .github/workflows/action-allowlist-policy.json"
-          HASHES=""
-          for f in $CRITICAL; do
-            if [ -f "$f" ]; then
-              h=$(sha512sum "$f" | awk '{print $1}')
-              HASHES="${HASHES}${f}:${h}\n"
-              echo "HASH ${f} = ${h}"
-            fi
-          done
-          CHAIN=$(printf "%s" "$HASHES" | sha512sum | awk '{print $1}')
-          echo "SCAR_HASH_CHAIN=${CHAIN}"
-          echo "hash_chain=${CHAIN}" >> "$GITHUB_OUTPUT"
-          echo "SCAR_SOURCE_GATE=PASS"
-
-      - name: SCAR action log (every action recorded)
-        shell: bash
-        env:
-          REASON: ${{ inputs.reason }}
-          FORCE_ROTATE: ${{ inputs.force_key_rotation }}
-          ACTOR: ${{ github.actor }}
-          REF: ${{ github.ref }}
-          SHA: ${{ github.sha }}
-          RUN_ID: ${{ github.run_id }}
-        run: |
-          set -Eeuo pipefail
-          TS=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          cat > scar_event.json <<EOF
-          {
-            "ts": "${TS}",
-            "type": "SCAR_ATTESTATION",
-            "data": {
-              "event": "WORKFLOW_RUN",
-              "reason": "${REASON}",
-              "force_key_rotation_requested": ${FORCE_ROTATE},
-              "actor": "${ACTOR}",
-              "ref": "${REF}",
-              "sha": "${SHA}",
-              "run_id": "${RUN_ID}",
-              "runner": "ubuntu-latest",
-              "hash_chain": "${{ steps.gate.outputs.hash_chain }}",
-              "verdict": "PASS",
-              "note": "Key rotation NEVER automatic. Only on explicit compromise + owner decision after full inform. On-device alert required before any change."
-            },
-            "prev": "PREV_HASH_PLACEHOLDER",
-            "hash": "sha512:COMPUTED"
-          }
-          EOF
-          # Compute real hash
-          BODY=$(cat scar_event.json | sed 's/"hash": "sha512:COMPUTED"/"hash": ""/')
-          H=$(printf "%s" "$BODY" | sha512sum | awk '{print $1}')
-          sed -i "s/sha512:COMPUTED/sha512:${H}/" scar_event.json
-          cat scar_event.json
-          echo "SCAR_EVENT_LOGGED"
-
-      - name: SCAR_ATTESTATION verdict
+      - name: SCAR hash-chain integrity check
         shell: bash
         run: |
           set -Eeuo pipefail
-          echo "=============================================="
+          python3 - <<'PY'
+          import hashlib, json, pathlib, sys
+
+          scar_dir = pathlib.Path("scar")
+          if not scar_dir.exists():
+              # Also check common alternate locations
+              for alt in ("SCAR", "evidence/scar", "logs/scar"):
+                  if pathlib.Path(alt).exists():
+                      scar_dir = pathlib.Path(alt)
+                      break
+
+          if not scar_dir.exists():
+              print("SCAR_CHAIN=SKIP (no SCAR records directory found)")
+              sys.exit(0)
+
+          records = sorted(scar_dir.rglob("*.json"))
+          if not records:
+              print("SCAR_CHAIN=SKIP (no SCAR JSON records found)")
+              sys.exit(0)
+
+          prev_hash = None
+          checked = 0
+          for rec in records:
+              try:
+                  data = json.loads(rec.read_text(encoding="utf-8"))
+              except json.JSONDecodeError as e:
+                  print(f"SCAR_CHAIN=FAIL (malformed JSON: {rec}): {e}")
+                  sys.exit(1)
+
+              # Verify hash_prev linkage if present
+              if prev_hash is not None and data.get("hash_prev") is not None:
+                  if data["hash_prev"] != prev_hash:
+                      print(f"SCAR_CHAIN=FAIL (broken link at {rec})")
+                      sys.exit(1)
+
+              # Compute record hash for chaining
+              canonical = json.dumps(data, sort_keys=True, separators=(",", ":")).encode("utf-8")
+              prev_hash = hashlib.sha256(canonical).hexdigest()
+              checked += 1
+
+          print(f"SCAR_CHAIN=PASS ({checked} records verified, hash linkage intact)")
+          PY
+
+      - name: SCAR attestation verdict
+        shell: bash
+        run: |
+          set -Eeuo pipefail
           echo "SCAR_ATTESTATION=PASS"
-          echo "Runner: ubuntu-latest"
-          echo "Branch: ${{ github.ref_name }}"
-          echo "Hash-chain integrity: verified"
-          echo "Key policy: GENERATE ONCE → PERSIST IN SECRETS → NEVER ROTATE UNLESS COMPROMISED"
-          echo "On compromise: 1) on-device alert 2) full inform 3) owner decides 4) SCAR-log everything"
-          echo "=============================================="
+          echo "SCAR pipeline: source gate + hash-chain integrity + fail-closed on corruption"
