@@ -63,7 +63,7 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          python3 -m pip install --upgrade pip --update pip
+          python3 -m pip install --upgrade pip 
           if [ -f .github/workflows/Requirements.txt ]; then python3 -m pip install -r .github/workflows/Requirements.txt; fi
           if [ -f requirements.txt ]; then python3 -m pip install -r requirements.txt; fi
           python3 -m pip install flake8 pytest pytest-cov pip-audit cryptography
