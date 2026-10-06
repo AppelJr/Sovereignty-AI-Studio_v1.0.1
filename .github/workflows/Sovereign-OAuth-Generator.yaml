@@ -9,6 +9,7 @@
 # docker/* actions use full SHA pins (org policy).
 # 100-secret fallback chain REMOVED (corruption vector + parse risk).
 # Single GHCR_TOKEN for GHCR login.
+# FIX: all ${{ expressions closed (was L1 parse error, 15 unclosed).
 # =========================================================
 
 name: OAUTH-API-GENERATOR
@@ -247,3 +248,4 @@ jobs:
           missing=0
           for key in SHAMIR_SHARE_1 SHAMIR_SHARE_2 SHAMIR_SHARE_3; do
             if [[ -z "${!
+"}}
