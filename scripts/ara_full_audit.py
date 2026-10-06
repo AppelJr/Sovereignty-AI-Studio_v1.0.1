@@ -15,7 +15,7 @@ from collections import defaultdict
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-REPO = os.environ.get("GITHUB_REPOSITORY", "Appel420/Sovereignty-AI-Studio")
+REPO = os.environ.get("GH_REPOSITORY", "AppelJr/Sovereignty-AI-Studio_v1.0.1")
 BRANCH = os.environ.get("ARA_CANONICAL_BRANCH", "Collaboration")
 RULESET = os.environ.get("ARA_RULESET_NAME", "Ara")
 REPORT = ROOT / "automation/reports/ara_full_audit.json"
@@ -67,11 +67,17 @@ def main() -> int:
             templates.append(rel(p))
     local = {"branch": git("branch", "--show-current"), "head": git("rev-parse", "HEAD"), "files_scanned": len(fs), "duplicate_groups": dupes, "nested_git_repositories": nested, "nested_studio_snapshot_paths": snapshots, "credential_or_template_risks": templates, "status": git("status", "--porcelain=v1").splitlines()}
     remote = {"checked": False}
-    token = os.environ.get("GITHUB_TOKEN")
+    token = os.environ.get("GH_TOKEN")
     if token:
         try:
             rs = api(f"/repos/{REPO}/rulesets", token)
-            matches = [r for r in rs if r.get("name", "").casefold() == RULESET.casefold()]
+            # Guard: the rulesets endpoint must return a list. A non-list
+            # (e.g. a single ruleset dict from a mismatched mock) is not
+            # iterable as rulesets - treat as zero matches, fail-closed.
+            if isinstance(rs, list):
+                matches = [r for r in rs if isinstance(r, dict) and r.get("name", "").casefold() == RULESET.casefold()]
+            else:
+                matches = []
             remote = {"checked": True, "matches": [api(f"/repos/{REPO}/rulesets/{r['id']}", token) for r in matches]}
         except (urllib.error.URLError, urllib.error.HTTPError, OSError, TimeoutError) as e:
             remote = {"checked": False, "error": str(e)}
@@ -79,7 +85,8 @@ def main() -> int:
     if nested: findings.append({"severity": "HIGH", "code": "NESTED_REPOSITORY"})
     if snapshots: findings.append({"severity": "HIGH", "code": "NESTED_STUDIO_SNAPSHOT"})
     if templates: findings.append({"severity": "HIGH", "code": "CREDENTIAL_OR_TEMPLATE_RISK"})
-    if dupes: findings.append({"severity": "MEDIUM", "code": "DUPLICATE_CONTENT", "groups": len(dupes)})
+    if dupes: findings.append({"severity": "MEDIUM", "code": "DUPLICATE_CONTENT", "groups": len(dupes)
+    })
     if remote.get("checked"):
         matches = remote.get("matches", [])
         if not matches: findings.append({"severity": "CRITICAL", "code": "ARA_RULESET_MISSING"})
