@@ -136,14 +136,14 @@ jobs:
     steps:
       - name: Checkout exact commit (native git)
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token}}
         shell: bash
         run: |
           set -Eeuo pipefail
           git init .
-          git remote add origin "https://github.com/${{ github.repository }}.git"
-          auth="$(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 | tr -d '\n')"
-          git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${{ github.sha }}"
+          git remote add origin "https://github.com/${{ GITHUB_REPOSITORY}}.git"
+          auth="$(printf 'x-access-token:%s' "${{ GH_TOKEN}}" | base64 | tr -d '\n')"
+          git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${{ GITHUB_SHA}}"
           git checkout --detach FETCH_HEAD
           git config --unset-all http.extraheader 2>/dev/null || true
           git rev-parse --short HEAD
@@ -270,7 +270,7 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          echo "${{ github.token }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+          echo "${{ github.token}}" | docker login ghcr.io -u ${{ github.actor}} --password-stdin
       - name: Compute image name
         shell: bash
         run: |
@@ -393,25 +393,25 @@ jobs:
       - name: Verify required jobs succeeded
         shell: bash
         env:
-          BUILD_TEST: ${{ needs.build-test.result }}
-          OAUTH_GENERATOR: ${{ needs.oauth-generator.result }}
-          SECURITY_SCAN: ${{ needs.security-scan.result }}
-          BUILD_SIGN: ${{ needs.build-sign.result }}
-          SUPPLY_CHAIN: ${{ needs.supply-chain.result }}
+          BUILD_TEST: ${{ needs.build-test.result}}
+          OAUTH_GENERATOR: ${{ needs.oauth-generator.result}}
+          SECURITY_SCAN: ${{ needs.security-scan.result}}
+          BUILD_SIGN: ${{ needs.build-sign.result}}
+          SUPPLY_CHAIN: ${{ needs.supply-chain.result}}
         run: |
           set -Eeuo pipefail
-          echo "build-test=${BUILD_TEST}"
-          echo "oauth-generator=${OAUTH_GENERATOR}"
-          echo "security-scan=${SECURITY_SCAN}"
-          echo "build-sign=${BUILD_SIGN}"
-          echo "supply-chain=${SUPPLY_CHAIN}"
-          test "${BUILD_TEST}" = "success"
-          test "${OAUTH_GENERATOR}" = "success"
-          test "${SECURITY_SCAN}" = "success"
-          if [[ "${{ github.event_name }}" == "release" ]] || \
-             [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == "refs/heads/main" ]]; then
-            test "${BUILD_SIGN}" = "success"
-            test "${SUPPLY_CHAIN}" = "success"
+          echo "build-test=${{ BUILD_TEST}}"
+          echo "oauth-generator=${{ OAUTH_GENERATOR}}"
+          echo "security-scan=${{ SECURITY_SCAN}}"
+          echo "build-sign=${{ BUILD_SIGN}}"
+          echo "supply-chain=${{ SUPPLY_CHAIN}}"
+          test "${{ BUILD_TEST}}" = "success"
+          test "${{ OAUTH_GENERATOR}}" = "success"
+          test "${{ SECURITY_SCAN}}" = "success"
+          if [[ "${{ github.event_name}}" == "release" ]] || \
+             [[ "${{ github.event_name}}" == "push" && "${{ github.ref}}" == "refs/heads/main" ]]; then
+            test "${{ BUILD_SIGN}}" = "success"
+            test "${{ SUPPLY_CHAIN}}" = "success"
           fi
           echo "Verification completed successfully."
 # CI success ≠ production certification. Device-local ≠ repository CI.
