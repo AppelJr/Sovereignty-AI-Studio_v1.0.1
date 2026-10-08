@@ -5,6 +5,8 @@
 # node.js.yml, python-ci.yml, and ara-hardened-ci.yml.
 #
 # Provenance: rewritten 2026-10-08 by Grok lane at AppelJr's direction.
+# Path fix 2026-10-08: generator lives at scripts/oauth_local_generator.py,
+# not .github/workflows/. Run #33 failed on the wrong path.
 
 name: OAUTH-API-GENERATOR
 
@@ -46,7 +48,16 @@ jobs:
           set -Eeuo pipefail
           OUT="$(mktemp -d)"
           trap 'rm -rf "${OUT}"' EXIT
-          python3 .github/workflows/oauth_local_generator.py "${OUT}"
-          test -d "${OUT}"
-          echo "OAuth generator artifacts written to ${OUT}"
+          python3 scripts/oauth_local_generator.py --service sovereignty-ai-studio --output-dir "${OUT}"
+          test -f "${OUT}/oauth-client.json"
+          test -f "${OUT}/oauth-private-key.pem"
+          test -f "${OUT}/provenance.json"
+          python3 -c "import json; d=json.load(open('${OUT}/oauth-client.json')); assert d['signing_algorithm']=='ML-DSA-87'; assert 'private_key' not in d; assert d['key_reference']=='oauth-private-key.pem'; assert len(d['kid'])==32"
+          python3 -c "import json; d=json.load(open('${OUT}/provenance.json')); assert d['event']=='credential_generated'; assert d['algorithm']=='ML-DSA-87'"
+          echo "OAuth generator artifacts verified in ${OUT}"
           ls -la "${OUT}"
+
+      - name: Run local OAuth contract validator
+        run: |
+          set -Eeuo pipefail
+          python3 scripts/validate-local-oauth.py
