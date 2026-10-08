@@ -53,11 +53,6 @@ defaults:
   run:
     shell: bash
 
-env:
-  PYTHONPATH: .:./backend
-  PIP_DISABLE_PIP_VERSION_CHECK: "1"
-  PIP_NO_CACHE_DIR: "1"
-
 jobs:
 
   # =========================================================
@@ -73,7 +68,7 @@ jobs:
         python: ['3.13']
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 1
           persist-credentials: true
@@ -118,7 +113,7 @@ jobs:
           persist-credentials: true
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 25
 
@@ -184,7 +179,7 @@ jobs:
           echo "REGISTRY_LC=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
 
       - name: Build Multi-Arch Image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           platforms: linux/amd64,linux/arm64
@@ -218,7 +213,7 @@ jobs:
     steps:
       - name: Dependency Review
         continue-on-error: false
-        uses: actions/dependency-review-action@v4
+        uses: actions/dependency-review-action@v5
         # Advisory only: some repositories do not have dependency graph / GHAS
         # enabled, so this should not block regulated-use CI execution.
 
