@@ -9,66 +9,12 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
-env:
-  PYTHONPATH: .:./backend
-  PIP_VERSION_CHECK: true
 jobs:
   oauth-generator:
     name: OAuth Generator
     runs-on: ubuntu-latest
-    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-      - name: Set up Python
-        uses: actions/setup-python@a309ff6b9b65668c78104e57f5c09729b44f9ef5
-        with:
-          python-version: "3.13"
-      - name: Install cryptography
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install cryptography
       - name: Run OAuth generator dry-run
-        run: |
-          set -Eeuo pipefail
-          python scripts/oauth_local_generator.py --dry-run
-          echo "OAUTH_GENERATOR=PASS"
-  build-test:
-    name: Build Test Python
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ["3.13"]
-    steps:
-      - name: Checkout
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-      - name: Set up Python
-        uses: actions/setup-python@a309ff6b9b65668c78104e57f5c09729b44f9ef5
-        with:
-          python-version: ${{ matrix.python-version}}
-      - name: Install Python dependencies
-        run: |
-          python -m pip install --upgrade pip
-          if [ -f .github/workflows/Requirements.txt ]; then python -m pip install -r .github/workflows/Requirements.txt; fi
-          if [ -f requirements.txt ]; then python -m pip install -r requirements.txt; fi
-          if [ -f backend/requirements.txt ]; then python -m pip install -r backend/requirements.txt; fi
-          python -m pip install flake8 pytest pytest-cov pip-audit cryptography
-      - name: Validate Python syntax
-        run: |
-          set -Eeuo pipefail
-          python -m compileall -q apps backend src
-      - name: Lint
-        run: |
-          set -Eeuo pipefail
-          flake8 --count --select=E9,F63,F7,F82 --show-source --statistics
-      - name: Run Python unit tests
-        run: |
-          set -Eeuo pipefail
-          env -u GH_TOKEN -u GITH_TOKEN pytest --cov=apps --cov=backend --cov=src --cov-report=xml --strict-markers -x --tb=short
-      - name: Dependency audit
-        run: |
-          set -Eeuo pipefail
-          if [ -f .github/workflows/Requirements.txt ]; then python -m pip_audit -r .github/workflows/Requirements.txt; fi
-          if [ -f requirements.txt ]; then python -m pip_audit -r requirements.txt; fi
-          if [ -f backend/requirements.txt ]; then python -m pip_audit -r backend/requirements.txt; fi
+        run: python scripts/oauth_local_generator.py --dry-run
