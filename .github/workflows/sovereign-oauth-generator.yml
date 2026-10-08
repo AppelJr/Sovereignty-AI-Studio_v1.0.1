@@ -83,15 +83,17 @@ jobs:
         python: ["3.13"]
 
     steps:
-      - name: Checkout repository without a GitHub Action
+      - name: Fetch repository without a GitHub Action
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          rm -rf .git
-          git init
-          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
-          git -c http.extraheader="AUTHORIZATION: bearer ${GH_TOKEN}"             fetch --depth=1 origin "${GITHUB_SHA}"
-          git checkout --detach "${GITHUB_SHA}"
+          set -euo pipefail
+          curl --fail --silent --show-error --location \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/tarball/${GITHUB_SHA}" \
+            --output "${RUNNER_TEMP}/source.tar.gz"
+          tar -xzf "${RUNNER_TEMP}/source.tar.gz" --strip-components=1 -C "${GITHUB_WORKSPACE}"
 
       - name: Verify Python
         run: |
@@ -127,15 +129,17 @@ jobs:
     permissions:
       contents: read
     steps:
-      - name: Checkout repository without a GitHub Action
+      - name: Fetch repository without a GitHub Action
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          rm -rf .git
-          git init
-          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
-          git -c http.extraheader="AUTHORIZATION: bearer ${GH_TOKEN}"             fetch --depth=1 origin "${GITHUB_SHA}"
-          git checkout --detach "${GITHUB_SHA}"
+          set -euo pipefail
+          curl --fail --silent --show-error --location \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/tarball/${GITHUB_SHA}" \
+            --output "${RUNNER_TEMP}/source.tar.gz"
+          tar -xzf "${RUNNER_TEMP}/source.tar.gz" --strip-components=1 -C "${GITHUB_WORKSPACE}"
 
       - name: Install Node.js 25 without a GitHub Action
         run: |
@@ -189,15 +193,17 @@ jobs:
       id-token: write
 
     steps:
-      - name: Checkout repository without a GitHub Action
+      - name: Fetch repository without a GitHub Action
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          rm -rf .git
-          git init
-          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
-          git -c http.extraheader="AUTHORIZATION: bearer ${GH_TOKEN}"             fetch --depth=1 origin "${GITHUB_SHA}"
-          git checkout --detach "${GITHUB_SHA}"
+          set -euo pipefail
+          curl --fail --silent --show-error --location \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/tarball/${GITHUB_SHA}" \
+            --output "${RUNNER_TEMP}/source.tar.gz"
+          tar -xzf "${RUNNER_TEMP}/source.tar.gz" --strip-components=1 -C "${GITHUB_WORKSPACE}"
 
       - name: Verify Docker Buildx
         run: |
@@ -270,15 +276,17 @@ jobs:
       contents: read
       pull-requests: read
     steps:
-      - name: Checkout repository without a GitHub Action
+      - name: Fetch repository without a GitHub Action
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          rm -rf .git
-          git init
-          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
-          git -c http.extraheader="AUTHORIZATION: bearer ${GH_TOKEN}"             fetch --depth=1 origin "${GITHUB_SHA}"
-          git checkout --detach "${GITHUB_SHA}"
+          set -euo pipefail
+          curl --fail --silent --show-error --location \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/tarball/${GITHUB_SHA}" \
+            --output "${RUNNER_TEMP}/source.tar.gz"
+          tar -xzf "${RUNNER_TEMP}/source.tar.gz" --strip-components=1 -C "${GITHUB_WORKSPACE}"
 
       - name: Review Python dependencies
         run: |
@@ -301,15 +309,17 @@ jobs:
     permissions:
       contents: read
     steps:
-      - name: Checkout repository without a GitHub Action
+      - name: Fetch repository without a GitHub Action
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          rm -rf .git
-          git init
-          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
-          git -c http.extraheader="AUTHORIZATION: bearer ${GH_TOKEN}"             fetch --depth=1 origin "${GITHUB_SHA}"
-          git checkout --detach "${GITHUB_SHA}"
+          set -euo pipefail
+          curl --fail --silent --show-error --location \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/tarball/${GITHUB_SHA}" \
+            --output "${RUNNER_TEMP}/source.tar.gz"
+          tar -xzf "${RUNNER_TEMP}/source.tar.gz" --strip-components=1 -C "${GITHUB_WORKSPACE}"
 
       - name: Install Trivy without a GitHub Action
         run: |
