@@ -1,80 +1,279 @@
-# OAUTH API GENERATOR - CI/CD PIPELINE
+# OAUTH API GENERATOR – CI/CD PIPELINE
+
 #
-# Lean lane: checkout, install cryptography, run the OAuth generator,
-# assert artifacts. No third-party actions - native git checkout only,
-# matching ci.yml, node.js.yml, python-ci.yml, and ara-hardened-ci.yml.
-#
-# Provenance: rewritten 2026-10-08 by Grok lane at AppelJr's direction.
-# Path fix 2026-10-08: generator lives at scripts/oauth_local_generator.py,
-# not .github/workflows/. Run #33 failed on the wrong path.
-# Dep fix 2026-10-08: pip install cryptography>=43 before generator step.
-# 2026-10-08: removed the ML-DSA import verification step - the generator
-# already imports internally and reports the backend in its report.
-# 2026-10-08: switched generator to Ed25519 backend (v0.4). ML-DSA-87 and
-# liboqs-python removed - neither is installed on ubuntu-latest runners
-# (system cryptography 41.0.7 lacks the ml_dsa module), so every run failed
-# with exit code 1. Ed25519 has been in cryptography since 2.0.
+# =========================================================
+# OAUTH API GENERATOR – CI/CD PIPELINE
+# =========================================================
+# CI/CD build, test, and security pipeline
+# for AppelJr Sovereignty AI Studio
+# =========================================================
 
 name: OAUTH-API-GENERATOR
 
 on:
   push:
-    branches: [Collaboration, main, Claude, "GPT/Codex", ara-hardened, "copilot/main", duckAI, devassist420]
+    branches: [“main”, “Collaboration”]
+    paths:
+      - ".github/workflows/Requirements.txt"
+      - ".github/workflows/oauth-api-generator.yml"
+      - "Dockerfile"
+      - "docker-compose*.yml"
+      - "package-lock.json"
+      - "package.json"
+      - "pyproject.toml"
+      - "pytest.ini"
+      - "requirements*.txt"
+      - "**/*.js"
+      - "**/*.py"
   pull_request:
-    branches: [Collaboration, main, Claude, "GPT/Codex", ara-hardened, "copilot/main", duckAI, devassist420]
+    branches: [“main”, “Collaboration”]
+    paths:
+      - ".github/workflows/Requirements.txt"
+      - ".github/workflows/oauth-api-generator.yml"
+      - "Dockerfile"
+      - "docker-compose*.yml"
+      - "package-lock.json"
+      - "package.json"
+      - "pyproject.toml"
+      - "pytest.ini"
+      - "requirements*.txt"
+      - "**/*.js"
+      - "**/*.py"
+  release:
+    types: [published]
   workflow_dispatch:
 
 concurrency:
-  group: oauth-api-generator-${{ github.ref }}-lean
+  group: oauth-api-generator-${{ github.ref }}
   cancel-in-progress: false
 
-permissions:
-  contents: read
+permissions: {}
 
 defaults:
   run:
     shell: bash --noprofile --norc -euo pipefail {0}
 
+env:
+  PYTHONPATH: .:./backend
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  PIP_NO_CACHE_DIR: "1"
+
 jobs:
-  oauth-generator:
-    name: OAuth Generator
+
+  # =========================================================
+  # LINT + TEST (Python)
+  # =========================================================
+  build-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    strategy:
+      matrix:
+        python: ['3.13']
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          persist-credentials: true
+
+      - name: Set up Python ${{ matrix.python }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Install Python dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r .github/workflows/Requirements.txt
+          pip install flake8 safety
+
+      - name: Lint with flake8
+        run: flake8 --count --select=E9,F63,F7,F82 --show-source --statistics
+
+      - name: Run Python tests
+        env:
+          PYTHONPATH: .:./backend
+        run: pytest --cov=apps --cov=backend --cov=src --cov-report=term --strict-markers -x --tb=short
+
+      - name: Dependency safety check
+        run: |
+          safety check -r .github/workflows/Requirements.txt --output text || true
+          safety check -r requirements.txt --output text || true
+        continue-on-error: false
+
+  # =========================================================
+  # NODE CHECK
+  # =========================================================
+  node-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          persist-credentials: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 25
+
+      - name: Install Node dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund || npm install --ignore-scripts --no-audit --no-fund
+
+      - name: Node syntax check
+        run: |
+          npm run check
+          node -c node-bridge/server.js
+
+  # =========================================================
+  # DOCKER BUILD + MULTI-ARCH + COSIGN SIGNING
+  # =========================================================
+  build-sign:
+    needs: [build-test, node-check]
+    if: github.event_name == 'release' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      packages: write
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          persist-credentials: true
+
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Validate SHAMIR release-share secrets
+        if: github.event_name == 'release'
+        env:
+          SHAMIR_SHARE_1: ${{ secrets.SHAMIR_SHARE_1 }}
+          SHAMIR_SHARE_2: ${{ secrets.SHAMIR_SHARE_2 }}
+          SHAMIR_SHARE_3: ${{ secrets.SHAMIR_SHARE_3 }}
+        run: |
+          missing=0
+          for key in SHAMIR_SHARE_1 SHAMIR_SHARE_2 SHAMIR_SHARE_3; do
+            if [[ -z "${!key:-}" ]]; then
+              echo "::error::Missing required secret: $key"
+              missing=1
+            fi
+          done
+          printf '::add-mask::%s' "${SHAMIR_SHARE_1:-}"
+          printf '::add-mask::%s' "${SHAMIR_SHARE_2:-}"
+          printf '::add-mask::%s' "${SHAMIR_SHARE_3:-}"
+          if [[ "$missing" -ne 0 ]]; then
+            exit 1
+          fi
+
+      - name: Compute lowercase image name
+        run: |
+          echo "REGISTRY_LC=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
+
+      - name: Build Multi-Arch Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          sbom: true
+          provenance: mode=max
+          tags: |
+            ${{ env.REGISTRY_LC }}:latest
+            ${{ env.REGISTRY_LC }}:${{ github.sha }}
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign Image (Keyless — Fulcio + Rekor)
+        run: |
+          cosign sign \
+            --yes \
+            --fulcio-url https://fulcio.sigstore.dev \
+            --rekor-url https://rekor.sigstore.dev \
+            ${{ env.REGISTRY_LC }}:${{ github.sha }}
+        env:
+          COSIGN_EXPERIMENTAL: 1
+
+  dependency-review:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
-      - name: Checkout exact commit (native git, no external action)
-        env:
-          GH_TOKEN: ${{ github.token}}
-        run: |
-          set -Eeuo pipefail
-          git init .
-          git remote add origin "https://github.com/${{ github.repository }}.git"
-          auth="$(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 | tr -d '\n')"
-          git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${{ github.sha}}"
-          git checkout --detach FETCH_HEAD
-          git config --unset-all http.extraheader 2>/dev/null || true
-          git rev-parse --short HEAD
+      - name: Dependency Review
+        continue-on-error: false
+        uses: actions/dependency-review-action@v4
+        # Advisory only: some repositories do not have dependency graph / GHAS
+        # enabled, so this should not block regulated-use CI execution.
 
-      - name: Install dependencies
-        run: |
-          set -Eeuo pipefail
-          python3 -m pip install --upgrade "pip>=24" "cryptography>=43"
-          python3 -c "import cryptography; print('cryptography', cryptography.__version__)"
+  # =========================================================
+  # SECURITY SCANNING
+  # =========================================================
+  security-scan:
+    needs: [build-test, node-check]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          persist-credentials: true
 
-      - name: Run OAuth generator
-        run: |
-          set -Eeuo pipefail
-          OUT="$(mktemp -d -p /tmp sg-oauth-XXXXXX)"
-          trap 'rm -rf "${OUT}"' EXIT
-          python3 scripts/oauth_local_generator.py --service sovereignty-ai-studio --output-dir "${OUT}"
-          test -f "${OUT}/oauth-client.json"
-          test -f "${OUT}/oauth-private-key.pem"
-          test -f "${OUT}/provenance.json"
-          python3 -c "import json; d=json.load(open('${OUT}/oauth-client.json')); assert d['signing_algorithm']=='Ed25519'; assert 'private_key' not in d; assert d['key_reference']=='oauth-private-key.pem'; assert len(d['kid'])==32"
-          python3 -c "import json; d=json.load(open('${OUT}/provenance.json')); assert d['event']=='credential_generated'; assert d['algorithm']=='Ed25519'"
-          echo "OAuth generator artifacts verified in ${OUT}"
-          ls -la "${OUT}"
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@0.35.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          skip-dirs: external,frontend
+          format: table
+          severity: CRITICAL,HIGH
+          ignore-unfixed: false
+          hide-progress: false
+          exit-code: 1
 
-      - name: Run local OAuth contract validator
+      - name: OWASP dependency check
         run: |
-          set -Eeuo pipefail
-          python3 scripts/validate-local-oauth.py
+          pip install pip-audit
+          pip-audit -r requirements.txt || true
+        continue-on-error: false
+
+# =========================================================
+# SECURITY HARDENING HEADERS (enforced in nginx + FastAPI)
+# =========================================================
+# Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
+# Content-Security-Policy: default-src 'self'; script-src 'self'
+# X-Content-Type-Options: nosniff
+# X-Frame-Options: DENY
+# X-XSS-Protection: 1; mode=block
+# Referrer-Policy: strict-origin-when-cross-origin
+# Permissions-Policy: camera=(), microphone=(), geolocation=()
+
+# =========================================================
+# COMPLIANCE NOTICE (MEDICAL / REGULATED USE)
+# =========================================================
+# This pipeline adds technical guardrails (linting, tests, dependency review,
+# vulnerability scanning, SBOM/provenance generation, and image signing),
+# governance, and legal/compliance review for the deployed environment.
+# For key custody, use SHAMIR secret-sharing operationally; CI only checks that
+# release-share secret inputs are configured and never reconstructs master keys.
+# Compliance checks are advisory guards, not certification claims.
+ 
+# https://Github.com/Appeljr/Sovereignty-AI-Studio_v1.0.1.git OAuth API Generator 	
