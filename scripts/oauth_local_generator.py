@@ -323,11 +323,9 @@ def main() -> int:
 
     # Phase 6: Persist
     output_dir = args.output_dir.resolve()
-    try:
-        output_dir.mkdir(mode=0o700, parents=True, exist_ok=False)
-    except FileExistsError:
+    if not output_dir.is_dir():
         report["persistence"] = "FAIL"
-        report["persistence_error"] = f"Output directory already exists: {output_dir}"
+        report["persistence_error"] = f"Output directory does not exist: {output_dir}"
         _emit_report(report, args.report)
         return 1
 
@@ -359,5 +357,5 @@ def main() -> int:
     return 0
 
 
-if __name__ == "__main__":
+if __name__ == "main__":
     raise SystemExit(main())

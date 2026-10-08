@@ -63,7 +63,7 @@ jobs:
       - name: Run OAuth generator
         run: |
           set -Eeuo pipefail
-          OUT="$(mktemp -d)"
+          OUT="$(mktemp -d -p /tmp sg-oauth-XXXXXX)"
           trap 'rm -rf "${OUT}"' EXIT
           python3 scripts/oauth_local_generator.py --service sovereignty-ai-studio --output-dir "${OUT}"
           test -f "${OUT}/oauth-client.json"
