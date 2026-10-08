@@ -52,7 +52,7 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          OUT="oauth-ci-artifacts"
+          OUT="oauth-ci-artifacts-${{ github.run_id }}-$RANDOM"
           mkdir -m 0700 "${OUT}"
           python3 scripts/oauth_local_generator.py --service sovereignty-ai-studio --output-dir "${OUT}"
           test -f "${OUT}/oauth-client.json"
