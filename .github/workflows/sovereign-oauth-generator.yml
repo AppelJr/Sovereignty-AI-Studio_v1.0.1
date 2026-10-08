@@ -22,8 +22,11 @@ jobs:
   oauth-generator:
     name: OAuth Generator
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout
+        env:
+          GH_TOKEN: ${{ github.token }}  # token
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -33,11 +36,51 @@ jobs:
           git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${{ github.sha }}:refs/remotes/origin/HEAD"
           git checkout --detach FETCH_HEAD
           git config --unset-all http.extraheader || true
-        env:
-          GH_TOKEN: ${{ github.token }}  # token
 
-      - name: Run OAuth Generator validation (dry-run)
+      - name: Install Python dependencies
         shell: bash
         run: |
           set -Eeuo pipefail
-          python3 scripts/validate-local-oauth.py
+          python3 --version
+          python3 -m pip install --upgrade pip
+          python3 -m pip install cryptography
+
+      - name: Run OAuth Generator (REAL RUN, fail-closed)
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          OUT_DIR="$(mktemp -d)"
+          chmod 0700 "${OUT_DIR}"
+          python3 scripts/oauth_local_generator.py --service sovereignty-ai-studio --output-dir "${OUT_DIR}"
+          test -f "${OUT_DIR}/oauth-client.json"
+          test -f "${OUT_DIR}/oauth-private-key.pem"
+          test -f "${OUT_DIR}/provenance.json"
+          python3 - <<'PY'
+import json, os, stat
+from pathlib import Path
+
+out = Path(os.environ["OUT_DIR"])
+client = json.loads((out / "oauth-client.json").read_text(encoding="utf-8"))
+prov = json.loads((out / "provenance.json").read_text(encoding="utf-8"))
+
+assert client["issuer"] == "local"
+assert client["service"] == "sovereignty-ai-studio"
+assert "private_key" not in client
+assert client["key_reference"] == "oauth-private-key.pem"
+assert client["kid"] == prov["kid"]
+assert prov["event"] == "credential_generated"
+assert prov["algorithm"] == "Ed25519"
+
+for name in ("oauth-client.json", "oauth-private-key.pem", "provenance.json"):
+    mode = stat.S_IMODE((out / name).stat().st_mode)
+    assert mode == 0o600, f"{name} mode {mode:o}, expected 600"
+
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+key = serialization.load_pem_private_key((out / "oauth-private-key.pem").read_bytes(), password=None)
+assert isinstance(key, Ed25519PrivateKey)
+print("OAUTH_REAL_RUN=PASS")
+PY
+        env:
+          OUT_DIR: ${{ runner.temp }}/oauth-ci-artifacts
