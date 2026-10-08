@@ -2,7 +2,7 @@
 # Sovereignty AI Studio — OAUTH API Generator
 # Real execution only. No mocked authorization. No bolted-on gates.
 # =========================================================
-name: OAUTH-API-GENERATOR
+name: OAuth Generator
 on:
   push:
     branches:
