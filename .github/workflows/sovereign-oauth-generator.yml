@@ -1,18 +1,19 @@
 # OAUTH API GENERATOR - CI/CD PIPELINE
 #
-# Lean lane: checkout, install cryptography>=43 (ML-DSA-87 backend),
-# run the OAuth generator, assert artifacts. No third-party actions -
-# native git checkout only, matching ci.yml, node.js.yml, python-ci.yml,
-# and ara-hardened-ci.yml.
+# Lean lane: checkout, install cryptography, run the OAuth generator,
+# assert artifacts. No third-party actions - native git checkout only,
+# matching ci.yml, node.js.yml, python-ci.yml, and ara-hardened-ci.yml.
 #
 # Provenance: rewritten 2026-10-08 by Grok lane at AppelJr's direction.
 # Path fix 2026-10-08: generator lives at scripts/oauth_local_generator.py,
 # not .github/workflows/. Run #33 failed on the wrong path.
 # Dep fix 2026-10-08: pip install cryptography>=43 before generator step.
-# scripts/requirements.txt pins cryptography>=42.0.0, which lacks ML-DSA-87.
 # 2026-10-08: removed the ML-DSA import verification step - the generator
-# already imports ml_dsa internally and reports the backend in its report.
-# Added push trigger so Collaboration pushes fire this automatically.
+# already imports internally and reports the backend in its report.
+# 2026-10-08: switched generator to Ed25519 backend (v0.4). ML-DSA-87 and
+# liboqs-python removed - neither is installed on ubuntu-latest runners
+# (system cryptography 41.0.7 lacks the ml_dsa module), so every run failed
+# with exit code 1. Ed25519 has been in cryptography since 2.0.
 
 name: OAUTH-API-GENERATOR
 
@@ -68,8 +69,8 @@ jobs:
           test -f "${OUT}/oauth-client.json"
           test -f "${OUT}/oauth-private-key.pem"
           test -f "${OUT}/provenance.json"
-          python3 -c "import json; d=json.load(open('${OUT}/oauth-client.json')); assert d['signing_algorithm']=='ML-DSA-87'; assert 'private_key' not in d; assert d['key_reference']=='oauth-private-key.pem'; assert len(d['kid'])==32"
-          python3 -c "import json; d=json.load(open('${OUT}/provenance.json')); assert d['event']=='credential_generated'; assert d['algorithm']=='ML-DSA-87'"
+          python3 -c "import json; d=json.load(open('${OUT}/oauth-client.json')); assert d['signing_algorithm']=='Ed25519'; assert 'private_key' not in d; assert d['key_reference']=='oauth-private-key.pem'; assert len(d['kid'])==32"
+          python3 -c "import json; d=json.load(open('${OUT}/provenance.json')); assert d['event']=='credential_generated'; assert d['algorithm']=='Ed25519'"
           echo "OAuth generator artifacts verified in ${OUT}"
           ls -la "${OUT}"
 
