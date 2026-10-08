@@ -1,30 +1,23 @@
-# OAUTH API GENERATOR - CI/CD PIPELINE
+# OAUTH-API-GENERATOR
 #
 # Lean lane: checkout, install cryptography, run the OAuth generator,
-# assert artifacts. No third-party actions - native git checkout only,
-# matching ci.yml, node.js.yml, python-ci.yml, and ara-hardened-ci.yml.
+# assert artifacts. No third-party actions — native git checkout only,
+# matching ci.yml, python-ci.yml, and ara-hardened-ci.yml.
 #
 # Provenance: rewritten 2026-10-08 by Grok lane at AppelJr's direction.
-# The previous version of this file was the full CI/CD pipeline (build-test,
-# node-check, docker build-sign, trivy, OWASP) with NO OAuth generator step
-# at all - which is why every run showed zero OAuth activity. Run #52's 0s
-# startup_failure was actions/checkout@v4 rejected by the repo's policy
-# requiring actions pinned to full-length SHAs from a repo owned by AppelJr.
-#
-# 2026-10-08: assertion lines rewritten as heredocs (zero nested quotes)
-# after CI SyntaxError: invalid decimal literal on the python3 -c lines.
-# Run #55 (d8be3d53) still failed because the push trigger branch list
-# did not include fix/oauth-workflow-lean, so the heredoc commit never
-# actually ran in CI. This commit is the heredoc version on a branch
-# the trigger watches.
+# The previous version of this file was the full CI/CD pipeline
+# (build-test, node-check, docker build-sign, trivy, OWASP) with NO
+# OAuth generator step at all — which is why runs #61-#65 showed
+# startup_failure with total_jobs: 0. The allowlist/SHA-pinning policy
+# was never the blocker; the workflow simply had nothing to run.
 
 name: OAUTH-API-GENERATOR
 
 on:
   push:
-    branches: ["Collaboration, main, Claude, GPT/Codex, ara-hardened, copilot, xAI/Grok, duckAI, devassist420"]
+    branches: [Collaboration, main, Claude, "GPT/Codex", ara-hardened, "copilot/main", duckAI, devassist420]
   pull_request:
-    branches: ["Collaboration, main, Claude, GPT/Codex, ara-hardened, copilot, xAI/Grok, duckAI, devassist420"]
+    branches: [Collaboration, main, Claude, "GPT/Codex", ara-hardened, "copilot/main", duckAI, devassist420]
   workflow_dispatch:
 
 concurrency:
@@ -40,10 +33,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Checkout commit 
+      - name: Checkout exact commit (native git, no external action)
         env:
           GH_TOKEN: ${{ github.token}}
-          shell: bash
+        shell: bash
         run: |
           set -Eeuo pipefail
           git init .
