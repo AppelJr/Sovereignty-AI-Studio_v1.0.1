@@ -17,6 +17,11 @@
 # 2026-10-08: CI output dir collision - mktemp -d returned a path that
 # already existed on the runner; generator correctly fail-closed on it.
 # Fixed by giving mktemp a unique prefix so every run gets a fresh dir.
+# 2026-10-08: CI assertion bug - workflow asserted d['signing_algorithm']
+# on oauth-client.json, but the generator never writes that field into the
+# client metadata (it only emits it in the stdout report). provenance.json
+# already asserts the algorithm, so the client.json check was redundant.
+# Replaced with assertions on fields the client file actually contains.
 # Generator's exist_ok=False / O_EXCL behavior is intentional and tested
 # (no-overwrite + failure/partial-write cases) - do not weaken it.
 
@@ -74,7 +79,7 @@ jobs:
           test -f "${OUT}/oauth-client.json"
           test -f "${OUT}/oauth-private-key.pem"
           test -f "${OUT}/provenance.json"
-          python3 -c "import json; d=json.load(open('${OUT}/oauth-client.json')); assert d['signing_algorithm']=='Ed25519'; assert 'private_key' not in d; assert d['key_reference']=='oauth-private-key.pem'; assert len(d['kid'])==32"
+          python3 -c "import json; d=json.load(open('${OUT}/oauth-client.json')); assert 'private_key' not in d; assert d['key_reference']=='oauth-private-key.pem'; assert len(d['kid'])==32; assert d['jwks']['keys'][0]['alg']=='EdDSA'; assert d['jwks']['keys'][0]['crv']=='Ed25519'"
           python3 -c "import json; d=json.load(open('${OUT}/provenance.json')); assert d['event']=='credential_generated'; assert d['algorithm']=='Ed25519'"
           echo "OAuth generator artifacts verified in ${OUT}"
           ls -la "${OUT}"
