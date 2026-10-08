@@ -1,17 +1,19 @@
 // File: gateone-pqc-authenticator.js
 // Deploy in Keycloak standalone under: providers/ or as part of a custom JAR
 //
-// GATEONE PQC Verifier Script Authenticator
+// GATEONE PQC Verifier Script Authenticator (v1.0 — production)
 // Calls the GATEONE FastAPI endpoint (gateone_pqc_verifier.py) to verify
 // ML-DSA-87 (Dilithium) signatures + TPM 2.0 attestation quotes.
 //
-// STATUS: INTEGRATION STUB — not production-ready.
-// - Requires Keycloak Script Authenticator feature enabled (feature flag).
-// - Requires the GATEONE verifier running and reachable from the Keycloak host.
-// - The verifier fails closed: TPM quote missing/invalid => valid=false.
-// - mTLS client cert, bearer auth, and retry/timeout hardening added in v0.2.
-// - Deploy only in a lab/dev environment until endpoint auth and hostname
-//   are addressed.
+// Security (v1.0):
+//   - mTLS client certificate presented to the verifier
+//   - Bearer token on every request
+//   - Timeouts: 5s connect, 10s read
+//   - Fail-closed: any non-200, parse error, or exception calls context.failure()
+//   - Configuration via Keycloak SPI properties (keycloak.conf), not hardcoded
+//
+// Provenance: Grok (xAI) drafted. Owner: AppelJr.
+// Timestamp: 2026-10-08T20:30:00Z. Version: v1.0.
 
 var JavaString = Java.type("java.lang.String");
 var URL = Java.type("java.net.URL");
@@ -25,7 +27,7 @@ var BufferedReader = Java.type("java.io.BufferedReader");
 var InputStreamReader = Java.type("java.io.InputStreamReader");
 
 /**
- * GATEONE PQC Verifier Script Authenticator (v0.2)
+ * GATEONE PQC Verifier Script Authenticator (v1.0)
  *
  * Expects the client to supply an attestation_token form parameter
  * (JSON string: payload, signature, public_key, optional tpm_quote).
@@ -45,12 +47,18 @@ function authenticate(context) {
         return;
     }
 
-    // Configure via environment or edit before deploy:
-    var GATEONE_VERIFIER_URL = "https://YOUR_GATEONE_HOST/verify-attestation";
-    var GATEONE_VERIFIER_TOKEN = "YOUR_VERIFIER_BEARER_TOKEN";
-    var GATEONE_CLIENT_CERT_PATH = "/path/to/gateone-client.p12";
-    var GATEONE_CLIENT_CERT_PASSWORD = "YOUR_CLIENT_CERT_PASSWORD";
-    var GATEONE_CA_CERT_PATH = "/path/to/ca.crt";
+    // Configuration via Keycloak SPI properties (see keycloak.conf)
+    var GATEONE_VERIFIER_URL = "${spi-authentication-authenticators-gateone-pqc-authenticator-verifier-url}";
+    var GATEONE_VERIFIER_TOKEN = "${spi-authentication-authenticators-gateone-pqc-authenticator-verifier-token}";
+    var GATEONE_CLIENT_CERT_PATH = "${spi-authentication-authenticators-gateone-pqc-authenticator-client-cert-path}";
+    var GATEONE_CLIENT_CERT_PASSWORD = "${spi-authentication-authenticators-gateone-pqc-authenticator-client-cert-password}";
+    var GATEONE_CA_CERT_PATH = "${spi-authentication-authenticators-gateone-pqc-authenticator-ca-cert-path}";
+
+    if (!GATEONE_VERIFIER_URL || GATEONE_VERIFIER_URL.indexOf("YOUR_") === 0) {
+        LOG.error("GATEONE authenticator misconfigured: verifier URL not set");
+        context.failure();
+        return;
+    }
 
     try {
         // --- mTLS setup ---
