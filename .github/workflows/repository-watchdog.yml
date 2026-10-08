@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: repository-watchdog-${{ github.ref}}
+  group: repository-watchdog-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -33,14 +33,14 @@ jobs:
           printf 'PAYLOAD_ENTERED=true\n'
       - name: Checkout without external action
         env:
-          GH_TOKEN: ${{ github.token}}
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -Eeuo pipefail
           git init .
-          git remote add origin "https://github.com/${{ github.repository}}.git"
-          auth="$(printf 'x-access-token:%s' "${{ github.token}}" | base64 | tr -d '\n')"
-          git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${{ github.sha}}"
+          git remote add origin "https://github.com/${{ github.repository }}.git"
+          auth="$(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 | tr -d '\n')"
+          git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${{ github.sha }}"
           git checkout --detach FETCH_HEAD
           if git config --get-regexp '^http\.extraheader$' >/dev/null 2>&1; then
             git config --unset-all http.extraheader
