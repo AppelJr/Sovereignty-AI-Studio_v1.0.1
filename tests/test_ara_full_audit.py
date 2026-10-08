@@ -17,6 +17,7 @@ def audit_workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setattr(ara_full_audit, "ROOT", root)
     monkeypatch.setattr(ara_full_audit, "REPORT", root / "automation" / "reports" / "ara_full_audit.json")
     monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    monkeypatch.delenv("GH_TOKEN", raising=False)
     return root
 
 
@@ -112,10 +113,15 @@ def test_main_rejects_unscoped_always_bypass(
         "bypass_actors": [{"bypass_mode": "always", "actor_id": None}],
     }
 
+    list_path = f"/repos/{ara_full_audit.REPO}/rulesets"
+    detail_path = f"/repos/{ara_full_audit.REPO}/rulesets/42"
+
     def fake_api(path: str, token: str):
-        if path == "/repos/Appel420/Sovereignty-AI-Studio/rulesets":
+        if path == list_path:
             return [{"id": 42, "name": "Ara"}]
-        return ruleset
+        if path == detail_path:
+            return ruleset
+        return []
 
     monkeypatch.setattr(ara_full_audit, "api", fake_api)
 
