@@ -14,6 +14,10 @@
 # liboqs-python removed - neither is installed on ubuntu-latest runners
 # (system cryptography 41.0.7 lacks the ml_dsa module), so every run failed
 # with exit code 1. Ed25519 has been in cryptography since 2.0.
+# 2026-10-08: dropped the signing_algorithm assertion on oauth-client.json -
+# the generator never writes that field into client metadata (it only
+# appears in the stdout report and provenance.json), so the assertion
+# raised KeyError on every run. Provenance still asserts the algorithm.
 
 name: OAUTH-API-GENERATOR
 
@@ -66,7 +70,7 @@ jobs:
           test -f "${OUT}/oauth-client.json"
           test -f "${OUT}/oauth-private-key.pem"
           test -f "${OUT}/provenance.json"
-          python3 -c "import json; d=json.load(open('${OUT}/oauth-client.json')); assert d['signing_algorithm']=='Ed25519'; assert 'private_key' not in d; assert d['key_reference']=='oauth-private-key.pem'; assert len(d['kid'])==32"
+          python3 -c "import json; d=json.load(open('${OUT}/oauth-client.json')); assert 'private_key' not in d; assert d['key_reference']=='oauth-private-key.pem'; assert len(d['kid'])==32"
           python3 -c "import json; d=json.load(open('${OUT}/provenance.json')); assert d['event']=='credential_generated'; assert d['algorithm']=='Ed25519'"
           echo "OAuth generator artifacts verified in ${OUT}"
           ls -la "${OUT}"
