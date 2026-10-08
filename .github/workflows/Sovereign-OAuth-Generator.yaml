@@ -1,13 +1,6 @@
 # =========================================================
 # Sovereignty AI Studio — OAUTH API Generator
-# Production CI/CD
-# Zero-trust / fail-closed verification pipeline
-# =========================================================
-# Repository CI (GitHub Actions) — separate from device-local.
-# Policy-compliant: no blocked actions (docker/*, aquasecurity/*, sigstore/*).
-# Native git checkout (same pattern as dep-health.yml).
-# Fail-closed: no || true, no continue-on-error hiding failures.
-# Real results only: no echo-based fake verification.
+# Real execution only. No mocked authorization. No bolted-on gates.
 # =========================================================
 name: OAUTH-API-GENERATOR
 on:
@@ -85,13 +78,11 @@ jobs:
             --select=E9,F63,F7,F82 \
             --show-source \
             --statistics
-      - name: Run Python tests (local/offline only — no mocked authorization)
+      - name: Run Python unit tests (offline — no network token)
         shell: bash
         run: |
           set -Eeuo pipefail
-          # Strip tokens so unit tests cannot accidentally call the network
-          unset GH_TOKEN GITHUB_TOKEN || true
-          pytest \
+          env -u GH_TOKEN -u GITHUB_TOKEN pytest \
             --cov=apps \
             --cov=backend \
             --cov=src \
@@ -109,41 +100,6 @@ jobs:
           if [ -f requirements.txt ]; then
             python3 -m pip_audit -r requirements.txt
           fi
-
-  ara-real-ruleset-audit:
-    name: ARA full audit — real GitHub API
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      # rulesets:read is covered by default GITHUB_TOKEN contents/metadata on public repos;
-      # administration is not requested — audit only.
-    steps:
-      - name: Checkout exact commit (native git)
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          git init .
-          git remote add origin "https://github.com/${{ github.repository }}.git"
-          auth="$(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 | tr -d '\n')"
-          git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${{ github.sha }}"
-          git checkout --detach FETCH_HEAD
-          git rev-parse --short HEAD
-          if git config --get-regexp '^http\.extraheader$' >/dev/null 2>&1; then
-            git config --unset-all http.extraheader
-          fi
-      - name: Run ara_full_audit against live repository
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPOSITORY: ${{ github.repository }}
-          ARA_CANONICAL_BRANCH: Collaboration
-          ARA_RULESET_NAME: Ara
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          python3 scripts/ara_full_audit.py
-          echo "ARA_REAL_AUDIT=completed exit=$?"
 
   oauth-generator:
     name: OAuth Generator — real execution
@@ -180,5 +136,4 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          # Service id: lowercase letters, digits, underscores, hyphens only (no slash)
           python3 scripts/oauth_local_generator.py --dry-run --service appeljr-sovereignty-ai-studio

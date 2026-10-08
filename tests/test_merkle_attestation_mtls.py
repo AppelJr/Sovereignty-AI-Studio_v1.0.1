@@ -59,10 +59,12 @@ def test_production_mtls_requires_client_ca():
 
 
 def test_production_cannot_disable_certificate_verification(monkeypatch):
-    monkeypatch.setenv("TLS_REJECT_UNSUPPORTED", "0")
+    # Production always rejects unauthorized clients; env cannot weaken it.
+    monkeypatch.setenv("TLS_REJECT_UNAUTHORIZED", "0")
     assert reject_unauthorized(production=True) is True
 
 
 def test_development_mtls_can_use_explicit_disable_only_for_nonproduction(monkeypatch):
-    monkeypatch.setenv("TLS_REJECT_UNSUPPORTED", "0")
+    # Non-production may disable only via the real policy key in mtls_policy.py.
+    monkeypatch.setenv("TLS_REJECT_UNAUTHORIZED", "0")
     assert reject_unauthorized(production=False) is False
