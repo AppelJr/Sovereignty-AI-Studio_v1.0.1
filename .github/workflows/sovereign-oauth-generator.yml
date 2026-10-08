@@ -47,17 +47,19 @@ jobs:
           python3 --version
           python3 -m pip install --upgrade pip
           python3 -m pip install cryptography
+          python3 -m pip install liboqs-python
 
       - name: Run OAuth Generator (REAL RUN, fail-closed)
         shell: bash
         run: |
           set -Eeuo pipefail
-          OUT="oauth-ci-artifacts-${{ github.run_id }}-$RANDOM"
+          OUT="oauth-ci-artifacts"
+          rm -rf "${OUT}"
           mkdir -m 0700 "${OUT}"
           python3 scripts/oauth_local_generator.py --service sovereignty-ai-studio --output-dir "${OUT}"
           test -f "${OUT}/oauth-client.json"
           test -f "${OUT}/oauth-private-key.pem"
           test -f "${OUT}/provenance.json"
           python3 -c "import json,sys; d=json.load(open(sys.argv[1])); assert d['validation']=='PASS'; assert d['event']=='credential_generated'; assert 'private_key' not in d" "${OUT}/provenance.json"
-          python3 -c "from cryptography.hazmat.primitives import serialization; from cryptography.hazmat.primitives.asymmetric import ed25519; ed25519.Ed25519PrivateKey.from_private_bytes(open(sys.argv[1],'rb').read())" "${OUT}/oauth-private-key.pem"
+          python3 -c "import base64; from cryptography.hazmat.primitives import serialization; from cryptography.hazmat.primitives.asymmetric import ml_dsa; k=serialization.load_pem_private_key(open(sys.argv[1],'rb').read(), None); assert isinstance(k, ml_dsa.MLDSA87PrivateKey)" "${OUT}/oauth-private-key.pem"
           echo "OAUTH_REAL_RUN=PASS"
