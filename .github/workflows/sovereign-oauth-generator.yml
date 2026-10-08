@@ -22,21 +22,17 @@ name: OAUTH-API-GENERATOR
 
 on:
   push:
-    branches: [Collaboration, main, Claude, "GPT/Codex", ara-hardened, "copilot/main", duckAI, devassist420]
+    branches: ["Collaboration, main, Claude, GPT/Codex, ara-hardened, copilot, xAI/Grok, duckAI, devassist420"]
   pull_request:
-    branches: [Collaboration, main, Claude, "GPT/Codex", ara-hardened, "copilot/main", duckAI, devassist420]
+    branches: ["Collaboration, main, Claude, GPT/Codex, ara-hardened, copilot, xAI/Grok, duckAI, devassist420"]
   workflow_dispatch:
 
 concurrency:
   group: oauth-api-generator-${{ github.ref }}-lean
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 permissions:
   contents: read
-
-defaults:
-  run:
-    shell: bash --noprofile --norc -euo pipefail {0}
 
 jobs:
   oauth-generator:
@@ -44,9 +40,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Checkout exact commit (native git, no external action)
+      - name: Checkout commit 
         env:
           GH_TOKEN: ${{ github.token}}
+          shell: bash
         run: |
           set -Eeuo pipefail
           git init .
@@ -73,22 +70,22 @@ jobs:
           test -f "${OUT}/oauth-private-key.pem"
           test -f "${OUT}/provenance.json"
           python3 - "${OUT}/oauth-client.json" <<'PY'
-import json, sys
-d = json.load(open(sys.argv[1]))
-assert "private_key" not in d
-assert d["key_reference"] == "oauth-private-key.pem"
-assert len(d["kid"]) == 32
-PY
+          import json, sys
+          d = json.load(open(sys.argv[1]))
+          assert "private_key" not in d
+          assert d["key_reference"] == "oauth-private-key.pem"
+          assert len(d["kid"]) == 32
+          PY
           python3 - "${OUT}/provenance.json" <<'PY'
-import json, sys
-d = json.load(open(sys.argv[1]))
-assert d["event"] == "credential_generated"
-assert d["algorithm"] == "Ed25519"
-PY
+          import json, sys
+          d = json.load(open(sys.argv[1]))
+          assert d["event"] == "credential_generated"
+          assert d["algorithm"] == "Ed25519"
+          PY
           echo "OAuth generator artifacts verified in ${OUT}"
           ls -la "${OUT}"
 
-      - name: Run local OAuth contract validator
+      - name: Run OAuth contract validator
         run: |
           set -Eeuo pipefail
           python3 scripts/validate-local-oauth.py
