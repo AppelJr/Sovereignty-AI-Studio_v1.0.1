@@ -19,6 +19,7 @@
   ],
   "approved": [
     {"action": "actions/checkout", "pinned": "full-sha", "note": "GitHub-owned, allowed with full SHA pin"},
+    {"action": "actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683", "pinned": "full-sha", "note": "v4.2.2 - explicit SHA entry for Swift Build and startup-probe workflows"},
     {"action": "actions/setup-node", "pinned": "full-sha", "note": "GitHub-owned, allowed with full SHA pin"},
     {"action": "actions/setup-python", "pinned": "full-sha", "note": "GitHub-owned, allowed with full SHA pin"},
     {"action": "actions/upload-artifact", "pinned": "full-sha"},

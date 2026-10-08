@@ -2,20 +2,20 @@ name: Repository Watchdog
 
 on:
   push:
-    branches: [main, Claude, GPT/Codex, ara-hardened, copilot/main, Collaboration, duckAI, devassist420]
+    branches: [main, Claude, GPT/Codex, ara-hardened, copilot/main, Collaboration, Grok, duckAI, devassist420]
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: repository-watchdog-${{ github.ref }}
+  group: repository-watchdog-${{ github.ref}}
   cancel-in-progress: false
 
 jobs:
   watch:
     name: Repository Watchdog (visible)
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - name: Watchdog startup — visible
@@ -23,25 +23,25 @@ jobs:
         run: |
           set -Eeuo pipefail
           printf 'WATCHDOG_STATUS=STARTED\n'
-          printf 'WATCHDOG_EVENT=%s\n' "${GITHUB_EVENT_NAME}"
-          printf 'WATCHDOG_RUN_ID=%s\n' "${GITHUB_RUN_ID}"
-          printf 'FULL_SHA=%s\n' "${GITHUB_SHA}"
-          printf 'HEAD_SHA_LEN=%s\n' "${#GITHUB_SHA}"
-          test "${#GITHUB_SHA}" -eq 40
+          printf 'WATCHDOG_EVENT=%s\n' "${{ github.event_name}}"
+          printf 'WATCHDOG_RUN_ID=%s\n' "${{ github.run_id}}"
+          printf 'FULL_SHA=%s\n' "${{ github.sha}}"
+          printf 'HEAD_SHA_LEN=%s\n' "${{ github.sha}}"
+          test "${{ github.sha}}" -eq 40
           printf 'HATCH=OPEN\n'
           printf 'PAYLOAD_ENTERED=true\n'
       - name: Checkout without external action
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token}}
         shell: bash
         run: |
           set -Eeuo pipefail
           git init .
-          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
-          auth="$(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 | tr -d '\n')"
-          git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${GITHUB_SHA}"
+          git remote add origin "https://github.com/${{ github.repository}}.git"
+          auth="$(printf 'x-access-token:%s' "${{ github.token}}" | base64 | tr -d '\n')"
+          git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${{ github.sha}}"
           git checkout --detach FETCH_HEAD
-          git config --unset-all http.extraheader 2>/dev/null || true
+          git config --unset-all http.extraheader
       - name: Verify workflow inventory
         shell: bash
         run: |
@@ -51,7 +51,7 @@ jobs:
             test -f ".github/workflows/$required"
             printf 'WORKFLOW_PRESENT=%s\n' "$required"
           done
-      - name: Verify local runner contracts
+      - name: Verify runner contracts
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -69,7 +69,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           printf 'WATCHDOG_STATUS=PASS\n'
-          printf 'FULL_SHA=%s\n' "${GITHUB_SHA}"
+          printf 'FULL_SHA=%s\n' "${{ github.sha}}"
           printf 'HATCH=OPEN\n'
           printf 'PAYLOAD_ENTERED=true\n'
           printf 'WATCHDOG_RESULT=VISIBLE_LOCAL_RUNNER_CONTRACTS_VERIFIED\n'
