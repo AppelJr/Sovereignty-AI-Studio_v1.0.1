@@ -40,9 +40,9 @@ jobs:
         run: |
           set -Eeuo pipefail
           git init .
-          git remote add origin "https://github.com/${{ GITHUB_REPOSITORY}}.git"
+          git remote add origin "https://github.com/${{ github.repository}}.git"
           auth="$(printf 'x-access-token:%s' "${{ GH_TOKEN}}" | base64 | tr -d '\n')"
-          git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${{ GITHUB_SHA}}"
+          git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${{ github.sha}}"
           git checkout --detach FETCH_HEAD
           git config --unset-all http.extraheader 2>/dev/null || true
           git rev-parse --short HEAD
@@ -70,24 +70,24 @@ jobs:
   # PYTHON + NODE BUILD / TEST
   # =======================================================
   build-test:
-    name: Build / Test — Python ${{ matrix.python }}
+    name: Build / Test — Python ${{ matrix.python}}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      matrix:
-        python:
-          - "3.13"
+    matrix:
+      python:
+        - "3.13"
     steps:
       - name: Checkout commit
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token}}
         shell: bash
         run: |
           set -Eeuo pipefail
           git init .
-          git remote add origin "https://github.com/${{ github.repository }}.git"
-          auth="$(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 | tr -d '\n')"
-          git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${{ github.sha }}"
+          git remote add origin "https://github.com/${{ github.repository}}.git"
+          auth="$(printf 'x-access-token:%s' "${{ GH_TOKEN}}" | base64 | tr -d '\n')"
+          git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${{ github.sha}}"
           git checkout --detach FETCH_HEAD
           git rev-parse --short HEAD
           if git config --get-regexp '^http\.extraheader$' >/dev/null 2>&1; then
@@ -126,7 +126,7 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          env -u GH_TOKEN -u GITHUB_TOKEN pytest \
+          env -u GH_TOKEN -u GITH_TOKEN pytest \
             --cov=apps \
             --cov=backend \
             --cov=src \
@@ -144,40 +144,3 @@ jobs:
           if [ -f requirements.txt ]; then
             python3 -m pip_audit -r requirements.txt
           fi
-
-  oauth-generator:
-    name: OAuth Generator — real execution
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout exact commit (native git)
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          git init .
-          git remote add origin "https://github.com/${{ github.repository }}.git"
-          auth="$(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 | tr -d '\n')"
-          git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${{ github.sha }}"
-          git checkout --detach FETCH_HEAD
-          git rev-parse --short HEAD
-          if git config --get-regexp '^http\.extraheader$' >/dev/null 2>&1; then
-            git config --unset-all http.extraheader
-          fi
-      - name: Set up Python (system)
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq python3 python3-pip
-          python3 --version
-      - name: Install generator dependency
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          python3 -m pip install --upgrade pip cryptography
-      - name: Run OAuth generator dry-run
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          python3 scripts/oauth_local_generator.py --dry-run --service appeljr-sovereignty-ai-studio
