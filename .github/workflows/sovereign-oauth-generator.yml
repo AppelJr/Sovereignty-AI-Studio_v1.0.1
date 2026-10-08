@@ -1,18 +1,26 @@
-# OAUTH API GENERATOR – CI/CD PIPELINE
+# OAUTH API GENERATOR - CI/CD PIPELINE
 #
-# Lean lane: checkout, install ML-DSA-87 backend, run the OAuth generator,
-# assert artifacts. No third-party actions — native git checkout only,
-# matching ci.yml, node.js.yml, python-ci.yml, and ara-hardened-ci.yml.
+# Lean lane: checkout, install cryptography>=43 (ML-DSA-87 backend),
+# run the OAuth generator, assert artifacts. No third-party actions -
+# native git checkout only, matching ci.yml, node.js.yml, python-ci.yml,
+# and ara-hardened-ci.yml.
 #
 # Provenance: rewritten 2026-10-08 by Grok lane at AppelJr's direction.
 # Path fix 2026-10-08: generator lives at scripts/oauth_local_generator.py,
 # not .github/workflows/. Run #33 failed on the wrong path.
 # Dep fix 2026-10-08: pip install cryptography>=43 before generator step.
 # scripts/requirements.txt pins cryptography>=42.0.0, which lacks ML-DSA-87.
+# 2026-10-08: removed the ML-DSA import verification step - the generator
+# already imports ml_dsa internally and reports the backend in its report.
+# Added push trigger so Collaboration pushes fire this automatically.
 
 name: OAUTH-API-GENERATOR
 
 on:
+  push:
+    branches: [Collaboration, main, Claude, "GPT/Codex", ara-hardened, "copilot/main", duckAI, devassist420]
+  pull_request:
+    branches: [Collaboration, main, Claude, "GPT/Codex", ara-hardened, "copilot/main", duckAI, devassist420]
   workflow_dispatch:
 
 concurrency:
@@ -42,14 +50,14 @@ jobs:
           auth="$(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 | tr -d '\n')"
           git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${{ github.sha}}"
           git checkout --detach FETCH_HEAD
-          git config --unset-all http.extraheader 2>/dev>/dev/null || true
+          git config --unset-all http.extraheader 2>/dev/null || true
           git rev-parse --short HEAD
 
-      - name: Install ML-DSA-87 backend (cryptography>=43)
+      - name: Install dependencies
         run: |
           set -Eeuo pipefail
           python3 -m pip install --upgrade "pip>=24" "cryptography>=43"
-          python3 -c "from cryptography.hazmat.primitives.asymmetric import ml_dsa; print('ML-DSA-87 backend OK:', ml_dsa.MLDSA87PrivateKey)"
+          python3 -c "import cryptography; print('cryptography', cryptography.__version__)"
 
       - name: Run OAuth generator
         run: |
