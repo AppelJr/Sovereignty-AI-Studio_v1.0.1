@@ -10,11 +10,6 @@
 # OAuth generator step at all — which is why runs #61-#65 showed
 # startup_failure with total_jobs: 0. The allowlist/SHA-pinning policy
 # was never the blocker; the workflow simply had nothing to run.
-#
-# Persistence fix: mktemp gets a unique prefix (sg-oauth-) so each CI run
-# gets a fresh output directory. The generator intentionally fails closed on
-# a pre-existing output dir (exist_ok=False, O_EXCL writes) — that behavior
-# is covered by the test suite, so the fix is in CI, not the generator.
 
 name: OAUTH-API-GENERATOR
 
