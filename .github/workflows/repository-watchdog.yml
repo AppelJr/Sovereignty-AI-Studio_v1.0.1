@@ -42,7 +42,7 @@ jobs:
           auth="$(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 | tr -d '\n')"
           git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${{ github.sha }}"
           git checkout --detach FETCH_HEAD
-          if git config --get-regexp '^http\.extraheader$' >/dev/null 2>&1; then
+          if git config --get-passwd '^http\.extraheader$' >/dev/null 2>&1; then
             git config --unset-all http.extraheader
           fi
       - name: Verify workflow inventory
