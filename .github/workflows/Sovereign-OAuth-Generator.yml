@@ -1,23 +1,11 @@
-# =========================================================
-# Sovereignty AI Studio — OAuth Generator
-# Real execution only. No mocked authorization. No bolted-on gates.
-# =========================================================
 name: OAuth Generator
 on:
   push:
-    branches:
-      - main
-      - Collaboration
-      - grok
-      - 'xAI/Grok/**'
+    branches: [main, Collaboration, grok, 'xAI/Grok/**']
   pull_request:
-    branches:
-      - main
-      - Collaboration
-      - grok
+    branches: [main, Collaboration, grok]
   release:
-    types:
-      - published
+    types: [published]
   workflow_dispatch:
 permissions:
   contents: read
@@ -25,9 +13,6 @@ env:
   PYTHONPATH: .:./backend
   PIP_VERSION_CHECK: true
 jobs:
-  # =======================================================
-  # OAUTH GENERATOR — the actual job this workflow exists for
-  # =======================================================
   oauth-generator:
     name: OAuth Generator
     runs-on: ubuntu-latest
@@ -35,42 +20,33 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-
       - name: Install cryptography
         run: |
           python -m pip install --upgrade pip
           python -m pip install cryptography
-
-      - name: Run OAuth generator (dry-run, fail-closed)
+      - name: Run OAuth generator dry-run
         run: |
           set -Eeuo pipefail
           python scripts/oauth_local_generator.py --dry-run
           echo "OAUTH_GENERATOR=PASS"
-  # =======================================================
-  # PYTHON BUILD / TEST
-  # =======================================================
   build-test:
-    name: Build / Test — Python ${{ matrix.python-version}}
+    name: Build Test Python
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        python-version:
-          - "3.13"
+        python-version: ["3.13"]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version}}
-
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
@@ -78,42 +54,21 @@ jobs:
           if [ -f requirements.txt ]; then python -m pip install -r requirements.txt; fi
           if [ -f backend/requirements.txt ]; then python -m pip install -r backend/requirements.txt; fi
           python -m pip install flake8 pytest pytest-cov pip-audit cryptography
-
       - name: Validate Python syntax
         run: |
           set -Eeuo pipefail
           python -m compileall -q apps backend src
-
       - name: Lint
         run: |
           set -Eeuo pipefail
-          flake8 \
-            --count \
-            --select=E9,F63,F7,F82 \
-            --show-source \
-            --statistics
-
+          flake8 --count --select=E9,F63,F7,F82 --show-source --statistics
       - name: Run Python unit tests
         run: |
           set -Eeuo pipefail
-          env -u GH_TOKEN -u GITH_TOKEN pytest \
-            --cov=apps \
-            --cov=backend \
-            --cov=src \
-            --cov-report=xml \
-            --strict-markers \
-            -x \
-            --tb=short
-
-      - name: Dependency audit (fail-closed)
+          env -u GH_TOKEN -u GITH_TOKEN pytest --cov=apps --cov=backend --cov=src --cov-report=xml --strict-markers -x --tb=short
+      - name: Dependency audit
         run: |
           set -Eeuo pipefail
-          if [ -f .github/workflows/Requirements.txt ]; then
-            python -m pip_audit -r .github/workflows/Requirements.txt
-          fi
-          if [ -f requirements.txt ]; then
-            python -m pip_audit -r requirements.txt
-          fi
-          if [ -f backend/requirements.txt ]; then
-            python -m pip_audit -r backend/requirements.txt
-          fi
+          if [ -f .github/workflows/Requirements.txt ]; then python -m pip_audit -r .github/workflows/Requirements.txt; fi
+          if [ -f requirements.txt ]; then python -m pip_audit -r requirements.txt; fi
+          if [ -f backend/requirements.txt ]; then python -m pip_audit -r backend/requirements.txt; fi
