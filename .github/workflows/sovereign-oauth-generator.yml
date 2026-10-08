@@ -29,15 +29,32 @@ jobs:
           set -Eeuo pipefail
           git init .
           git remote add origin "https://github.com/${{ github.repository }}.git"
-          auth="$(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 | tr -d '\n')"
+          auth="$(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 | tr -d '\\n')"
           git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${{ github.sha }}:refs/remotes/origin/HEAD"
           git checkout --detach FETCH_HEAD
           git config --unset-all http.extraheader || true
         env:
           GH_TOKEN: ${{ github.token }}  # token
 
-      - name: Run OAuth Generator validation (dry-run)
+      - name: Install Python dependencies
         shell: bash
         run: |
           set -Eeuo pipefail
-          python3 scripts/validate-local-oauth.py
+          python3 --version
+          python3 -m pip install --upgrade pip
+          python3 -m pip install cryptography
+
+      - name: Run OAuth Generator (REAL RUN, fail-closed)
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          OUT="oauth-ci-artifacts"
+          mkdir -m 0700 "${OUT}"
+          python3 scripts/oauth_local_generator.py --service sovereignty-ai-studio --output-dir "${OUT}"
+          test -f "${OUT}/oauth-client.json"
+          test -f "${OUT}/oauth-private-key.pem"
+          test -f "${OUT}/provenance.json"
+          python3 -c "import json,sys; d=json.load(open(sys.argv[1])); assert d['validation']=='PASS' and d['generation']=='PASS' and d['persistence']=='PASS' and d['network_accessed'] is False and 'private_key' not in d" "${OUT}/oauth-client.json"
+          python3 -c "import json,sys; d=json.load(open(sys.argv[1])); assert d['event']=='credential_generated' and d['algorithm']=='Ed25519' and d['service']=='sovereignty-ai-studio'" "${OUT}/provenance.json"
+          python3 -c "from cryptography.hazmat.primitives import serialization; from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey; k=serialization.load_pem_private_key(open(sys.argv[1],'rb').read(), None); assert isinstance(k, Ed25519PrivateKey)" "${OUT}/oauth-private-key.pem"
+          echo "OAUTH_REAL_RUN=PASS"
