@@ -24,7 +24,7 @@ jobs:
   oauth-generator:
     name: OAuth Generator
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - name: Checkout exact commit (native git, no external action)
         env:
@@ -53,8 +53,7 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          OUT="oauth-ci-artifacts"
-          rm -rf "${OUT}"
+          OUT="oauth-ci-artifacts-$RANDOM"
           mkdir -m 0700 "${OUT}"
           python3 scripts/oauth_local_generator.py --service sovereignty-ai-studio --output-dir "${OUT}"
           test -f "${OUT}/oauth-client.json"
