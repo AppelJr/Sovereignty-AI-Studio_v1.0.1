@@ -2,7 +2,7 @@ argon2-cffi==25.1.0
 bcrypt==5.0.0
 blake3==1.0.9
 cryptography==50.0.1
-pyjwt==2.13.0
+pyjwt==2.15.0
 python-jose[cryptography]==3.5.0
 passlib[bcrypt]==1.7.4
 httpx==0.28.1
