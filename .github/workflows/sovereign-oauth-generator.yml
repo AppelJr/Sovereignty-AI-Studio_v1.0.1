@@ -26,16 +26,11 @@ on:
 
 concurrency:
   group: oauth-api-generator-${{ github.ref }}-lean
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 permissions:
   contents: read
-
-defaults:
-  run:
-    shell: bash --noprofile --norc -euo pipefail {0}
-
-jobs:
+ jobs:
   oauth-generator:
     name: OAuth Generator
     runs-on: ubuntu-latest
@@ -44,6 +39,7 @@ jobs:
       - name: Checkout exact commit (native git, no external action)
         env:
           GH_TOKEN: ${{ github.token}}
+          shell: bash
         run: |
           set -Eeuo pipefail
           git init .
