@@ -15,7 +15,7 @@ on:
 
 concurrency:
   group: oauth-generator-${{ github.ref }}  # concurrency group
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -24,7 +24,7 @@ jobs:
   oauth-generator:
     name: OAuth Generator
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - name: Checkout exact commit (native git, no external action)
         env:
