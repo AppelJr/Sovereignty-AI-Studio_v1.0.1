@@ -7,6 +7,8 @@
 # Provenance: rewritten 2026-10-08 by Grok lane at AppelJr's direction.
 # Path fix 2026-10-08: generator lives at scripts/oauth_local_generator.py,
 # not .github/workflows/. Run #33 failed on the wrong path.
+# Dep fix 2026-10-08: pip install cryptography>=43 before generator step.
+# scripts/requirements.txt pins cryptography>=42.0.0, which lacks ML-DSA-87.
 
 name: OAUTH-API-GENERATOR
 
@@ -42,6 +44,11 @@ jobs:
           git checkout --detach FETCH_HEAD
           git config --unset-all http.extraheader 2>/dev/null || true
           git rev-parse --short HEAD
+
+      - name: Install ML-DSA-87 backend (cryptography>=43)
+        run: |
+          set -Eeuo pipefail
+          python3 -m pip install --upgrade "pip>=24" "cryptography>=43"
 
       - name: Run OAuth generator
         run: |
