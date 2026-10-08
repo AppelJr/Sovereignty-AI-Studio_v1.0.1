@@ -10,6 +10,9 @@
 # at all - which is why every run showed zero OAuth activity. Run #52's 0s
 # startup_failure was actions/checkout@v4 rejected by the repo's policy
 # requiring actions pinned to full-length SHAs from a repo owned by AppelJr.
+#
+# 2026-10-08: assertion lines rewritten as heredocs (zero nested quotes)
+# after CI SyntaxError: invalid decimal literal on the python3 -c lines.
 
 name: OAUTH-API-GENERATOR
 
@@ -65,8 +68,19 @@ jobs:
           test -f "${OUT}/oauth-client.json"
           test -f "${OUT}/oauth-private-key.pem"
           test -f "${OUT}/provenance.json"
-          python3 -c "import json; d=json.load(open("${OUT}/oauth-client.json")); assert 'private_key' not in d; assert d['key_reference']=='oauth-private-key.pem'; assert len(d['kid'])==32"
-          python3 -c "import json; d=json.load(open("${OUT}/provenance.json")); assert d['event']=='credential_generated'; assert d['algorithm']=='Ed25519'"
+          python3 - "${OUT}/oauth-client.json" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1]))
+assert "private_key" not in d
+assert d["key_reference"] == "oauth-private-key.pem"
+assert len(d["kid"]) == 32
+PY
+          python3 - "${OUT}/provenance.json" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1]))
+assert d["event"] == "credential_generated"
+assert d["algorithm"] == "Ed25519"
+PY
           echo "OAuth generator artifacts verified in ${OUT}"
           ls -la "${OUT}"
 
