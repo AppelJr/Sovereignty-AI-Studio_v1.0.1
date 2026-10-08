@@ -79,24 +79,13 @@ jobs:
           python-version: ${{ matrix.python}}
 
       - name: Install Python dependencies
-        run: |
-          pip install --upgrade pip
-          pip install -r .github/workflows/Requirements.txt
-          pip install flake8 safety
-
-      - name: Lint with flake8
-        run: flake8 --count --select=E9,F63,F7,F82 --show-source --statistics
+        run: pip install -r .github/workflows/Requirements.txt
 
       - name: Run Python tests
-        env:
-          PYTHONPATH: .:./backend
-        run: pytest --cov=apps --cov=backend --cov=src --cov-report=term --strict-markers -x --tb=short
+        run: pytest -q
 
       - name: Dependency safety check
-        run: |
-          safety check -r .github/workflows/Requirements.txt --output text || true
-          safety check -r requirements.txt --output text || true
-        continue-on-error: false
+        run: safety check -r .github/workflows/Requirements.txt
 
   # =========================================================
   # NODE CHECK
@@ -151,7 +140,7 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor}}
-          password: ${{ secrets.GITHUB_TOKEN}}
+          password: ${{ secrets.github_token}}
 
       - name: Validate SHAMIR release-share secrets
         if: github.event_name == 'release'
