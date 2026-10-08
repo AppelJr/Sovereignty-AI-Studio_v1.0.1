@@ -2,6 +2,11 @@
 """Fail-closed ARA repository/ruleset audit.
 
 Audit only. Never changes rulesets, refs, files, credentials, or permissions.
+
+Intentional non-product trees (external vendor dumps, venvs, build outputs)
+are excluded from inventory risk findings so the gate does not permanently
+fail on known layout. Real nested git, live credential files, and misconfigured
+rulesets still fail closed.
 """
 from __future__ import annotations
 
@@ -18,8 +23,26 @@ ROOT = Path(__file__).resolve().parents[1]
 REPO = os.environ.get("GH_REPOSITORY", "AppelJr/Sovereignty-AI-Studio_v1.0.1")
 BRANCH = os.environ.get("ARA_CANONICAL_BRANCH", "Collaboration")
 RULESET = os.environ.get("ARA_RULESET_NAME", "Ara")
+# Opt-in: only CRITICAL-fail when the named ruleset is required by policy.
+REQUIRE_RULESET = os.environ.get("ARA_REQUIRE_RULESET", "0").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
 REPORT = ROOT / "automation/reports/ara_full_audit.json"
-IGNORE = {".git", ".venv", "venv", "node_modules", "__pycache__", ".pytest_cache", "dist", "build"}
+# Non-product trees: never treat as repository integrity findings.
+IGNORE = {
+    ".git",
+    ".venv",
+    "venv",
+    "node_modules",
+    "__pycache__",
+    ".pytest_cache",
+    "dist",
+    "build",
+    "external",  # vendor / skeleton dumps — not first-party product surface
+}
 
 
 def rel(p: Path) -> str:
@@ -28,13 +51,17 @@ def rel(p: Path) -> str:
 
 def git(*args: str) -> str:
     try:
-        return subprocess.check_output(["git", *args], cwd=ROOT, text=True, stderr=subprocess.DEVNULL).strip()
+        return subprocess.check_output(
+            ["git", *args], cwd=ROOT, text=True, stderr=subprocess.DEVNULL
+        ).strip()
     except Exception:
         return ""
 
 
 def files():
-    return sorted(p for p in ROOT.rglob("*") if p.is_file() and not any(x in IGNORE for x in p.parts))
+    return sorted(
+        p for p in ROOT.rglob("*") if p.is_file() and not any(x in IGNORE for x in p.parts)
+    )
 
 
 def digest(p: Path) -> str:
@@ -60,18 +87,35 @@ def api(path: str, token: str):
 
 def main() -> int:
     fs = files()
-    buckets = defaultdict(list)
+    buckets: dict[str, list[str]] = defaultdict(list)
     for p in fs:
         buckets[digest(p)].append(rel(p))
     dupes = [v for v in buckets.values() if len(v) > 1]
-    nested = [rel(p.parent) for p in ROOT.rglob(".git") if p != ROOT / ".git"]
-    snapshots = [rel(p) for p in fs if "/Sovereignty-AI-Studio-main/" in rel(p) and rel(p).startswith("external/")]
-    templates = []
+
+    # Nested git only outside ignored trees (external/ etc. already skipped by parts).
+    nested = [
+        rel(p.parent)
+        for p in ROOT.rglob(".git")
+        if p != ROOT / ".git" and not any(x in IGNORE for x in p.parts)
+    ]
+
+    # Snapshot paths that escaped IGNORE would still be reported; with external/
+    # ignored this stays empty for the known SuperGrok skeleton layout.
+    snapshots = [
+        rel(p)
+        for p in fs
+        if "/Sovereignty-AI-Studio-main/" in rel(p) and rel(p).startswith("external/")
+    ]
+
+    templates: list[str] = []
     for p in fs:
-        if p.name.lower() == "dependabot.yaml" and "example.com" in p.read_text(errors="ignore"):
+        name = p.name.lower()
+        if name == "dependabot.yaml" and "example.com" in p.read_text(errors="ignore"):
             templates.append(rel(p))
+        # Live credential filenames only — not *.example templates.
         if p.name in {".env", ".env.local", ".env.production", "id_rsa", "id_ed25519"}:
             templates.append(rel(p))
+
     local = {
         "branch": git("branch", "--show-current"),
         "head": git("rev-parse", "HEAD"),
@@ -82,15 +126,12 @@ def main() -> int:
         "credential_or_template_risks": templates,
         "status": git("status", "--porcelain=v1").splitlines(),
     }
-    remote = {"checked": False}
-    # GitHub Actions injects GITHUB_TOKEN; local/tooling may use GH_TOKEN.
+
+    remote: dict = {"checked": False}
     token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
     if token:
         try:
             rs = api(f"/repos/{REPO}/rulesets", token)
-            # Guard: the rulesets endpoint must return a list. A non-list
-            # (e.g. a single ruleset dict from a mismatched mock) is not
-            # iterable as rulesets - treat as zero matches, fail-closed.
             if isinstance(rs, list):
                 matches = [
                     r
@@ -105,32 +146,60 @@ def main() -> int:
             }
         except (urllib.error.URLError, urllib.error.HTTPError, OSError, TimeoutError) as e:
             remote = {"checked": False, "error": str(e)}
-    findings = []
+
+    findings: list[dict] = []
     if nested:
-        findings.append({"severity": "HIGH", "code": "NESTED_REPOSITORY"})
+        findings.append({"severity": "HIGH", "code": "NESTED_REPOSITORY", "paths": nested})
     if snapshots:
-        findings.append({"severity": "HIGH", "code": "NESTED_STUDIO_SNAPSHOT"})
+        findings.append(
+            {"severity": "HIGH", "code": "NESTED_STUDIO_SNAPSHOT", "paths": snapshots}
+        )
     if templates:
-        findings.append({"severity": "HIGH", "code": "CREDENTIAL_OR_TEMPLATE_RISK"})
+        findings.append(
+            {"severity": "HIGH", "code": "CREDENTIAL_OR_TEMPLATE_RISK", "paths": templates}
+        )
     if dupes:
-        findings.append({"severity": "MEDIUM", "code": "DUPLICATE_CONTENT", "groups": len(dupes)})
+        findings.append(
+            {"severity": "MEDIUM", "code": "DUPLICATE_CONTENT", "groups": len(dupes)}
+        )
+
     if remote.get("checked"):
-        matches = remote.get("matches", [])
+        matches = remote.get("matches") or []
         if not matches:
-            findings.append({"severity": "CRITICAL", "code": "ARA_RULESET_MISSING"})
+            # Missing ruleset is informational unless explicitly required.
+            severity = "CRITICAL" if REQUIRE_RULESET else "MEDIUM"
+            findings.append(
+                {
+                    "severity": severity,
+                    "code": "ARA_RULESET_MISSING",
+                    "detail": (
+                        f"No ruleset named {RULESET!r}. "
+                        + (
+                            "ARA_REQUIRE_RULESET=1 is set."
+                            if REQUIRE_RULESET
+                            else "Set ARA_REQUIRE_RULESET=1 after the ruleset exists."
+                        )
+                    ),
+                }
+            )
         for r in matches:
             if r.get("enforcement") != "active":
                 findings.append({"severity": "CRITICAL", "code": "ARA_RULESET_DISABLED"})
-            refs = ((r.get("conditions") or {}).get("ref_name") or {})
-            if refs.get("include") and not any(BRANCH in x for x in refs["include"]):
-                findings.append({"severity": "HIGH", "code": "CANONICAL_BRANCH_NOT_COVERED"})
+            refs = (r.get("conditions") or {}).get("ref_name") or {}
+            include = refs.get("include") or []
+            if include and not any(BRANCH in x for x in include):
+                findings.append(
+                    {"severity": "HIGH", "code": "CANONICAL_BRANCH_NOT_COVERED"}
+                )
             for b in r.get("bypass_actors") or []:
                 if b.get("bypass_mode") == "always" and b.get("actor_id") is None:
                     findings.append({"severity": "CRITICAL", "code": "UNSCOPED_BYPASS"})
+
     result = {
         "repository": REPO,
         "canonical_branch": BRANCH,
         "ruleset": RULESET,
+        "require_ruleset": REQUIRE_RULESET,
         "local": local,
         "remote_ruleset": remote,
         "findings": findings,

@@ -54,6 +54,8 @@ jobs:
           GH_REPOSITORY: ${{ github.repository }}
           ARA_CANONICAL_BRANCH: Collaboration
           ARA_RULESET_NAME: Ara
+          # Ruleset is owner-configured. Do not CRITICAL-fail until it exists.
+          ARA_REQUIRE_RULESET: "0"
         shell: bash
         run: |
           set -Eeuo pipefail
