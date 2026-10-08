@@ -6,8 +6,8 @@ Artifact layout (written to --output-dir):
   oauth-private-key.pem  – PKCS#8 PEM private key; permissions 0600
   provenance.json        – immutable generation event record
 
-Compatibility note (v0.3):
-  * Signing algorithm is ML-DSA-87 (production). Ed25519 is dev-only and removed.
+Compatibility note (v0.4):
+  * Signing algorithm is Ed25519 (production). ML-DSA-87 / liboqs removed.
   * 'private_key' is no longer stored in oauth-client.json; use oauth-private-key.pem instead.
   * oauth-client.json now includes 'key_reference' and a deterministic 'kid'.
   * Report now uses 'validation', 'generation', 'persistence' fields instead of 'status'.
@@ -26,7 +26,7 @@ import secrets
 import sys
 from pathlib import Path
 
-TOOL_VERSION = "0.3"
+TOOL_VERSION = "0.4"
 PRIVATE_KEY_FILENAME = "oauth-private-key.pem"
 SERVICE_PATTERN = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
 
@@ -45,9 +45,8 @@ def canonical_json(value: object) -> str:
     """Return a deterministic JSON string with sorted keys and 2-space indent."""
     return json.dumps(value, sort_keys=True, indent=2, separators=(",", ": ")) + "\n"
 
-
 def derive_kid(public_key_bytes: bytes) -> str:
-    """Derive a stable key identifier from raw ML-DSA-87 public key bytes.
+    """Derive a stable key identifier from raw Ed25519 public key bytes.
 
     Algorithm: SHA-256(raw_public_key_bytes), lower-hex, first 32 characters.
     """
@@ -77,7 +76,7 @@ def canonicalize_config(service: str) -> dict:
     return {
         "issuer": "local",
         "service": service,
-        "signing_algorithm": "ML-DSA-87",
+        "signing_algorithm": "Ed25519",
         "tool_version": TOOL_VERSION,
     }
 
@@ -88,39 +87,22 @@ def canonicalize_config(service: str) -> dict:
 
 
 def generate_key_material() -> tuple:
-    """Generate an ML-DSA-87 key pair and associated identifiers.
+    """Generate an Ed25519 key pair and associated identifiers.
 
     Returns:
         (private_key, public_key_bytes, kid, client_id, backend)
 
-    Backend priority: cryptography.hazmat.primitives.asymmetric.ml_dsa (cryptography>=43),
-    then liboqs-python (oqs). Raises RuntimeError if neither is available.
+    Backend: cryptography.hazmat.primitives.asymmetric.ed25519 (always available
+    in cryptography>=2.0). No ML-DSA / liboqs dependency.
     """
-    try:
-        from cryptography.hazmat.primitives import serialization
-        from cryptography.hazmat.primitives.asymmetric import ml_dsa
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
-        private_key = ml_dsa.MLDSA87PrivateKey.generate()
-        public_key_bytes = private_key.public_key().public_bytes(
-            serialization.Encoding.Raw, serialization.PublicFormat.Raw
-        )
-        return private_key, public_key_bytes, derive_kid(public_key_bytes), f"sg_{secrets.token_urlsafe(18)}", "cryptography"
-    except ImportError:
-        pass
-
-    try:
-        import oqs
-
-        with oqs.Signature("ML-DSA-87") as sig:
-            public_key_bytes = sig.generate_keypair()
-            private_key = sig.export_secret_key()
-        return private_key, public_key_bytes, derive_kid(public_key_bytes), f"sg_{secrets.token_urlsafe(18)}", "oqs"
-    except ImportError:
-        pass
-
-    raise RuntimeError(
-        "ML-DSA-87 requires cryptography>=43 or liboqs-python (oqs); neither is installed"
+    private_key = Ed25519PrivateKey.generate()
+    public_key_bytes = private_key.public_key().public_bytes(
+        serialization.Encoding.Raw, serialization.PublicFormat.Raw
     )
+    return private_key, public_key_bytes, derive_kid(public_key_bytes), f"sg_{secrets.token_urlsafe(18)}", "cryptography-ed25519"
 
 
 # ---------------------------------------------------------------------------
@@ -132,12 +114,12 @@ def policy_gate(config: dict) -> None:
     """Assert local policy constraints before credential generation proceeds.
 
     Enforces:
-    - signing_algorithm must be ML-DSA-87.
+    - signing_algorithm must be Ed25519.
     - issuer must be 'local'; network issuers are not permitted.
     """
-    if config.get("signing_algorithm") != "ML-DSA-87":
+    if config.get("signing_algorithm") != "Ed25519":
         raise ValueError(
-            f"signing_algorithm must be ML-DSA-87; got {config.get('signing_algorithm')!r}"
+            f"signing_algorithm must be Ed25519; got {config.get('signing_algorithm')!r}"
         )
     if config.get("issuer") != "local":
         raise ValueError("issuer must be 'local'; network issuers are not permitted")
@@ -151,7 +133,7 @@ def policy_gate(config: dict) -> None:
 def create_provenance(service: str, kid: str) -> dict:
     """Return an immutable credential-generation event record (RFC-0007)."""
     return {
-        "algorithm": "ML-DSA-87",
+        "algorithm": "Ed25519",
         "event": "credential_generated",
         "kid": kid,
         "service": service,
@@ -224,9 +206,10 @@ def persist_artifacts(
         "jwks": {
             "keys": [
                 {
-                    "alg": "ML-DSA-87",
+                    "alg": "EdDSA",
+                    "crv": "Ed25519",
                     "kid": kid,
-                    "kty": "ML-DSA",
+                    "kty": "OKP",
                     "use": "sig",
                     "x": b64url(public_key_bytes),
                 }
@@ -289,7 +272,7 @@ def main() -> int:
         "issuer": "local",
         "network_accessed": False,
         "service": args.service,
-        "signing_algorithm": "ML-DSA-87",
+        "signing_algorithm": "Ed25519",
     }
 
     # Phase 1: Validate
