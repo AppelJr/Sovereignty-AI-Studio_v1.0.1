@@ -46,7 +46,14 @@ def digest(p: Path) -> str:
 
 
 def api(path: str, token: str):
-    req = urllib.request.Request("https://api.github.com" + path, headers={"Accept": "application/vnd.github+json", "Authorization": f"Bearer {token}", "X-GitHub-Api-Version": "2022-11-28"})
+    req = urllib.request.Request(
+        "https://api.github.com" + path,
+        headers={
+            "Accept": "application/vnd.github+json",
+            "Authorization": f"Bearer {token}",
+            "X-GitHub-Api-Version": "2022-11-28",
+        },
+    )
     with urllib.request.urlopen(req, timeout=20) as r:
         return json.load(r)
 
@@ -65,9 +72,19 @@ def main() -> int:
             templates.append(rel(p))
         if p.name in {".env", ".env.local", ".env.production", "id_rsa", "id_ed25519"}:
             templates.append(rel(p))
-    local = {"branch": git("branch", "--show-current"), "head": git("rev-parse", "HEAD"), "files_scanned": len(fs), "duplicate_groups": dupes, "nested_git_repositories": nested, "nested_studio_snapshot_paths": snapshots, "credential_or_template_risks": templates, "status": git("status", "--porcelain=v1").splitlines()}
+    local = {
+        "branch": git("branch", "--show-current"),
+        "head": git("rev-parse", "HEAD"),
+        "files_scanned": len(fs),
+        "duplicate_groups": dupes,
+        "nested_git_repositories": nested,
+        "nested_studio_snapshot_paths": snapshots,
+        "credential_or_template_risks": templates,
+        "status": git("status", "--porcelain=v1").splitlines(),
+    }
     remote = {"checked": False}
-    token = os.environ.get("GH_TOKEN")
+    # GitHub Actions injects GITHUB_TOKEN; local/tooling may use GH_TOKEN.
+    token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
     if token:
         try:
             rs = api(f"/repos/{REPO}/rulesets", token)
@@ -75,28 +92,50 @@ def main() -> int:
             # (e.g. a single ruleset dict from a mismatched mock) is not
             # iterable as rulesets - treat as zero matches, fail-closed.
             if isinstance(rs, list):
-                matches = [r for r in rs if isinstance(r, dict) and r.get("name", "").casefold() == RULESET.casefold()]
+                matches = [
+                    r
+                    for r in rs
+                    if isinstance(r, dict) and r.get("name", "").casefold() == RULESET.casefold()
+                ]
             else:
                 matches = []
-            remote = {"checked": True, "matches": [api(f"/repos/{REPO}/rulesets/{r['id']}", token) for r in matches]}
+            remote = {
+                "checked": True,
+                "matches": [api(f"/repos/{REPO}/rulesets/{r['id']}", token) for r in matches],
+            }
         except (urllib.error.URLError, urllib.error.HTTPError, OSError, TimeoutError) as e:
             remote = {"checked": False, "error": str(e)}
     findings = []
-    if nested: findings.append({"severity": "HIGH", "code": "NESTED_REPOSITORY"})
-    if snapshots: findings.append({"severity": "HIGH", "code": "NESTED_STUDIO_SNAPSHOT"})
-    if templates: findings.append({"severity": "HIGH", "code": "CREDENTIAL_OR_TEMPLATE_RISK"})
-    if dupes: findings.append({"severity": "MEDIUM", "code": "DUPLICATE_CONTENT", "groups": len(dupes)
-    })
+    if nested:
+        findings.append({"severity": "HIGH", "code": "NESTED_REPOSITORY"})
+    if snapshots:
+        findings.append({"severity": "HIGH", "code": "NESTED_STUDIO_SNAPSHOT"})
+    if templates:
+        findings.append({"severity": "HIGH", "code": "CREDENTIAL_OR_TEMPLATE_RISK"})
+    if dupes:
+        findings.append({"severity": "MEDIUM", "code": "DUPLICATE_CONTENT", "groups": len(dupes)})
     if remote.get("checked"):
         matches = remote.get("matches", [])
-        if not matches: findings.append({"severity": "CRITICAL", "code": "ARA_RULESET_MISSING"})
+        if not matches:
+            findings.append({"severity": "CRITICAL", "code": "ARA_RULESET_MISSING"})
         for r in matches:
-            if r.get("enforcement") != "active": findings.append({"severity": "CRITICAL", "code": "ARA_RULESET_DISABLED"})
+            if r.get("enforcement") != "active":
+                findings.append({"severity": "CRITICAL", "code": "ARA_RULESET_DISABLED"})
             refs = ((r.get("conditions") or {}).get("ref_name") or {})
-            if refs.get("include") and not any(BRANCH in x for x in refs["include"]): findings.append({"severity": "HIGH", "code": "CANONICAL_BRANCH_NOT_COVERED"})
+            if refs.get("include") and not any(BRANCH in x for x in refs["include"]):
+                findings.append({"severity": "HIGH", "code": "CANONICAL_BRANCH_NOT_COVERED"})
             for b in r.get("bypass_actors") or []:
-                if b.get("bypass_mode") == "always" and b.get("actor_id") is None: findings.append({"severity": "CRITICAL", "code": "UNSCOPED_BYPASS"})
-    result = {"repository": REPO, "canonical_branch": BRANCH, "ruleset": RULESET, "local": local, "remote_ruleset": remote, "findings": findings, "fail_closed": True}
+                if b.get("bypass_mode") == "always" and b.get("actor_id") is None:
+                    findings.append({"severity": "CRITICAL", "code": "UNSCOPED_BYPASS"})
+    result = {
+        "repository": REPO,
+        "canonical_branch": BRANCH,
+        "ruleset": RULESET,
+        "local": local,
+        "remote_ruleset": remote,
+        "findings": findings,
+        "fail_closed": True,
+    }
     REPORT.parent.mkdir(parents=True, exist_ok=True)
     REPORT.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
     print(json.dumps({"findings": len(findings), "report": str(REPORT)}, indent=2))

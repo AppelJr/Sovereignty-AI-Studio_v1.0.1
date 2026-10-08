@@ -17,6 +17,48 @@ The canonical runtime modes are **LOCAL**, **HYBRID**, and **ONLINE**. LOCAL is 
 
 Runtime artifacts are classified as **canonical**, **derived**, or **external**. Canonical artifacts define the runtime contract; derived artifacts are generated or secondary representations; external artifacts require explicit authorization before execution or ingestion.
 
+### Artifact classification
+
+| Class | Authority | Role |
+| --- | --- | --- |
+| **canonical** | yes | Source of truth. Authorizes decisions, promotions, and trust. Mutations require Human Owner authorization and MUST emit a SCAR / audit record. |
+| **derived** | no | Projections from canonical state. Useful for dashboards and reports. MUST NOT authorize actions or be treated as runtime truth. |
+| **external** | no | Data from outside the sovereign boundary. MAY inform reasoning. MUST NOT authorize actions, alter policy, or become canonical without explicit Human Owner promotion. |
+
+**Examples**
+
+- **canonical:** policy manifests, identity records, trust anchors, SCAR ledger, `config/runtime-coherence.json`, capability / admission policy, branch registry and promotion contracts
+- **derived:** dashboard projections, caches, reports, aggregated metrics, alert summaries
+- **external:** Git mirrors, provider metadata, imported files, third-party scan results, cloud listing / API inventory
+
+**Invariants**
+
+```text
+Dashboard state             ≠  Runtime truth
+GitHub repository listing   ≠  Authorized integration
+Provider metadata           ≠  Policy
+Derived report              ≠  SCAR evidence
+External input              ≠  Authority
+```
+
+**Promotion rule**
+
+External or derived material becomes canonical only through:
+
+```text
+Human Owner intent
+        →
+Policy / capability decision
+        →
+GateOne resolution
+        →
+SCAR evidence record
+        →
+Canonical artifact
+```
+
+Silent promotion is forbidden. Network availability is not authorization.
+
 The primary local dashboard/runtime path is **PHPWin** -> Python bridge -> Node bridge. Status endpoints must report `UNAVAILABLE`, `DENY`, or `REQUIRE_APPROVAL` rather than claiming an unavailable capability is active.
 
 ## Canonical runtime map
