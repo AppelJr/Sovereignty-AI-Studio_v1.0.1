@@ -2,7 +2,7 @@ name: SCAR.yml — Sovereign Compliance Audit Record
 
 on:
   push:
-    branches: [Collaboration]
+    branches: [Collaboration, 'xAI/Grok/**']
   workflow_dispatch:
     inputs:
       reason:
@@ -27,16 +27,19 @@ jobs:
     steps:
       - name: Checkout exact commit (native git)
         env:
-          GH_TOKEN: ${{ github.token}}
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -Eeuo pipefail
           git init .
-          git remote add origin "https://github.com/${{ github.repository}}.git"
-          auth="$(printf 'x-access-token:%s' "${{ github.token}}" | base64 -w0)"
-          git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${{ github.sha}}"
+          git remote add origin "https://github.com/${{ github.repository }}.git"
+          auth="$(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 -w0)"
+          git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${{ github.sha }}"
           git checkout --detach FETCH_HEAD
-          git config --unset-all http.extraheader
+          # git config --unset-all exits 5 when the key is absent; only unset if present
+          if git config --get-regexp '^http\.extraheader$' >/dev/null 2>&1; then
+            git config --unset-all http.extraheader
+          fi
           echo "CHECKED_OUT=$(git rev-parse --short HEAD)"
 
       - name: SCAR source gate + hash-chain integrity
@@ -45,7 +48,6 @@ jobs:
         run: |
           set -Eeuo pipefail
           echo "SCAR_SOURCE_GATE=START"
-          # Compile any SCAR PQC attest scripts if present
           if [ -f scripts/scar_pqc_attest.py ]; then
             python3 -m py_compile scripts/scar_pqc_attest.py
             echo "SCAR_SOURCE_GATE=PASS"
@@ -62,7 +64,6 @@ jobs:
 
           scar_dir = pathlib.Path("scar")
           if not scar_dir.exists():
-              # Also check common alternate locations
               for alt in ("SCAR", "evidence/scar", "logs/scar"):
                   if pathlib.Path(alt).exists():
                       scar_dir = pathlib.Path(alt)
@@ -86,13 +87,11 @@ jobs:
                   print(f"SCAR_CHAIN=FAIL (malformed JSON: {rec}): {e}")
                   sys.exit(1)
 
-              # Verify hash_prev linkage if present
               if prev_hash is not None and data.get("hash_prev") is not None:
                   if data["hash_prev"] != prev_hash:
                       print(f"SCAR_CHAIN=FAIL (broken link at {rec})")
                       sys.exit(1)
 
-              # Compute record hash for chaining
               canonical = json.dumps(data, sort_keys=True, separators=(",", ":")).encode("utf-8")
               prev_hash = hashlib.sha256(canonical).hexdigest()
               checked += 1

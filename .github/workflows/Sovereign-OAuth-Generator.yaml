@@ -1,13 +1,6 @@
 # =========================================================
 # Sovereignty AI Studio — OAUTH API Generator
-# Production CI/CD
-# Zero-trust / fail-closed verification pipeline
-# =========================================================
-# Repository CI (GitHub Actions) — separate from device-local.
-# Policy-compliant: no blocked actions (docker/*, aquasecurity/*, sigstore/*).
-# Native git checkout (same pattern as dep-health.yml).
-# Fail-closed: no || true, no continue-on-error hiding failures.
-# Real results only: no echo-based fake verification.
+# Real execution only. No mocked authorization. No bolted-on gates.
 # =========================================================
 name: OAUTH-API-GENERATOR
 on:
@@ -16,6 +9,7 @@ on:
       - main
       - Collaboration
       - grok
+      - 'xAI/Grok/**'
   pull_request:
     branches:
       - main
@@ -96,6 +90,9 @@ jobs:
           git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${{ github.sha }}"
           git checkout --detach FETCH_HEAD
           git rev-parse --short HEAD
+          if git config --get-regexp '^http\.extraheader$' >/dev/null 2>&1; then
+            git config --unset-all http.extraheader
+          fi
       - name: Set up Python (system)
         shell: bash
         run: |
@@ -107,7 +104,7 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          python3 -m pip install --upgrade pip 
+          python3 -m pip install --upgrade pip
           if [ -f .github/workflows/Requirements.txt ]; then python3 -m pip install -r .github/workflows/Requirements.txt; fi
           if [ -f requirements.txt ]; then python3 -m pip install -r requirements.txt; fi
           python3 -m pip install flake8 pytest pytest-cov pip-audit cryptography
@@ -125,11 +122,11 @@ jobs:
             --select=E9,F63,F7,F82 \
             --show-source \
             --statistics
-      - name: Run Python tests
+      - name: Run Python unit tests (offline — no network token)
         shell: bash
         run: |
           set -Eeuo pipefail
-          pytest \
+          env -u GH_TOKEN -u GITHUB_TOKEN pytest \
             --cov=apps \
             --cov=backend \
             --cov=src \
@@ -141,12 +138,13 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          python3 -m pip_audit \
-            -r .github/workflows/Requirements.txt
-          if [ -f requirements.txt ]; then
-            python3 -m pip_audit \
-              -r requirements.txt
+          if [ -f .github/workflows/Requirements.txt ]; then
+            python3 -m pip_audit -r .github/workflows/Requirements.txt
           fi
+          if [ -f requirements.txt ]; then
+            python3 -m pip_audit -r requirements.txt
+          fi
+
   oauth-generator:
     name: OAuth Generator — real execution
     runs-on: ubuntu-latest
@@ -163,6 +161,9 @@ jobs:
           git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${{ github.sha }}"
           git checkout --detach FETCH_HEAD
           git rev-parse --short HEAD
+          if git config --get-regexp '^http\.extraheader$' >/dev/null 2>&1; then
+            git config --unset-all http.extraheader
+          fi
       - name: Set up Python (system)
         shell: bash
         run: |
@@ -179,4 +180,4 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          python3 scripts/oauth_local_generator.py --dry-run --service appeljr/sovereignty-ai-studio
+          python3 scripts/oauth_local_generator.py --dry-run --service appeljr-sovereignty-ai-studio

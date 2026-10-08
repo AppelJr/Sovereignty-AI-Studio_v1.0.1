@@ -22,12 +22,13 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
+          SHA="${{ github.sha}}"
           printf 'WATCHDOG_STATUS=STARTED\n'
           printf 'WATCHDOG_EVENT=%s\n' "${{ github.event_name}}"
           printf 'WATCHDOG_RUN_ID=%s\n' "${{ github.run_id}}"
-          printf 'FULL_SHA=%s\n' "${{ github.sha}}"
-          printf 'HEAD_SHA_LEN=%s\n' "${{ github.sha}}"
-          test "${{ github.sha}}" -eq 40
+          printf 'FULL_SHA=%s\n' "$SHA"
+          printf 'HEAD_SHA_LEN=%s\n' "${{ #SHA}}"
+          test "${{ #SHA}}" -eq 40
           printf 'HATCH=OPEN\n'
           printf 'PAYLOAD_ENTERED=true\n'
       - name: Checkout without external action
@@ -41,7 +42,9 @@ jobs:
           auth="$(printf 'x-access-token:%s' "${{ github.token}}" | base64 | tr -d '\n')"
           git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${{ github.sha}}"
           git checkout --detach FETCH_HEAD
-          git config --unset-all http.extraheader
+          if git config --get-regexp '^http\.extraheader$' >/dev/null 2>&1; then
+            git config --unset-all http.extraheader
+          fi
       - name: Verify workflow inventory
         shell: bash
         run: |
@@ -60,7 +63,7 @@ jobs:
               echo "runs-on contract present in $workflow"
             else
               echo "missing runs-on in $workflow"
-              exit 0
+              exit 1
             fi
           done
           echo 'RUNNER_CONTRACTS=PASS'
@@ -68,8 +71,9 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
+          SHA="${{ github.sha}}"
           printf 'WATCHDOG_STATUS=PASS\n'
-          printf 'FULL_SHA=%s\n' "${{ github.sha}}"
+          printf 'FULL_SHA=%s\n' "$SHA"
           printf 'HATCH=OPEN\n'
           printf 'PAYLOAD_ENTERED=true\n'
           printf 'WATCHDOG_RESULT=VISIBLE_LOCAL_RUNNER_CONTRACTS_VERIFIED\n'
