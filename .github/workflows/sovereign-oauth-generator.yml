@@ -1,8 +1,8 @@
 # OAUTH API GENERATOR – CI/CD PIPELINE
 #
-# Lean lane: checkout, run the OAuth generator, assert artifacts.
-# No third-party actions — native git checkout only, matching ci.yml,
-# node.js.yml, python-ci.yml, and ara-hardened-ci.yml.
+# Lean lane: checkout, install ML-DSA-87 backend, run the OAuth generator,
+# assert artifacts. No third-party actions — native git checkout only,
+# matching ci.yml, node.js.yml, python-ci.yml, and ara-hardened-ci.yml.
 #
 # Provenance: rewritten 2026-10-08 by Grok lane at AppelJr's direction.
 # Path fix 2026-10-08: generator lives at scripts/oauth_local_generator.py,
@@ -42,13 +42,14 @@ jobs:
           auth="$(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 | tr -d '\n')"
           git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${{ github.sha}}"
           git checkout --detach FETCH_HEAD
-          git config --unset-all http.extraheader 2>/dev/null || true
+          git config --unset-all http.extraheader 2>/dev>/dev/null || true
           git rev-parse --short HEAD
 
       - name: Install ML-DSA-87 backend (cryptography>=43)
         run: |
           set -Eeuo pipefail
           python3 -m pip install --upgrade "pip>=24" "cryptography>=43"
+          python3 -c "from cryptography.hazmat.primitives.asymmetric import ml_dsa; print('ML-DSA-87 backend OK:', ml_dsa.MLDSA87PrivateKey)"
 
       - name: Run OAuth generator
         run: |
