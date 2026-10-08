@@ -4,10 +4,13 @@
 [![Python CI](https://github.com/AppelJr/Sovereignty-AI-Studio_v1.0.1/actions/workflows/python-ci.yml/badge.svg)](https://github.com/AppelJr/Sovereignty-AI-Studio_v1.0.1/actions/workflows/python-ci.yml) [![Quart App CI](https://github.com/AppelJr/Sovereignty-AI-Studio_v1.0.1/actions/workflows/Quart.yml/badge.svg)](https://github.com/AppelJr/Sovereignty-AI-Studio_v1.0.1/actions/workflows/Quart.yml)
 [![ara-hardened-unit-ci-local](https://github.com/AppelJr/Sovereignty-AI-Studio_v1.0.1/actions/workflows/ara-hardened-ci.yml/badge.svg)](https://github.com/AppelJr/Sovereignty-AI-Studio_v1.0.1/actions/workflows/ara-hardened-ci.yml) [![Diamond Lattice 5D Core v0.1](https://github.com/AppelJr/Sovereignty-AI-Studio_v1.0.1/actions/workflows/Diamond_5D_Memory_Core.yml/badge.svg)](https://github.com/AppelJr/Sovereignty-AI-Studio_v1.0.1/actions/workflows/Diamond_5D_Memory_Core.yml) [![iOS Build](https://github.com/AppelJr/Sovereignty-AI-Studio_v1.0.1/actions/workflows/ios-build.yml/badge.svg)](https://github.com/AppelJr/Sovereignty-AI-Studio_v1.0.1/actions/workflows/ios-build.yml) [![OAuth Generator](https://github.com/AppelJr/Sovereignty-AI-Studio_v1.0.1/actions/workflows/sovereign-oauth-generator.yml/badge.svg)](https://github.com/AppelJr/Sovereignty-AI-Studio_v1.0.1/actions/workflows/sovereign-oauth-generator.yml) [![Node.js CI](https://github.com/AppelJr/Sovereignty-AI-Studio_v1.0.1/actions/workflows/node.js.yml/badge.svg)](https://github.com/AppelJr/Sovereignty-AI-Studio_v1.0.1/actions/workflows/node.js.yml) [![SCAR.yml — Sovereign Compliance Audit Record](https://github.com/AppelJr/Sovereignty-AI-Studio_v1.0.1/actions/workflows/scar.yml/badge.svg)](https://github.com/AppelJr/Sovereignty-AI-Studio_v1.0.1/actions/workflows/scar.yml)
 # Sovereignty AI Studio 
-@claude @codex @copilot @grok @duckai @xAI
-This is the dedicated base branch. All changes by Claude Grok/Ara xAI/Grok DuckAI GPT/Codex Copilot must be made in their dedicated branch. Do not push directly to main. Create a Pull Request for review.
-@claude @codex @copilot @grok @duckai @xAI (the @ doubles are on purpose) to understand lanes 
-Sovereignty AI Studio is a self-hosted, offline-first AI control surface and supporting service stack. The primary user interface is the KODER dashboard in [`DevAssist420SGHv119.html`](DevAssist420SGHv119.html); Python and Node services provide local routing, agent orchestration, and optional self-hosted integrations.
+# @claude @codex @copilot @grok @duckai @xAI
+## 👉👉👉
+## This is the dedicated base branch. All changes by Claude Grok/Ara xAI/Grok DuckAI GPT/Codex Copilot must be made in their dedicated branch. Do not push directly to main. Create a Pull Request for review.
+## 👈👈👈
+# @claude @codex @copilot @grok @duckai @xAI   
+(the @ doubles are on purpose) to understand lanes 
+## Sovereignty AI Studio is a self-hosted, offline-first AI control surface and supporting service stack. The primary user interface is the KODER dashboard in [`DevAssist420SGHv119.html`](DevAssist420SGHv119.html); Python and Node services provide local routing, agent orchestration, and optional self-hosted integrations.
 
 ## Runtime governance
 
