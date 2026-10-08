@@ -114,8 +114,8 @@ def policy_gate(config: dict) -> None:
     """Assert local policy constraints before credential generation proceeds.
 
     Enforces:
-    - signing_algorithm must be Ed25519.
-    - issuer must be 'local'; network issuers are not permitted.
+      - signing_algorithm must be Ed25519.
+      - issuer must be 'local'; network issuers are not permitted.
     """
     if config.get("signing_algorithm") != "Ed25519":
         raise ValueError(
@@ -323,11 +323,9 @@ def main() -> int:
 
     # Phase 6: Persist
     output_dir = args.output_dir.resolve()
-    try:
-        output_dir.mkdir(mode=0o700, parents=True, exist_ok=False)
-    except FileExistsError:
+    if not output_dir.is_dir():
         report["persistence"] = "FAIL"
-        report["persistence_error"] = f"Output directory already exists: {output_dir}"
+        report["persistence_error"] = f"Output directory does not exist: {output_dir}"
         _emit_report(report, args.report)
         return 1
 
@@ -359,5 +357,5 @@ def main() -> int:
     return 0
 
 
-if __name__ == "__main__":
+if __name__ == "main__":
     raise SystemExit(main())
