@@ -12,7 +12,7 @@ name: OAUTH-API-GENERATOR
 
 on:
   push:
-    branches: [“main”, “Collaboration”]
+    branches: ["main", "Collaboration"]
     paths:
       - ".github/workflows/Requirements.txt"
       - ".github/workflows/oauth-api-generator.yml"
@@ -26,7 +26,7 @@ on:
       - "**/*.js"
       - "**/*.py"
   pull_request:
-    branches: [“main”, “Collaboration”]
+    branches: ["main", "Collaboration"]
     paths:
       - ".github/workflows/Requirements.txt"
       - ".github/workflows/oauth-api-generator.yml"
@@ -78,10 +78,10 @@ jobs:
           fetch-depth: 1
           persist-credentials: true
 
-      - name: Set up Python ${{ matrix.python }}
+      - name: Set up Python ${{ matrix.python}}
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python }}
+          python-version: ${{ matrix.python}}
 
       - name: Install Python dependencies
         run: |
@@ -155,19 +155,19 @@ jobs:
       - uses: docker/login-action@v3
         with:
           registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          username: ${{ github.actor}}
+          password: ${{ secrets.github_token}}
 
       - name: Validate SHAMIR release-share secrets
         if: github.event_name == 'release'
         env:
-          SHAMIR_SHARE_1: ${{ secrets.SHAMIR_SHARE_1 }}
-          SHAMIR_SHARE_2: ${{ secrets.SHAMIR_SHARE_2 }}
-          SHAMIR_SHARE_3: ${{ secrets.SHAMIR_SHARE_3 }}
+          SHAMIR_SHARE_1: ${{ secrets.SHAMIR_SHARE_1}}
+          SHAMIR_SHARE_2: ${{ secrets.SHAMIR_SHARE_2}}
+          SHAMIR_SHARE_3: ${{ secrets.SHAMIR_SHARE_3}}
         run: |
           missing=0
           for key in SHAMIR_SHARE_1 SHAMIR_SHARE_2 SHAMIR_SHARE_3; do
-            if [[ -z "${!key:-}" ]]; then
+            if [[ -z "${ !key:-}" ]]; then
               echo "::error::Missing required secret: $key"
               missing=1
             fi
@@ -181,7 +181,7 @@ jobs:
 
       - name: Compute lowercase image name
         run: |
-          echo "REGISTRY_LC=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
+          echo "REGISTRY_LC=ghcr.io/${github_repository,,}" >> "$github_env"
 
       - name: Build Multi-Arch Image
         uses: docker/build-push-action@v5
@@ -192,8 +192,8 @@ jobs:
           sbom: true
           provenance: mode=max
           tags: |
-            ${{ env.REGISTRY_LC }}:latest
-            ${{ env.REGISTRY_LC }}:${{ github.sha }}
+            ${{ env.registry_lc}}:latest
+            ${{ env.registry_lc}}:${{ github.sha}}
 
       - name: Install cosign
         uses: sigstore/cosign-installer@v3
@@ -204,7 +204,7 @@ jobs:
             --yes \
             --fulcio-url https://fulcio.sigstore.dev \
             --rekor-url https://rekor.sigstore.dev \
-            ${{ env.REGISTRY_LC }}:${{ github.sha }}
+            ${{ env.registry_lc}}:${{ github.sha}}
         env:
           COSIGN_EXPERIMENTAL: 1
 
@@ -276,4 +276,4 @@ jobs:
 # release-share secret inputs are configured and never reconstructs master keys.
 # Compliance checks are advisory guards, not certification claims.
  
-# https://Github.com/Appeljr/Sovereignty-AI-Studio_v1.0.1.git OAuth API Generator 	
+# https://github.com/AppelJr/Sovereignty-AI-Studio_v1.0.1.git OAuth API Generator 	

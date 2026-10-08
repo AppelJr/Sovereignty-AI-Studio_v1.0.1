@@ -114,8 +114,8 @@ def policy_gate(config: dict) -> None:
     """Assert local policy constraints before credential generation proceeds.
 
     Enforces:
-    - signing_algorithm must be Ed25519.
-    - issuer must be 'local'; network issuers are not permitted.
+      - signing_algorithm must be Ed25519.
+      - issuer must be 'local'; network issuers are not permitted.
     """
     if config.get("signing_algorithm") != "Ed25519":
         raise ValueError(
@@ -357,5 +357,5 @@ def main() -> int:
     return 0
 
 
-if __name__ == "main__":
+if __name__ == "__main__":
     raise SystemExit(main())
