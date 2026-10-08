@@ -32,8 +32,9 @@ REQUIRE_RULESET = os.environ.get("ARA_REQUIRE_RULESET", "0").strip().lower() in 
 }
 REPORT = ROOT / "automation/reports/ara_full_audit.json"
 # Non-product trees: never treat as repository integrity findings.
+# NOTE: '.git' is intentionally NOT in this set. It names the repository's own
+# git directory; nested '.git' directories are the thing being detected.
 IGNORE = {
-    ".git",
     ".venv",
     "venv",
     "node_modules",
@@ -92,11 +93,14 @@ def main() -> int:
         buckets[digest(p)].append(rel(p))
     dupes = [v for v in buckets.values() if len(v) > 1]
 
-    # Nested git only outside ignored trees (external/ etc. already skipped by parts).
+    # Nested git: any '.git' directory that is not the repository root's own.
+    # Compare Path objects directly — do NOT use 'x in p.parts' against IGNORE,
+    # because that would treat the literal directory name '.git' as an ignored
+    # tree and silently skip the very thing we are looking for.
     nested = [
         rel(p.parent)
         for p in ROOT.rglob(".git")
-        if p != ROOT / ".git" and not any(x in IGNORE for x in p.parts)
+        if p != ROOT / ".git" and not any(part in IGNORE for part in p.parts)
     ]
 
     # Snapshot paths that escaped IGNORE would still be reported; with external/
@@ -109,6 +113,9 @@ def main() -> int:
 
     templates: list[str] = []
     for p in fs:
+        # Only scan first-party trees for credential-ish filenames.
+        if any(part in IGNORE for part in p.parts):
+            continue
         name = p.name.lower()
         if name == "dependabot.yaml" and "example.com" in p.read_text(errors="ignore"):
             templates.append(rel(p))
@@ -152,16 +159,18 @@ def main() -> int:
         findings.append({"severity": "HIGH", "code": "NESTED_REPOSITORY", "paths": nested})
     if snapshots:
         findings.append(
-            {"severity": "HIGH", "code": "NESTED_STUDIO_SNAPSHOT", "paths": snapshots}
+            {
+                "severity": "HIGH",
+                "code": "NESTED_STUDIO_SNAPSHOT",
+                "paths": snapshots,
+            }
         )
     if templates:
         findings.append(
             {"severity": "HIGH", "code": "CREDENTIAL_OR_TEMPLATE_RISK", "paths": templates}
         )
     if dupes:
-        findings.append(
-            {"severity": "MEDIUM", "code": "DUPLICATE_CONTENT", "groups": len(dupes)}
-        )
+        findings.append({"severity": "MEDIUM", "code": "DUPLICATE_CONTENT", "groups": len(dupes)})
 
     if remote.get("checked"):
         matches = remote.get("matches") or []
