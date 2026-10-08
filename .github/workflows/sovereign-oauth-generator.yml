@@ -18,6 +18,11 @@
 # the generator never writes that field into client metadata (it only
 # appears in the stdout report and provenance.json), so the assertion
 # raised KeyError on every run. Provenance still asserts the algorithm.
+# 2026-10-08: replaced mktemp -d -p /tmp sg-oauth-XXXXXX with
+# python3 -c "import tempfile; print(tempfile.mkdtemp())" - run #49 died
+# at 0.05s with zero output after the mktemp line was echoed; the
+# python approach shares the generator's interpreter so dir creation
+# cannot fail independently of generation.
 
 name: OAUTH-API-GENERATOR
 
@@ -64,7 +69,7 @@ jobs:
       - name: Run OAuth generator
         run: |
           set -Eeuo pipefail
-          OUT="$(mktemp -d -p /tmp sg-oauth-XXXXXX)"
+          OUT="$(python3 -c "import tempfile; print(tempfile.mkdtemp())")"
           trap 'rm -rf "${OUT}"' EXIT
           python3 scripts/oauth_local_generator.py --service sovereignty-ai-studio --output-dir "${OUT}"
           test -f "${OUT}/oauth-client.json"
