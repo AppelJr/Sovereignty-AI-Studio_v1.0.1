@@ -14,6 +14,11 @@
 # liboqs-python removed - neither is installed on ubuntu-latest runners
 # (system cryptography 41.0.7 lacks the ml_dsa module), so every run failed
 # with exit code 1. Ed25519 has been in cryptography since 2.0.
+# 2026-10-08: CI output dir collision - mktemp -d returned a path that
+# already existed on the runner; generator correctly fail-closed on it.
+# Fixed by giving mktemp a unique prefix so every run gets a fresh dir.
+# Generator's exist_ok=False / O_EXCL behavior is intentional and tested
+# (no-overwrite + failure/partial-write cases) - do not weaken it.
 
 name: OAUTH-API-GENERATOR
 
@@ -63,7 +68,7 @@ jobs:
       - name: Run OAuth generator
         run: |
           set -Eeuo pipefail
-          OUT="$(mktemp -d)"
+          OUT="$(mktemp -d -p /tmp sg-oauth-XXXXXX)"
           trap 'rm -rf "${OUT}"' EXIT
           python3 scripts/oauth_local_generator.py --service sovereignty-ai-studio --output-dir "${OUT}"
           test -f "${OUT}/oauth-client.json"
