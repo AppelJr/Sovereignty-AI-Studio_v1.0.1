@@ -19,9 +19,10 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          printf 'FULL_SHA=%s\n' "${{ github.sha }}"
-          printf 'HEAD_SHA_LEN=%s\n' "${{ #github.sha }}"
-          test "${{ #github.sha }}" -eq 40
+          SHA="${{ github.sha }}"
+          printf 'FULL_SHA=%s\n' "$SHA"
+          printf 'HEAD_SHA_LEN=%s\n' "${{ #SHA }}\n"
+          test "${{ #SHA }}\n" -eq 40
           printf 'HATCH=OPEN\n'
           printf 'PAYLOAD_ENTERED=true\n'
           uname -m

@@ -22,13 +22,13 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          SHA="${{ github.sha }}"
+          SHA="${{ github.sha}}"
           printf 'WATCHDOG_STATUS=STARTED\n'
-          printf 'WATCHDOG_EVENT=%s\n' "${{ github.event_name }}"
-          printf 'WATCHDOG_RUN_ID=%s\n' "${{ github.run_id }}"
+          printf 'WATCHDOG_EVENT=%s\n' "${{ github.event_name}}"
+          printf 'WATCHDOG_RUN_ID=%s\n' "${{ github.run_id}}"
           printf 'FULL_SHA=%s\n' "$SHA"
-          printf 'HEAD_SHA_LEN=%s\n' "${#SHA}"
-          test "${#SHA}" -eq 40
+          printf 'HEAD_SHA_LEN=%s\n' "${{ #SHA}}"
+          test "${{ #SHA}}" -eq 40
           printf 'HATCH=OPEN\n'
           printf 'PAYLOAD_ENTERED=true\n'
       - name: Checkout without external action
@@ -71,7 +71,7 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          SHA="${{ github.sha }}"
+          SHA="${{ github.sha}}"
           printf 'WATCHDOG_STATUS=PASS\n'
           printf 'FULL_SHA=%s\n' "$SHA"
           printf 'HATCH=OPEN\n'
