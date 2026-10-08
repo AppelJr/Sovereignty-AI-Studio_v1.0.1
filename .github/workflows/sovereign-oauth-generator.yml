@@ -46,8 +46,7 @@ jobs:
           set -Eeuo pipefail
           python3 --version
           python3 -m pip install --upgrade pip
-          python3 -m pip install cryptography
-          python3 -m pip install liboqs-python
+          python3 -m pip install 'cryptography>=43'
 
       - name: Run OAuth Generator (REAL RUN, fail-closed)
         shell: bash
