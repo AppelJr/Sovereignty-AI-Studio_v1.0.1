@@ -1,0 +1,43 @@
+name: OAuth Generator
+
+on:
+  push:
+    branches: [Collaboration]
+    paths:
+      - 'scripts/oauth_local_generator.py'
+      - 'scripts/validate-local-oauth.py'
+      - 'config/local-oauth-policy.json'
+      - 'tests/test_oauth_local_generator.py'
+      - '.github/workflows/sovereign-oauth-generator.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: oauth-generator-${{ github.ref }}  # concurrency group
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  oauth-generator:
+    name: OAuth Generator
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git init .
+          git remote add origin "https://github.com/${{ github.repository }}.git"
+          auth="$(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 | tr -d '\n')"
+          git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${{ github.sha }}:refs/remotes/origin/HEAD"
+          git checkout --detach FETCH_HEAD
+          git config --unset-all http.extraheader || true
+        env:
+          GH_TOKEN: ${{ github.token }}  # token
+
+      - name: Run OAuth Generator validation (dry-run)
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 scripts/validate-local-oauth.py
