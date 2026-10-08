@@ -15,6 +15,7 @@ import json
 import os
 import subprocess
 import urllib.error
+import urllib.parse
 import urllib.request
 from collections import defaultdict
 from pathlib import Path
@@ -86,6 +87,15 @@ def api(path: str, token: str):
         return json.load(r)
 
 
+def _contains_example_com_host(text: str) -> bool:
+    for token in text.split():
+        parsed = urllib.parse.urlparse(token.strip("()[]<>{},;\"'"))
+        host = parsed.hostname
+        if host and (host == "example.com" or host.endswith(".example.com")):
+            return True
+    return False
+
+
 def main() -> int:
     fs = files()
     buckets: dict[str, list[str]] = defaultdict(list)
@@ -117,7 +127,9 @@ def main() -> int:
         if any(part in IGNORE for part in p.parts):
             continue
         name = p.name.lower()
-        if name == "dependabot.yaml" and "example.com" in p.read_text(errors="ignore"):
+        if name == "dependabot.yaml" and _contains_example_com_host(
+            p.read_text(errors="ignore")
+        ):
             templates.append(rel(p))
         # Live credential filenames only — not *.example templates.
         if p.name in {".env", ".env.local", ".env.production", "id_rsa", "id_ed25519"}:
