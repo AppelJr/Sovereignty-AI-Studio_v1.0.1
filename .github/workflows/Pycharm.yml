@@ -9,7 +9,7 @@ permissions:
 jobs:
   pycharm-security-recovery:
     name: PyCharm security recovery / visible execution
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-latest
     steps:
       - name: Report workflow state
         run: |

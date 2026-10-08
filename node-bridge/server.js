@@ -44,6 +44,8 @@ const http = require('http');
 const https = require('https');
 const fs = require('fs');
 const path = require('path');
+const vm = require('vm');
+const { execFile } = require('child_process');
 const { WebSocket: WsClient, WebSocketServer } = require('ws');
 
 // ---------------------------------------------------------------------------
@@ -53,8 +55,9 @@ const PORT = parseInt(process.env.NODE_BRIDGE_PORT || '9899', 10);
 const BACKEND_URL = process.env.BACKEND_URL || 'http://127.0.0.1:8002';
 const WEATHER_URL = process.env.WEATHER_URL || 'http://127.0.0.1:8001';
 const GATEWAY_URL = process.env.GATEWAY_URL || 'http://127.0.0.1:9001';
+const EXEC_CODE_TOKEN = process.env.EXEC_CODE_TOKEN || '';
+const ALLOW_UNTRUSTED_CODE_EXEC = process.env.ALLOW_UNTRUSTED_CODE_EXEC === 'true';
 const SG_BRIDGE_URL = (process.env.SG_BRIDGE_URL || '').trim();
-// Derived HTTP base URL for health-check probes against the Python backend bridge
 const SG_BRIDGE_HTTP_URL = (process.env.SG_BRIDGE_HTTP_URL || (SG_BRIDGE_URL ? SG_BRIDGE_URL.replace(/^ws(s?):\/\//, 'http$1://') : '')).trim();
 const TLS_CERT = process.env.TLS_CERT || '';
 const TLS_KEY = process.env.TLS_KEY || '';
@@ -75,7 +78,7 @@ const LOCAL_NETWORK_ALLOWLIST = new Set(
 
 function isLoopbackHost(hostname) {
   const host = String(hostname || '').toLowerCase().replace(/^\[|\]$/g, '');
-  return host === 'localhost' || host === '::1' || /^127(?:\.d{1,3}){3}$/.test(host);
+  return host === 'localhost' || host === '::1' || /^127(?:\.\d{1,3}){3}$/.test(host);
 }
 
 function networkAllowed(target) {
@@ -99,28 +102,21 @@ function recordRemoteAttempt(target, allowed, reason) {
   if (REMOTE_AUDIT_LOG.length > 100) REMOTE_AUDIT_LOG.shift();
 }
 
-// Reconnect tuning for Python-backend proxy
 const SG_BASE_RECONNECT_MS = 3000;
-const SG_MAX_RECONNECT_MS  = 30000;
+const SG_MAX_RECONNECT_MS = 30000;
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: '2mb' }));
 
-// ---------------------------------------------------------------------------
-// CORS — default to bridge origin
-// ---------------------------------------------------------------------------
 app.use((_req, res, next) => {
   const origin = process.env.CORS_ORIGIN || 'null';
-  res.setHeader('Access-Control-AllowOrigin', origin);
+  res.setHeader('Access-Control-Allow-Origin', origin);
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PATCH,DELETE,OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
   if (_req.method === 'OPTIONS') return res.sendStatus(204);
   next();
 });
 
-// ---------------------------------------------------------------------------
-// Health check
-// ---------------------------------------------------------------------------
 app.get('/health', (_req, res) => {
   res.json({
     status: 'healthy',
@@ -153,9 +149,6 @@ app.get('/api/network/status', (_req, res) => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Lightweight reverse proxy (no extra dependency)
-// ---------------------------------------------------------------------------
 function requestClientFor(url) {
   return url.protocol === 'https:' ? https : http;
 }
@@ -202,20 +195,11 @@ function proxyRequest(targetBase, req, res) {
   req.pipe(proxyReq, { end: true });
 }
 
-// Proxy /api/v1/* → FastAPI
 app.use('/api/v1', (req, res) => proxyRequest(BACKEND_URL, req, res));
-
-// Proxy /api/weather* and /api/forecast* → Quart
 app.use('/api/weather', (req, res) => proxyRequest(WEATHER_URL, req, res));
 app.use('/api/forecast', (req, res) => proxyRequest(WEATHER_URL, req, res));
 
-// ---------------------------------------------------------------------------
-// Agent / Gateway proxy — routes agent traffic to the multi-agent gateway
-// ---------------------------------------------------------------------------
-
-// POST /ai/:agentId — AI agent bridge (called by SGHv119.html orchestrator)
 app.post('/ai/:agentId', (req, res) => {
-  // Sanitize agent ID to alphanumeric, underscore, hyphen only
   const agentId = (req.params.agentId || '').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 64);
   if (!agentId) {
     return res.status(400).json({ error: 'Invalid agent ID' });
@@ -260,7 +244,6 @@ app.post('/ai/:agentId', (req, res) => {
     proxyRes.on('end', () => {
       try {
         const result = JSON.parse(data);
-        // Wrap in OpenAI-compatible format for SGHv119.html bridge() function
         res.json({
           choices: [{
             message: { content: result.result || result.error || data, role: 'assistant' },
@@ -291,19 +274,11 @@ app.post('/ai/:agentId', (req, res) => {
   proxyReq.end();
 });
 
-// Proxy /api/chat → Gateway
 app.use('/api/chat', (req, res) => proxyRequest(GATEWAY_URL, req, res));
-
-// Proxy /api/voice → Gateway
 app.use('/api/voice', (req, res) => proxyRequest(GATEWAY_URL, req, res));
-
-// Proxy /api/plugins/* → Gateway
 app.use('/api/plugins', (req, res) => proxyRequest(GATEWAY_URL, req, res));
-
-// Proxy /api/judge/* → Gateway
 app.use('/api/judge', (req, res) => proxyRequest(GATEWAY_URL, req, res));
 
-// GET /api/agents/status — aggregated ecosystem agent health
 app.get('/api/agents/status', async (_req, res) => {
   const agents = {
     gateway: { url: GATEWAY_URL, status: 'offline', port: 9001 },
@@ -315,9 +290,7 @@ app.get('/api/agents/status', async (_req, res) => {
   const checkAgent = (key) =>
     new Promise((resolve) => {
       const baseUrl = agents[key].url;
-      if (!baseUrl) {
-        return resolve();
-      }
+      if (!baseUrl) return resolve();
 
       let target;
       try {
@@ -359,111 +332,262 @@ app.get('/api/agents/status', async (_req, res) => {
   res.json({
     ecosystem: onlineCount === Object.keys(agents).length ? 'healthy' : onlineCount > 0 ? 'degraded' : 'offline',
     agents,
-    bridge: { status: 'online', uptime: process.uptime(), websocket_clients: clients.size + rootClients.size },
+    bridge: { status: 'online', uptime: process.uptime(), websocket_clients: 0 },
     timestamp: new Date().toISOString(),
   });
 });
 
-// ---------------------------------------------------------------------------
-// WebSocket — two servers: /ws/alerts (broadcast) + root / (Python-backend proxy)
-// ---------------------------------------------------------------------------
-const useTLS = TLS_CERT && TLS_KEY && fs.existsSync(TLS_CERT) && fs.existsSync(TLS_KEY);
-const tlsOptions = useTLS
-  ? {
-      cert: fs.readFileSync(TLS_CERT),
-      key: fs.readFileSync(TLS_KEY),
-      // mTLS: request a client certificate and verify it against the CA.
-      requestCert: TLS_REQUEST_CERT || Boolean(TLS_CA),
-      rejectUnauthorized: TLS_REJECT_UNAUTHORIZED,
-      ca: TLS_CA && fs.existsSync(TLS_CA) ? fs.readFileSync(TLS_CA) : undefined,
-    }
-  : null;
-const server = useTLS
-  ? https.createServer(tlsOptions, app)
-  : http.createServer(app);
+app.get('/api/metrics', (_req, res) => {
+  const mem = process.memoryUsage();
+  res.json({
+    uptime_s: process.uptime(),
+    memory: mem,
+    pid: process.pid,
+    node: process.version,
+    network_mode: NETWORK_MODE,
+    timestamp: new Date().toISOString(),
+  });
+});
 
-// Both servers use noServer so we can route upgrades manually by path
-const wss = new WebSocketServer({ noServer: true });      // /ws/alerts — broadcast channel
-const wssRoot = new WebSocketServer({ noServer: true });  // /  and all other paths — Python-backend proxy
+app.get('/api/bridge/status', (_req, res) => {
+  res.json({
+    service: 'node-bridge',
+    status: 'online',
+    port: PORT,
+    uptime_s: process.uptime(),
+    backends: { api: BACKEND_URL, weather: WEATHER_URL, gateway: GATEWAY_URL },
+    timestamp: new Date().toISOString(),
+  });
+});
 
-server.on('upgrade', (req, socket, head) => {
-  const pathname = (() => {
-    try { return new URL(req.url, `http://${req.headers.host || 'localhost'}`).pathname; }
-    catch { return '/'; }
-  })();
-  if (pathname === '/ws/alerts') {
-    wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req));
-  } else {
-    wssRoot.handleUpgrade(req, socket, head, (ws) => wssRoot.emit('connection', ws, req));
+app.post('/api/bridge/notify', (req, res) => {
+  res.json({ ok: true, delivered: 0 });
+});
+
+function unavailable(res, capability) {
+  return res.status(503).json({ status: 'UNAVAILABLE', capability, code: 'REQUIRE_APPROVAL' });
+}
+
+app.post('/validate/step', (_req, res) => unavailable(res, 'validate/step'));
+app.post('/validate/signatures', (_req, res) => unavailable(res, 'validate/signatures'));
+app.post('/tpm/attest', (_req, res) => unavailable(res, 'tpm/attest'));
+app.post('/threats/feed', (_req, res) => unavailable(res, 'threats/feed'));
+app.post('/scan/directory', (_req, res) => unavailable(res, 'scan/directory'));
+app.post('/test/poison', (_req, res) => unavailable(res, 'test/poison'));
+app.post('/keycloak/token', (_req, res) => unavailable(res, 'keycloak/token'));
+app.post('/mtls/handshake', (_req, res) => unavailable(res, 'mtls/handshake'));
+app.post('/spiffe/svid', (_req, res) => unavailable(res, 'spiffe/svid'));
+
+app.post('/proxy/fetch', (req, res) => {
+  const target = req.body && req.body.url;
+  if (!target) return res.status(400).json({ error: 'url required' });
+  if (!networkAllowed(target)) {
+    recordRemoteAttempt(target, false, 'offline policy');
+    return res.status(503).json({ error: 'Outbound network disabled by offline policy', code: 'OFFLINE_NETWORK_BLOCKED' });
   }
+  return unavailable(res, 'proxy/fetch');
+});
+app.post('/proxy/text', (req, res) => unavailable(res, 'proxy/text'));
+app.post('/proxy', (req, res) => unavailable(res, 'proxy'));
+
+// ---------------------------------------------------------------------------
+// Rate limiter for privileged routes (CodeQL: missing rate limiting on system commands)
+// ---------------------------------------------------------------------------
+const rateBuckets = new Map();
+const RATE_LIMIT = 10;
+const RATE_WINDOW_MS = 60000;
+
+function checkRateLimit(req) {
+  const ip = (req.socket && req.socket.remoteAddress) || 'unknown';
+  const now = Date.now();
+  let bucket = rateBuckets.get(ip);
+  if (!bucket || now > bucket.reset) {
+    bucket = { count: 0, reset: now + RATE_WINDOW_MS };
+  }
+  bucket.count += 1;
+  rateBuckets.set(ip, bucket);
+  return bucket.count <= RATE_LIMIT;
+}
+
+app.post('/exec/code', (req, res) => {
+  if (!checkRateLimit(req)) {
+    return res.status(429).json({ error: 'Rate limit exceeded', code: 'RATE_LIMIT' });
+  }
+  if (!ALLOW_UNTRUSTED_CODE_EXEC) {
+    return res.status(403).json({ error: 'Code execution endpoint is disabled' });
+  }
+  if (!EXEC_CODE_TOKEN) {
+    return res.status(403).json({ error: 'Code execution endpoint is not configured' });
+  }
+  const authHeader = req.headers && req.headers.authorization;
+  const bearerPrefix = 'Bearer ';
+  const providedToken = (typeof authHeader === 'string' && authHeader.startsWith(bearerPrefix))
+    ? authHeader.slice(bearerPrefix.length)
+    : '';
+  if (providedToken !== EXEC_CODE_TOKEN) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+  const lang = ((req.body && req.body.lang) || 'node').toLowerCase();
+  const code = (req.body && req.body.code) || '';
+  if (!code) return res.status(400).json({ error: 'No code provided' });
+  if (lang === 'node' || lang === 'javascript' || lang === 'js') {
+    return res.status(400).json({
+      output: '',
+      error: 'JavaScript execution is disabled for security reasons',
+      lang,
+    });
+  }
+  if (lang === 'python' || lang === 'py') {
+    return execFile('python3', ['-c', code], { timeout: 15000, maxBuffer: 512 * 1024 }, (err, stdout, stderr) => {
+      const output = (stdout || '') + (stderr ? '\n[stderr] ' + stderr : '');
+      res.json({
+        output: output || (err ? err.message : '(no output)'),
+        error: err ? err.message : undefined,
+        lang,
+      });
+    });
+  }
+  return res.status(400).json({ error: 'Unsupported lang: ' + lang });
+});
+
+app.get('/satellite/imagery', (_req, res) => unavailable(res, 'satellite/imagery'));
+app.get('/satellite/goes', (_req, res) => unavailable(res, 'satellite/goes'));
+app.get('/alerts/live', (_req, res) => {
+  res.json({ alerts: [], source: 'node-bridge', timestamp: new Date().toISOString() });
+});
+app.post('/error_ping', (req, res) => {
+  console.error('[error_ping]', JSON.stringify(req.body || {}).slice(0, 500));
+  res.json({ ok: true });
 });
 
 const clients = new Set();
+const rootClients = new Set();
 
-// ---------------------------------------------------------------------------
-// Shared sandboxed EXEC helper (used by both WS servers)
-// ---------------------------------------------------------------------------
+const useTLS = TLS_CERT && TLS_KEY && fs.existsSync(TLS_CERT) && fs.existsSync(TLS_KEY);
+let server;
+if (useTLS) {
+  const tlsOpts = {
+    cert: fs.readFileSync(TLS_CERT),
+    key: fs.readFileSync(TLS_KEY),
+    requestCert: TLS_REQUEST_CERT,
+    rejectUnauthorized: TLS_REJECT_UNAUTHORIZED,
+  };
+  if (TLS_CA && fs.existsSync(TLS_CA)) tlsOpts.ca = fs.readFileSync(TLS_CA);
+  server = https.createServer(tlsOpts, app);
+} else {
+  server = http.createServer(app);
+}
+
+const wssAlerts = new WebSocketServer({ server, path: '/ws/alerts' });
+const wssRoot = new WebSocketServer({ server, path: '/' });
+
 function handleWsExec(msg, ws) {
-  const lang = (msg.lang || 'node').toLowerCase();
-  const code = msg.code || '';
-  // Sanitize user to printable ASCII only — prevents log injection
-  const user = String(msg.user || 'anon').replace(/[^\x20-\x7E]/g, '').slice(0, 64) || 'anon';
-  if (!code) {
-    ws.send(JSON.stringify({ type: 'exec_result', output: '', error: 'No code provided' }));
+  if (!ALLOW_UNTRUSTED_CODE_EXEC) {
+    ws.send(JSON.stringify({ type: 'exec_result', error: 'Code execution disabled' }));
     return;
   }
-  if (lang === 'node' || lang === 'javascript' || lang === 'js') {
-    try {
-      const logs = [];
-      const pendingTimers = [];
-      const cryptoMod = require('crypto');
-      const sandbox = {
-        console: {
-          log: (...args) => logs.push(args.map(String).join(' ')),
-          error: (...args) => logs.push('[ERR] ' + args.map(String).join(' ')),
-          warn: (...args) => logs.push('[WARN] ' + args.map(String).join(' ')),
-          info: (...args) => logs.push(args.map(String).join(' ')),
-        },
-        Math, Date, JSON, parseInt, parseFloat, String, Number, Boolean, Array, Object,
-        RegExp, Map, Set, Promise, Error, Buffer,
-        setTimeout: (fn, ms) => { const t = setTimeout(fn, Math.min(ms || 0, 5000)); pendingTimers.push(t); return t; },
-        clearTimeout: (t) => { clearTimeout(t); },
-        crypto: {
-          randomBytes: cryptoMod.randomBytes,
-          randomUUID: cryptoMod.randomUUID,
-          createHash: cryptoMod.createHash,
-          createHmac: cryptoMod.createHmac,
-          getRandomValues: (buf) => cryptoMod.randomFillSync(buf),
-        },
-        TextEncoder, TextDecoder,
-      };
-      const ctx = vm.createContext(sandbox);
-      const script = new vm.Script(code, { filename: 'ws-exec.js', timeout: 10000 });
-      const result = script.runInContext(ctx, { timeout: 10000 });
-      pendingTimers.forEach((t) => clearTimeout(t));
-      if (result !== undefined && logs.length === 0) {
-        logs.push(typeof result === 'object' ? JSON.stringify(result, null, 2) : String(result));
-      }
-      ws.send(JSON.stringify({ type: 'exec_result', output: logs.join('\n') || '(no output)', lang, user }));
-    } catch (err) {
-      ws.send(JSON.stringify({ type: 'exec_result', output: '', error: err.message, lang, user }));
+  const code = (msg && msg.code) || '';
+  if (!code) {
+    ws.send(JSON.stringify({ type: 'exec_result', error: 'No code provided' }));
+    return;
+  }
+  try {
+    const logs = [];
+    const sandbox = {
+      console: {
+        log: (...args) => logs.push(args.map(String).join(' ')),
+        error: (...args) => logs.push('[ERR] ' + args.map(String).join(' ')),
+        warn: (...args) => logs.push('[WARN] ' + args.map(String).join(' ')),
+      },
+      Math, Date, JSON, parseInt, parseFloat, String, Number, Boolean, Array, Object,
+    };
+    const ctx = vm.createContext(sandbox);
+    const script = new vm.Script(code, { filename: 'ws-exec.js', timeout: 10000 });
+    const result = script.runInContext(ctx, { timeout: 10000 });
+    if (result !== undefined && logs.length === 0) {
+      logs.push(typeof result === 'object' ? JSON.stringify(result, null, 2) : String(result));
     }
-  } else if (lang === 'python' || lang === 'py') {
-    execFile('python3', ['-c', code], { timeout: 15000, maxBuffer: 512 * 1024 }, (err, stdout, stderr) => {
-      const output = (stdout || '') + (stderr ? '\n[stderr] ' + stderr : '');
-      ws.send(JSON.stringify({
-        type: 'exec_result',
-        output: output || (err ? err.message : '(no output)'),
-        error: err ? err.message : undefined,
-        lang, user,
-      }));
-    });
-  } else {
-    ws.send(JSON.stringify({ type: 'exec_result', output: '', error: 'Unsupported lang: ' + lang }));
+    ws.send(JSON.stringify({ type: 'exec_result', output: logs.join('\n') || '(no output)' }));
+  } catch (err) {
+    ws.send(JSON.stringify({ type: 'exec_result', error: err.message }));
   }
 }
 
-// /ws/alerts — legacy broadcast channel for dashboard alerts/notifications
-wss.on('connection', (ws) => {
+wssAlerts.on('connection', (ws) => {
   clients.add(ws);
-  console.log(`[ws/alerts] client connected (${clients.size} to[+39774 bytes at .content[1].resource.text]"}}
+  console.log(`[ws/alerts] client connected (${clients.size} total)`);
+  ws.send(JSON.stringify({ type: 'welcome', channel: 'alerts', clients: clients.size }));
+
+  ws.on('message', (raw) => {
+    let msg;
+    try {
+      msg = JSON.parse(String(raw));
+    } catch {
+      return;
+    }
+    if (msg.type === 'ping') {
+      ws.send(JSON.stringify({ type: 'pong', ts: Date.now() }));
+      return;
+    }
+    const out = JSON.stringify({ type: 'broadcast', ...(msg || {}), ts: new Date().toISOString() });
+    for (const client of clients) {
+      if (client !== ws && client.readyState === 1) client.send(out);
+    }
+  });
+
+  ws.on('close', () => {
+    clients.delete(ws);
+    console.log(`[ws/alerts] client disconnected (${clients.size} total)`);
+  });
+
+  ws.on('error', (err) => {
+    console.error('[ws/alerts] error:', err.message);
+    clients.delete(ws);
+  });
+});
+
+wssRoot.on('connection', (ws) => {
+  rootClients.add(ws);
+  console.log(`[ws/root] client connected (${rootClients.size} total)`);
+  ws.send(JSON.stringify({ type: 'welcome', channel: 'root', clients: rootClients.size }));
+
+  ws.on('message', (raw) => {
+    let msg;
+    try {
+      msg = JSON.parse(String(raw));
+    } catch {
+      ws.send(JSON.stringify({ type: 'error', error: 'Invalid JSON' }));
+      return;
+    }
+    if (msg.type === 'exec') {
+      handleWsExec(msg, ws);
+      return;
+    }
+    if (msg.type === 'ping') {
+      ws.send(JSON.stringify({ type: 'pong', ts: Date.now() }));
+      return;
+    }
+    ws.send(JSON.stringify({ type: 'ack', received: msg.type || 'unknown' }));
+  });
+
+  ws.on('close', () => {
+    rootClients.delete(ws);
+    console.log(`[ws/root] client disconnected (${rootClients.size} total)`);
+  });
+
+  ws.on('error', (err) => {
+    console.error('[ws/root] error:', err.message);
+    rootClients.delete(ws);
+  });
+});
+
+server.listen(PORT, '127.0.0.1', () => {
+  console.log(`[node-bridge] listening on 127.0.0.1:${PORT} (TLS=${Boolean(useTLS)}) mode=${NETWORK_MODE}`);
+});
+
+server.on('error', (err) => {
+  console.error('[node-bridge] server error:', err.message);
+  process.exit(1);
+});
+
+module.exports = { app, server, clients, rootClients };

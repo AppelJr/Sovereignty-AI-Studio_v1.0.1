@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "policy": "allowlist",
+  "description": "Third-party GitHub Actions are ALLOWED by default. The owner decides which to BLOCK. Blocked actions fail closed until explicitly approved. Unknown actions are proposed to the owner for review.",
+  "blocked": [
+    {"action": "google/*", "reason": "Google services (Firebase, Vertex, Gemini) - landlord"},
+    {"action": "google-github-actions/*", "reason": "Google-owned actions - landlord"},
+    {"action": "firebase/*", "reason": "Firebase - landlord"},
+    {"action": "googlecloudplatform/*", "reason": "GCP - landlord"},
+    {"action": "googleapis/*", "reason": "Google APIs - landlord"},
+    {"action": "google-gemini/*", "reason": "Gemini - landlord"},
+    {"action": "meta-llama/*", "reason": "Llama - landlord"},
+    {"action": "google-deepmind/*", "reason": "Gemma - landlord"},
+    {"action": "mistralai/*", "reason": "Mistral - landlord"},
+    {"action": "huggingface/*", "reason": "Hugging Face - landlord"},
+    {"action": "anthropic/*", "reason": "Anthropic - landlord"},
+    {"action": "openai/*", "reason": "OpenAI - landlord"},
+    {"action": "xai-org/*", "reason": "xAI - landlord"}
+  ],
+  "approved": [
+    {"action": "actions/checkout", "pinned": "full-sha", "note": "GitHub-owned, allowed with full SHA pin"},
+    {"action": "actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683", "pinned": "full-sha", "note": "v4.2.2 - explicit SHA entry for Swift Build and startup-probe workflows"},
+    {"action": "actions/setup-node", "pinned": "full-sha", "note": "GitHub-owned, allowed with full SHA pin"},
+    {"action": "actions/setup-python", "pinned": "full-sha", "note": "GitHub-owned, allowed with full SHA pin"},
+    {"action": "actions/upload-artifact", "pinned": "full-sha"},
+    {"action": "actions/download-artifact", "pinned": "full-sha"},
+    {"action": "docker/build-push-action", "pinned": "full-sha", "note": "Docker-owned, owner-approved"},
+    {"action": "docker/setup-buildx-action", "pinned": "full-sha", "note": "owner-approved"},
+    {"action": "docker/login-action", "pinned": "full-sha", "note": "owner-approved"},
+    {"action": "docker/setup-qemu-action", "pinned": "full-sha", "note": "owner-approved"},
+    {"action": "aquasecurity/trivy-action", "pinned": "full-sha", "note": "owner-approved - was blocked, now allowed"},
+    {"action": "sigstore/cosign-installer", "pinned": "full-sha", "note": "owner-approved - was blocked, now allowed"},
+    {"action": "actions/dependency-review-action", "pinned": "full-sha", "note": "owner-approved - was blocked, now allowed"}
+  ],
+  "enforcement": "Any action matching a blocked pattern fails closed. Unknown third-party actions not on either list are PROPOSED to the owner - not silently banned, not silently allowed.",
+  "provenance": {
+    "authored_by": "Grok lane",
+    "authored_at": "2026-10-06T12:10:00Z",
+    "owner": "AppelJr",
+    "owner_authority": "final approval retained by owner"
+  }
+}

@@ -6,7 +6,8 @@ Artifact layout (written to --output-dir):
   oauth-private-key.pem  – PKCS#8 PEM private key; permissions 0600
   provenance.json        – immutable generation event record
 
-Compatibility note (v0.2):
+Compatibility note (v0.3):
+  * Signing algorithm is ML-DSA-87 (production). Ed25519 is dev-only and removed.
   * 'private_key' is no longer stored in oauth-client.json; use oauth-private-key.pem instead.
   * oauth-client.json now includes 'key_reference' and a deterministic 'kid'.
   * Report now uses 'validation', 'generation', 'persistence' fields instead of 'status'.
@@ -24,16 +25,8 @@ import re
 import secrets
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING
 
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
-
-if TYPE_CHECKING:
-    pass
-
-
-TOOL_VERSION = "0.2"
+TOOL_VERSION = "0.3"
 PRIVATE_KEY_FILENAME = "oauth-private-key.pem"
 SERVICE_PATTERN = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
 
@@ -49,19 +42,14 @@ def b64url(value: bytes) -> str:
 
 
 def canonical_json(value: object) -> str:
-    """Return a deterministic JSON string with sorted keys and 2-space indent.
-
-    Serialization policy: sort_keys=True, indent=2, separators=(',', ': ').
-    All generated JSON files use this function to ensure reproducibility.
-    """
+    """Return a deterministic JSON string with sorted keys and 2-space indent."""
     return json.dumps(value, sort_keys=True, indent=2, separators=(",", ": ")) + "\n"
 
 
 def derive_kid(public_key_bytes: bytes) -> str:
-    """Derive a stable key identifier from raw Ed25519 public key bytes.
+    """Derive a stable key identifier from raw ML-DSA-87 public key bytes.
 
     Algorithm: SHA-256(raw_public_key_bytes), lower-hex, first 32 characters.
-    This is deterministic: anyone holding the public key can recompute the kid.
     """
     return hashlib.sha256(public_key_bytes).hexdigest()[:32]
 
@@ -89,7 +77,7 @@ def canonicalize_config(service: str) -> dict:
     return {
         "issuer": "local",
         "service": service,
-        "signing_algorithm": "Ed25519",
+        "signing_algorithm": "ML-DSA-87",
         "tool_version": TOOL_VERSION,
     }
 
@@ -99,19 +87,40 @@ def canonicalize_config(service: str) -> dict:
 # ---------------------------------------------------------------------------
 
 
-def generate_key_material() -> tuple[Ed25519PrivateKey, bytes, str, str]:
-    """Generate an Ed25519 key pair and associated identifiers.
+def generate_key_material() -> tuple:
+    """Generate an ML-DSA-87 key pair and associated identifiers.
 
     Returns:
-        (private_key, public_key_bytes, kid, client_id)
+        (private_key, public_key_bytes, kid, client_id, backend)
+
+    Backend priority: cryptography.hazmat.primitives.asymmetric.ml_dsa (cryptography>=43),
+    then liboqs-python (oqs). Raises RuntimeError if neither is available.
     """
-    private_key = Ed25519PrivateKey.generate()
-    public_key_bytes = private_key.public_key().public_bytes(
-        serialization.Encoding.Raw, serialization.PublicFormat.Raw
+    try:
+        from cryptography.hazmat.primitives import serialization
+        from cryptography.hazmat.primitives.asymmetric import ml_dsa
+
+        private_key = ml_dsa.MLDSA87PrivateKey.generate()
+        public_key_bytes = private_key.public_key().public_bytes(
+            serialization.Encoding.Raw, serialization.PublicFormat.Raw
+        )
+        return private_key, public_key_bytes, derive_kid(public_key_bytes), f"sg_{secrets.token_urlsafe(18)}", "cryptography"
+    except ImportError:
+        pass
+
+    try:
+        import oqs
+
+        with oqs.Signature("ML-DSA-87") as sig:
+            public_key_bytes = sig.generate_keypair()
+            private_key = sig.export_secret_key()
+        return private_key, public_key_bytes, derive_kid(public_key_bytes), f"sg_{secrets.token_urlsafe(18)}", "oqs"
+    except ImportError:
+        pass
+
+    raise RuntimeError(
+        "ML-DSA-87 requires cryptography>=43 or liboqs-python (oqs); neither is installed"
     )
-    kid = derive_kid(public_key_bytes)
-    client_id = f"sg_{secrets.token_urlsafe(18)}"
-    return private_key, public_key_bytes, kid, client_id
 
 
 # ---------------------------------------------------------------------------
@@ -123,14 +132,12 @@ def policy_gate(config: dict) -> None:
     """Assert local policy constraints before credential generation proceeds.
 
     Enforces:
-    - signing_algorithm must be in the approved set (currently only Ed25519).
+    - signing_algorithm must be ML-DSA-87.
     - issuer must be 'local'; network issuers are not permitted.
     """
-    approved_algorithms = {"Ed25519"}
-    if config.get("signing_algorithm") not in approved_algorithms:
+    if config.get("signing_algorithm") != "ML-DSA-87":
         raise ValueError(
-            f"signing_algorithm must be one of {approved_algorithms}; "
-            f"got {config.get('signing_algorithm')!r}"
+            f"signing_algorithm must be ML-DSA-87; got {config.get('signing_algorithm')!r}"
         )
     if config.get("issuer") != "local":
         raise ValueError("issuer must be 'local'; network issuers are not permitted")
@@ -144,7 +151,7 @@ def policy_gate(config: dict) -> None:
 def create_provenance(service: str, kid: str) -> dict:
     """Return an immutable credential-generation event record (RFC-0007)."""
     return {
-        "algorithm": "Ed25519",
+        "algorithm": "ML-DSA-87",
         "event": "credential_generated",
         "kid": kid,
         "service": service,
@@ -178,10 +185,7 @@ def write_json_exclusive(path: Path, value: dict, mode: int) -> None:
 
 
 def write_pem_exclusive(path: Path, pem_bytes: bytes, mode: int) -> None:
-    """Write PEM bytes to *path* with O_EXCL (no-overwrite) and *mode* permissions.
-
-    Raises FileExistsError if *path* already exists.
-    """
+    """Write PEM bytes to *path* with O_EXCL (no-overwrite) and *mode* permissions."""
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
     try:
         descriptor = os.open(path, flags, mode)
@@ -196,7 +200,7 @@ def write_pem_exclusive(path: Path, pem_bytes: bytes, mode: int) -> None:
 
 def persist_artifacts(
     output_dir: Path,
-    private_key: Ed25519PrivateKey,
+    private_key,
     public_key_bytes: bytes,
     kid: str,
     client_id: str,
@@ -220,10 +224,9 @@ def persist_artifacts(
         "jwks": {
             "keys": [
                 {
-                    "alg": "EdDSA",
-                    "crv": "Ed25519",
+                    "alg": "ML-DSA-87",
                     "kid": kid,
-                    "kty": "OKP",
+                    "kty": "ML-DSA",
                     "use": "sig",
                     "x": b64url(public_key_bytes),
                 }
@@ -234,11 +237,20 @@ def persist_artifacts(
         "service": service,
     }
 
-    pem_bytes = private_key.private_bytes(
-        serialization.Encoding.PEM,
-        serialization.PrivateFormat.PKCS8,
-        serialization.NoEncryption(),
-    )
+    if isinstance(private_key, (bytes, bytearray)):
+        pem_bytes = (
+            b"-----BEGIN PRIVATE KEY-----\n"
+            + base64.encodebytes(bytes(private_key)).decode("ascii")
+            + b"-----END PRIVATE KEY-----\n"
+        )
+    else:
+        from cryptography.hazmat.primitives import serialization
+
+        pem_bytes = private_key.private_bytes(
+            serialization.Encoding.PEM,
+            serialization.PrivateFormat.PKCS8,
+            serialization.NoEncryption(),
+        )
 
     write_json_exclusive(output_dir / "oauth-client.json", metadata, 0o600)
     write_pem_exclusive(output_dir / PRIVATE_KEY_FILENAME, pem_bytes, 0o600)
@@ -277,7 +289,7 @@ def main() -> int:
         "issuer": "local",
         "network_accessed": False,
         "service": args.service,
-        "signing_algorithm": "Ed25519",
+        "signing_algorithm": "ML-DSA-87",
     }
 
     # Phase 1: Validate
@@ -303,7 +315,7 @@ def main() -> int:
 
     # Phase 3: Generate key material
     try:
-        private_key, public_key_bytes, kid, client_id = generate_key_material()
+        private_key, public_key_bytes, kid, client_id, backend = generate_key_material()
     except Exception as exc:
         report["generation"] = "FAIL"
         report["generation_error"] = str(exc)
@@ -321,6 +333,7 @@ def main() -> int:
 
     report["generation"] = "PASS"
     report["kid"] = kid
+    report["backend"] = backend
 
     # Phase 5: Provenance
     provenance = create_provenance(args.service, kid)
