@@ -13,6 +13,10 @@
 #
 # 2026-10-08: assertion lines rewritten as heredocs (zero nested quotes)
 # after CI SyntaxError: invalid decimal literal on the python3 -c lines.
+# Run #55 (d8be3d53) still failed because the push trigger branch list
+# did not include fix/oauth-workflow-lean, so the heredoc commit never
+# actually ran in CI. This commit is the heredoc version on a branch
+# the trigger watches.
 
 name: OAUTH-API-GENERATOR
 
