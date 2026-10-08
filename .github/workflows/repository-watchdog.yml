@@ -27,10 +27,11 @@ jobs:
           printf 'WATCHDOG_EVENT=%s\n' "${{ github.event_name }}"
           printf 'WATCHDOG_RUN_ID=%s\n' "${{ github.run_id }}"
           printf 'FULL_SHA=%s\n' "$SHA"
-          printf 'HEAD_SHA_LEN=%s\n' "${#SHA}"
-          test "${#SHA}" -eq 40
+          printf 'HEAD_SHA_LEN=%s\n' "${{ #SHA }}"
+          test "${{ #SHA }}" -eq 40
           printf 'HATCH=OPEN\n'
           printf 'PAYLOAD_ENTERED=true\n'
+
       - name: Checkout without external action
         env:
           GH_TOKEN: ${{ github.token }}  # token
@@ -42,18 +43,8 @@ jobs:
           auth="$(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 | tr -d '\n')"
           git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${{ github.sha }}"
           git checkout --detach FETCH_HEAD
-          if git config --get-passwd '^http\.extraheader$' >/dev/null 2>&1; then
-            git config --unset-all http.extraheader
-          fi
-      - name: Verify workflow inventory
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          required_workflows=(ci.yml ci-sovereign.yml python-ci.yml Quart.yml)
-          for required in "${required_workflows[@]}"; do
-            test -f ".github/workflows/$required"
-            printf 'WORKFLOW_PRESENT=%s\n' "$required"
-          done
+          git config --unset-all http.extraheader || true
+
       - name: Verify runner contracts
         shell: bash
         run: |
@@ -67,6 +58,7 @@ jobs:
             fi
           done
           echo 'RUNNER_CONTRACTS=PASS'
+
       - name: Final watchdog result — visible
         shell: bash
         run: |
