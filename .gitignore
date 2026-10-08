@@ -83,11 +83,9 @@ coverage.xml
 # Archives
 archives/*.zip
 
-# TLS certificates (never commit private keys)
-certs/
-*.pem
+# TLS certificates — private keys NEVER committed; public certs allowed
+ca/private/
 *.key
-*.crt
 
 # Temporary files
 *.tmp
