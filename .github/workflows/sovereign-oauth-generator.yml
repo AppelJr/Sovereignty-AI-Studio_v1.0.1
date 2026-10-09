@@ -1,10 +1,6 @@
 # OAUTH API GENERATOR – CI/CD PIPELINE
-#
-# Lean lane: checkout, run the OAuth generator, assert artifacts.
-# No third-party actions — native git checkout only, matching ci.yml,
-# node.js.yml, python-ci.yml, and ara-hardened-ci.yml.
-#
-# Provenance: rewritten 2026-10-08 by Grok lane at AppelJr's direction.
+# Lean lane: authenticated source fetch, run the OAuth generator, assert artifacts.
+# No third-party GitHub actions. Outbound OAuth/network access remains available.
 
 name: OAUTH-API-GENERATOR
 
@@ -15,8 +11,7 @@ concurrency:
   group: oauth-api-generator-${{ github.ref }}-lean
   cancel-in-progress: false
 
-permissions:
-  contents: read
+permissions: {}
 
 defaults:
   run:
@@ -27,19 +22,29 @@ jobs:
     name: OAuth Generator
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
     steps:
-      - name: Checkout exact commit (native git, no external action)
+      - name: Fetch exact commit without reinitializing Git
         env:
-          GH_TOKEN: ${{ github.token}}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -Eeuo pipefail
-          git init .
-          git remote add origin "https://github.com/${{ github.repository }}.git"
-          auth="$(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 | tr -d '\n')"
-          git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${{ github.sha}}"
-          git checkout --detach FETCH_HEAD
-          git config --unset-all http.extraheader 2>/dev/null || true
-          git rev-parse --short HEAD
+          curl --fail --silent --show-error --location \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/tarball/${GITHUB_SHA}" \
+            --output "${RUNNER_TEMP}/source.tar.gz"
+          tar -xzf "${RUNNER_TEMP}/source.tar.gz" --strip-components=1 -C "${GITHUB_WORKSPACE}"
+          test -f .github/workflows/oauth_local_generator.py
+          printf 'Source commit: %s\n' "${GITHUB_SHA}"
+
+      - name: Verify Python runtime
+        run: |
+          command -v python3
+          python3 --version
+          python3 -m pip --version
+          python3 -c 'import sys; assert sys.version_info >= (3, 11), sys.version'
 
       - name: Run OAuth generator
         run: |
