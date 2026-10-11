@@ -1,0 +1,35 @@
+{
+  "schema": "https://sovereignty.local/schemas/modes.json",
+  "description": "Offline / hybrid / online mode configuration. Config only — no behavior changes. The six routing modules (intelligent_routing, handler_contract, budget_ledger, policy_resolver, queue_backend, runtime_executor) run identically in all three modes; mode only changes which external dependencies are reachable.",
+  "modes": {
+    "offline": {
+      "description": "No network. Local classifier, local adapters, local ledger, local queue, local SCAR log. Full-model tier is unavailable; PolicyResolver queues or denies full-tier requests.",
+      "network": false,
+      "allowed_tiers": ["local"],
+      "capabilities": {"full_model": false, "local_agent": true},
+      "budget_source": "local_ledger"
+    },
+    "hybrid": {
+      "description": "Local-first with optional online fallback. Local classifier and adapters run first; full-tier requests go through PolicyResolver capability + budget gates before any network call.",
+      "network": "on_demand",
+      "allowed_tiers": ["local", "full"],
+      "capabilities": {"full_model": true, "local_agent": true},
+      "budget_source": "local_ledger",
+      "fallback_triggers": ["local_unavailable", "local_incomplete"]
+    },
+    "online": {
+      "description": "Full network. All tiers available. Same governance loop: classifier recommends, PolicyResolver authorizes, RuntimeExecutor mutates, SCAR records.",
+      "network": true,
+      "allowed_tiers": ["local", "full"],
+      "capabilities": {"full_model": true, "local_agent": true},
+      "budget_source": "local_ledger"
+    }
+  },
+  "active_mode": "hybrid",
+  "notes": "Switching modes changes capabilities and network reachability only. It never bypasses PolicyResolver, BudgetLedger, or CircuitBreaker. A mode switch is itself an auditable event.",
+  "provenance": {
+    "created_by": "Grok (SpaceXAI)",
+    "created_at": "2026-10-11T07:30:00-04:00",
+    "based_on": "pasted module sources from chat 2026-10-11, verified against Sovereignty-AI-Studio_v1.0.1 Collaboration tree"
+  }
+}
