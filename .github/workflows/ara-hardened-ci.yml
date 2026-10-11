@@ -14,6 +14,7 @@ on:
       - Collaboration
       - duckAI
       - Devassist420
+      - gate-wiring
   pull_request:
     branches:
       - Claude
@@ -23,9 +24,10 @@ on:
       - Collaboration
       - duckAI
       - Devassist420
+      - gate-wiring
 
 concurrency:
-  group: ara-hardened-unit-ci-local-${{ github.workflow }}-${{ github.ref }}
+  group: ara-hardened-unit-ci-local-${{ github.workflow }}-${{ github.ref }
   cancel-in-progress: false
 
 permissions:
@@ -42,13 +44,13 @@ jobs:
     steps:
       - name: Checkout exact commit (native git, no external action)
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }
         run: |
           set -Eeuo pipefail
           git init .
-          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          git remote add origin "https://github.com/${{ github.repository }}.git"
           auth="$(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 | tr -d '\n')"
-          git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${GITHUB_SHA}"
+          git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${{ github.sha }}"
           git checkout --detach FETCH_HEAD
           git config --unset-all http.extraheader 2>/dev/null || true
 
@@ -56,9 +58,9 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          test "${GITHUB_ACTIONS}" = "true"
-          test -n "${GITHUB_SHA}"
-          echo "Running visible CI for ${GITHUB_REPOSITORY}@${GITHUB_SHA}"
+          test "${{ github.actions }}" = "true"
+          test -n "${{ github.sha }}"
+          echo "Running visible CI for ${{ github.repository }}@${{ github.sha }}"
 
       - name: Set up isolated Python
         shell: bash
@@ -66,7 +68,7 @@ jobs:
           set -Eeuo pipefail
           python_bin="$(command -v python3.13 || command -v python3)"
           "${python_bin}" -m venv .venv
-          echo "${GITHUB_WORKSPACE}/.venv/bin" >> "${GITHUB_PATH}"
+          echo "${{ github.workspace }}/.venv/bin" >> "${{ github.path }}"
           python --version
 
       - name: Install minimal test tools

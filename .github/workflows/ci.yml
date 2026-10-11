@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [Collaboration, main, Claude, "GPT/Codex", ara-hardened, "copilot/main", duckAI, devassist420]
+    branches: [Collaboration, main, Claude, "GPT/Codex", ara-hardened, "copilot/main", duckAI, devassist420, gate-wiring]
   pull_request:
-    branches: [Collaboration, main, Claude, "GPT/Codex", ara-hardened, "copilot/main", duckAI, devassist420]
+    branches: [Collaboration, main, Claude, "GPT/Codex", ara-hardened, "copilot/main", duckAI, devassist420, gate-wiring]
   workflow_dispatch:
 
 permissions:
@@ -18,14 +18,14 @@ jobs:
     steps:
       - name: Checkout exact commit (native git, no external action)
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }
         shell: bash
         run: |
           set -Eeuo pipefail
           git init .
-          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          git remote add origin "https://github.com/${{ github.repository }}.git"
           auth="$(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 | tr -d '\n')"
-          git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${GITHUB_SHA}"
+          git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${{ github.sha }}"
           git checkout --detach FETCH_HEAD
           git config --unset-all http.extraheader 2>/dev/null || true
           git rev-parse --short HEAD

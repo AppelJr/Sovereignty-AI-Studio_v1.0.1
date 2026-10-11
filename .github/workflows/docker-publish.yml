@@ -2,7 +2,7 @@ name: Docker
 
 on:
   push:
-    branches: [main, Claude, GPT/Codex, ara-hardened, copilot/main, Collaboration, duckAI, Devassist420]
+    branches: [main, Claude, GPT/Codex, ara-hardened, copilot/main, Collaboration, duckAI, Devassist420, gate-wiring]
     paths:
       - 'Dockerfile'
       - 'docker-compose.yml'
@@ -13,7 +13,7 @@ on:
       - 'gateway/**'
       - '.github/workflows/docker-publish.yml'
   pull_request:
-    branches: [main, Claude, GPT/Codex, ara-hardened, copilot/main, Collaboration, duckAI, Devassist420]
+    branches: [main, Claude, GPT/Codex, ara-hardened, copilot/main, Collaboration, duckAI, Devassist420, gate-wiring]
     paths:
       - 'Dockerfile'
       - 'docker-compose.yml'
@@ -28,14 +28,14 @@ on:
 env:
   REGISTRY: ghcr.io
   # GHCR requires the image repository name to be lowercase
-  IMAGE_NAME: ${{ github.repository }}
+  IMAGE_NAME: ${{ github.repository }
 
 permissions:
   contents: read
   packages: write
 
 concurrency:
-  group: docker-${{ github.workflow }}-${{ github.ref }}
+  group: docker-${{ github.workflow }}-${{ github.ref }
   cancel-in-progress: false
 
 jobs:
@@ -46,14 +46,14 @@ jobs:
     steps:
       - name: Checkout repository at exact commit
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }
         shell: bash
         run: |
           set -Eeuo pipefail
           git init .
-          git remote add origin "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git"
-          auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')"
-          git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${GITHUB_SHA}"
+          git remote add origin "${{ github.server_url }}/{{ github.repository }}.git"
+          auth="$(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 | tr -d '\n')"
+          git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${{ github.sha }}"
           git checkout --detach FETCH_HEAD
           git config --unset-all http.extraheader 2>/dev/null || true
 
@@ -62,7 +62,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           # GHCR repository names must be lowercase
-          echo "IMAGE_NAME_LC=${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
+          echo "IMAGE_NAME_LC=${{ github.repository,, }}" >> "${{ github.env }}"
 
       - name: Verify Docker
         run: docker version
@@ -98,14 +98,14 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          mkdir -p "$RUNNER_TEMP/compose-tls"
+          mkdir -p "${{ runner.temp }}/compose-tls"
           openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
             -subj '/CN=ci-compose-validation' \
-            -keyout "$RUNNER_TEMP/compose-tls/key.pem" \
-            -out "$RUNNER_TEMP/compose-tls/cert.pem" \
+            -keyout "${{ runner.temp }}/compose-tls/key.pem" \
+            -out "${{ runner.temp }}/compose-tls/cert.pem" \
             2>/dev/null
-          test -s "$RUNNER_TEMP/compose-tls/cert.pem"
-          test -s "$RUNNER_TEMP/compose-tls/key.pem"
+          test -s "${{ runner.temp }}/compose-tls/cert.pem"
+          test -s "${{ runner.temp }}/compose-tls/key.pem"
 
       - name: Validate Compose configuration
         env:
@@ -124,15 +124,15 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          TAG="${REGISTRY}/${IMAGE_NAME_LC}:${GITHUB_SHA}"
+          TAG="${{ env.REGISTRY }}/{{ env.IMAGE_NAME_LC }}:{{ github.sha }}"
           docker build --tag "$TAG" .
-          echo "IMAGE_TAG=$TAG" >> "$GITHUB_ENV"
+          echo "IMAGE_TAG=$TAG" >> "${{ github.env }}"
 
       - name: Publish image
         if: github.event_name == 'push'
         env:
-          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_TOKEN: ${{ secrets.github_token }
         run: |
           set -Eeuo pipefail
-          printf '%s' "$GHCR_TOKEN" | docker login "$REGISTRY" -u "${GITHUB_ACTOR}" --password-stdin
-          docker push "$IMAGE_TAG"
+          printf '%s' "${GHCR_TOKEN}" | docker login "${{ env.REGISTRY }}" -u "${{ github.actor }}" --password-stdin
+          docker push "${{ env.IMAGE_TAG }}"

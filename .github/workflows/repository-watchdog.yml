@@ -2,14 +2,14 @@ name: Repository Watchdog
 
 on:
   push:
-    branches: [main, Claude, GPT/Codex, ara-hardened, copilot/main, Collaboration, Grok, duckAI, devassist420]
+    branches: [main, Claude, GPT/Codex, ara-hardened, copilot/main, Collaboration, Grok, duckAI, devassist420, gate-wiring]
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: repository-watchdog-${{ github.ref }}  # concurrency group
+  group: repository-watchdog-${{ github.ref }
   cancel-in-progress: false
 
 jobs:
@@ -35,7 +35,7 @@ jobs:
 
       - name: Checkout without external action
         env:
-          GH_TOKEN: ${{ github.token }}  # token
+          GH_TOKEN: ${{ github.token }
         shell: bash
         run: |
           set -Eeuo pipefail
