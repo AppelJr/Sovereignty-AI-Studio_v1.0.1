@@ -10,7 +10,7 @@ import re
 import sys
 
 NO_FLY = [
-    (r"from\s+['\"]react['\"]", "React import"),
+    (r"from\s+['\"]react['\"]", "React named import"),
     (r"import\s+React\b", "React default import"),
     (r"react-scripts", "CRA react-scripts dependency"),
     (r"create-react-app", "CRA scaffold command"),
@@ -33,7 +33,7 @@ def scan(root):
                 continue
             for pattern, label in NO_FLY:
                 for m in re.finditer(pattern, text):
-                    line = text[:m.start()].count("\n") + 1
+                    line = text[: m.start()].count("\n") + 1
                     hits.append((path, line, label, m.group(0)))
     return hits
 
@@ -44,7 +44,7 @@ def main():
     if hits:
         print("FAIL — no-fly violations found:")
         for path, line, label, match in hits:
-            print(f"  {path}:{line} match={match!r}")
+            print(f"  {path}:{line} [{label}] match={match!r}")
         sys.exit(1)
     print("PASS — no no-fly violations.")
     sys.exit(0)
