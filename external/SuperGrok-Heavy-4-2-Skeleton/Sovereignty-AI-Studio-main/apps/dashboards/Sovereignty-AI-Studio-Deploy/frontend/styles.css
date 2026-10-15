@@ -1,0 +1,89 @@
+:root {
+  --bg: #0d1117;
+  --surface: #161b22;
+  --border: #30363d;
+  --text: #e6edf3;
+  --muted: #8b949e;
+  --accent: #58a6ff;
+  --success: #3fb950;
+  --failure: #f85149;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 24px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.app-header h1 { font-size: 18px; font-weight: 600; }
+
+.app-nav { display: flex; gap: 16px; }
+.app-nav a {
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 14px;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+.app-nav a:hover,
+.app-nav a.active { color: var(--text); background: var(--border); }
+
+#app { padding: 24px; max-width: 1200px; margin: 0 auto; }
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+
+input, select, button {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 14px;
+}
+
+button { cursor: pointer; }
+button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--border); }
+th { color: var(--muted); font-weight: 500; }
+
+.pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.pill.success { background: rgba(63,185,80,0.15); color: var(--success); }
+.pill.failure { background: rgba(248,81,73,0.15); color: var(--failure); }
+
+.pagination { display: flex; gap: 8px; align-items: center; margin-top: 16px; }
+
+.loading { color: var(--muted); text-align: center; padding: 32px; }
+.error { color: var(--failure); }
+
+@media (max-width: 768px) {
+  .app-header { flex-direction: column; gap: 12px; }
+  #app { padding: 12px; }
+}
