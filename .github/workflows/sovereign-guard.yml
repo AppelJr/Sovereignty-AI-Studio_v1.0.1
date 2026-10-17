@@ -11,19 +11,20 @@ permissions:
   contents: read
 
 jobs:
-  no-fly-scan:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-        with:
-          persist-credentials: true
-
-      - name: Run sovereign-guard.py
-        run: python3 guard/sovereign-guard.py .
-
+ no-fly-scan:
+     runs-on: ubuntu-latest
+     steps:
+      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      with:
+      persist-credentials: false
+     
+      - name: "sovereign-guard"
+      shell: bash
+      run: |
+         python3 guard/sovereign-guard.py
       - name: Verify scar chain
-       shell: bash
-       run: |
+      shell: bash
+      run: |
           python3 - <<'PY'
           import json, hashlib, sys
           prev = None
@@ -44,5 +45,5 @@ jobs:
                       sys.exit(1)
                   prev = rec["hash"]
                   n += 1
-          print(f"OK: scar chain valid, {n} records")
-          PY
+        print(f"OK: scar chain valid, {n} records")
+         PY
