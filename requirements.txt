@@ -15,7 +15,7 @@ requests==2.34.2
 aiohttp==3.14.3
 
 # Database
-psycopg2-binary==2.9.12
+psycopg2-binary==2.9.13
 asyncpg==0.31.0
 sqlalchemy[asyncio]==2.0.51
 alembic==1.18.5
