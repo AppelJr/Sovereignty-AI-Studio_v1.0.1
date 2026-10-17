@@ -5,6 +5,7 @@ on:
     branches: [main, Collaboration, ara-hardened, Grok, GPT/Codex]
   pull_request:
     branches: [main, Collaboration]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -13,7 +14,9 @@ jobs:
   no-fly-scan:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
 
       - name: Run sovereign-guard.py
         run: python3 guard/sovereign-guard.py .
@@ -24,7 +27,7 @@ jobs:
           import json, hashlib, sys
           prev = None
           n = 0
-          with open("scar/scar.jsonl") as f:
+          with open("scar/scar.jsonl", encoding="utf-8") as f:
               for line in f:
                   line = line.strip()
                   if not line:
@@ -33,7 +36,7 @@ jobs:
                   if rec.get("prev") != prev:
                       print("FAIL: scar chain broken at record", n)
                       sys.exit(1)
-                  payload = json.dumps({k: rec[k] for k in ("prev","event","detail","ts")},
+                  payload = json.dumps({k: rec[k] for k in ("prev", "event", "detail", "ts")},
                                        sort_keys=True, separators=(",", ":"))
                   if hashlib.sha256(payload.encode()).hexdigest() != rec["hash"]:
                       print("FAIL: scar hash mismatch at record", n)
