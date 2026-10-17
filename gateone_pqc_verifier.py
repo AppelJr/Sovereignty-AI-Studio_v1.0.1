@@ -246,7 +246,7 @@ async def verify_attestation(
         raise
     except Exception as e:
         scar_log({"event": "verify_error", "error": str(e), "ip": ip})
-        return {"valid": False, "reason": str(e)}
+        return {"valid": False, "reason": "Internal verification error"}
 
 
 # ---------------------------
