@@ -2,27 +2,29 @@ name: sovereign-guard
 
 on:
   push:
-    branches: [main, Collaboration, ara-hardened, Grok, GPT/Codex]
+    branches: [main, Collaboration, ara-hardened, xAI/Grok, GPT/Codex, claude, duckAI]
   pull_request:
-    branches: [main, Collaboration]
+    branches: [main, Collaboration, ara-hardened, xAI/grok, GPT/Codex, claude, duckAI]
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  no-fly-scan:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          persist-credentials: false
-
-      - name: Run sovereign-guard.py
-        run: python3 guard/sovereign-guard.py .
-
+ no-fly-scan:
+     runs-on: ubuntu-latest
+     steps:
+      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      with:
+      persist-credentials: false
+     
+      - name: "sovereign-guard"
+      shell: bash
+      run: |
+         python3 guard/sovereign-guard.py
       - name: Verify scar chain
-        run: |
+      shell: bash
+      run: |
           python3 - <<'PY'
           import json, hashlib, sys
           prev = None
@@ -43,5 +45,5 @@ jobs:
                       sys.exit(1)
                   prev = rec["hash"]
                   n += 1
-          print(f"OK: scar chain valid, {n} records")
-          PY
+        print(f"OK: scar chain valid, {n} records")
+         PY
