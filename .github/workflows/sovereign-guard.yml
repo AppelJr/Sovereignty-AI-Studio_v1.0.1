@@ -1,19 +1,23 @@
 name: sovereign-guard
 
 on:
+  push:
+    branches: [main, Collaboration, ara-hardened, xAI/Grok, GPT/Codex, claude, duckAI]
+  pull_request:
+    branches: [main, Collaboration, ara-hardened, xAI/Grok, GPT/Codex, claude, duckAI]
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  sovereign-guard:
-    name: Sovereign guard
-    runs-on: [self-hosted, linux, arm64]
+  no-fly-scan:
+    runs-on: ubuntu-latest
     steps:
-      - name: Checkout without external action
+      - name: Checkout exact commit (native git, no external action)
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token}}
+        shell: bash
         run: |
           set -Eeuo pipefail
           git init .
@@ -22,14 +26,47 @@ jobs:
           git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${GITHUB_SHA}"
           git checkout --detach FETCH_HEAD
           git config --unset-all http.extraheader 2>/dev/null || true
-      - name: Hatch — full SHA payload
+          git rev-parse --short HEAD
+
+      - name: Sovereign guard
         shell: bash
         run: |
           set -Eeuo pipefail
-          printf 'FULL_SHA=%s\n' "${GITHUB_SHA}"
-          printf 'HEAD_SHA_LEN=%s\n' "${#GITHUB_SHA}"
-          test "${#GITHUB_SHA}" -eq 40
-          printf 'HATCH=OPEN\n'
-          printf 'PAYLOAD_ENTERED=true\n'
-          uname -m
-          echo "RUNNER=${RUNNER_NAME:-none}/${RUNNER_OS:-none}/${RUNNER_ARCH:-none}"
+          python3 guard/sovereign-guard.py .
+
+      - name: Verify scar chain
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import sys
+
+          prev = None
+          n = 0
+
+          with open("scar/scar.jsonl", encoding="utf-8") as f:
+              for line in f:
+                  line = line.strip()
+                  if not line:
+                      continue
+
+                  rec = json.loads(line)
+                  if rec.get("prev") != prev:
+                      print("FAIL: scar chain broken at record", n)
+                      sys.exit(1)
+
+                  payload = json.dumps(
+                      {k: rec[k] for k in ("prev", "event", "detail", "ts")},
+                      sort_keys=True,
+                      separators=(",", ":"),
+                  )
+                  if hashlib.sha256(payload.encode()).hexdigest() != rec["hash"]:
+                      print("FAIL: scar hash mismatch at record", n)
+                      sys.exit(1)
+
+                  prev = rec["hash"]
+                  n += 1
+
+          print(f"OK: scar chain valid, {n} records")
+          PY
