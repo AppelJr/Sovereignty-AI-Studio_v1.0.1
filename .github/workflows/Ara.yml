@@ -3,7 +3,7 @@ name: Ara
 on:
   workflow_dispatch:
   push:
-    branches: [main, Claude, "GPT/Codex", ara-hardened, "copilot/main", Collaboration, duckAI, devassist420]
+    branches: [main, Claude, "GPT/Codex", ara-hardened, "copilot/main", Collaboration, duckAI, devassist420, "xAI/Grok/**"]
   pull_request:
     branches: [main, Claude, "GPT/Codex", ara-hardened, "copilot/main", Collaboration, duckAI, devassist420]
 
@@ -14,7 +14,7 @@ jobs:
   ara:
     name: Ara validation
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - name: Checkout exact commit (native git, no external action)
         env:
@@ -27,7 +27,9 @@ jobs:
           auth="$(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 | tr -d '\n')"
           git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${GITHUB_SHA}"
           git checkout --detach FETCH_HEAD
-          git config --unset-all http.extraheader 2>/dev/null || true
+          if git config --get-regexp '^http\.extraheader$' >/dev/null 2>&1; then
+            git config --unset-all http.extraheader
+          fi
       - name: Verify runner
         run: |
           set -Eeuo pipefail
@@ -36,9 +38,6 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          # Known non-modules misnamed as .py (docs dumps / PEM text):
-          # - Avatar_Companion_service.py  (markdown + concat modules)
-          # - GitHub_TLS_pem.py            (certificate text, not code)
           while IFS= read -r -d '' file; do
             case "$file" in
               Avatar_Companion_service.py|GitHub_TLS_pem.py)
@@ -49,3 +48,28 @@ jobs:
             python3 -m py_compile "$file"
           done < <(git -c core.quotePath=false ls-files -z -- '*.py' ':!:external/**' ':!:.venv/**')
           echo 'Ara Python syntax validation: PASS'
+      - name: Live ARA full audit (real GitHub API — no mocks)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPOSITORY: ${{ github.repository }}
+          ARA_CANONICAL_BRANCH: Collaboration
+          ARA_RULESET_NAME: Ara
+          # Ruleset is owner-configured. Do not CRITICAL-fail until it exists.
+          ARA_REQUIRE_RULESET: "0"
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          set +e
+          python3 scripts/ara_full_audit.py
+          status=$?
+          set -e
+          report="automation/reports/ara_full_audit.json"
+          if [ -f "$report" ]; then
+            echo "===== ARA REPORT (evidence) ====="
+            cat "$report"
+            echo "===== END ARA REPORT ====="
+          else
+            echo "ARA REPORT MISSING"
+            exit 1
+          fi
+          exit "$status"

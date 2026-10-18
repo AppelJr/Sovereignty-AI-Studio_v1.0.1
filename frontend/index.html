@@ -14,6 +14,9 @@
       --text: #e2e8f0;
       --muted: #64748b;
       --radius: 12px;
+      --local: #3dd68c;
+      --hybrid: #f0b429;
+      --online: #f07178;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -26,7 +29,6 @@
       overflow-x: hidden;
     }
 
-    /* Animated gradient background */
     body::before {
       content: '';
       position: fixed;
@@ -43,7 +45,6 @@
       100%{ background-position: 30% 40%, 70% 60%; }
     }
 
-    /* Navbar */
     nav {
       position: sticky;
       top: 0;
@@ -53,17 +54,19 @@
       border-bottom: 1px solid var(--border);
       display: flex;
       align-items: center;
-      gap: 2rem;
-      padding: 1rem 2rem;
+      gap: 1.25rem;
+      padding: 0.85rem 1.5rem;
+      flex-wrap: wrap;
     }
 
     nav .logo {
-      font-size: 1.2rem;
+      font-size: 1.15rem;
       font-weight: 700;
       background: linear-gradient(135deg, var(--accent), var(--accent2));
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       background-clip: text;
+      margin-right: 0.5rem;
     }
 
     nav a {
@@ -74,7 +77,123 @@
     }
     nav a:hover { color: var(--text); }
 
-    /* Main content */
+    nav .nav-spacer { flex: 1; min-width: 8px; }
+
+    /* —— Mode toggle (in-app) —— */
+    .mode-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.6rem;
+    }
+    .mode-track {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 3px;
+      background: #0c0c18;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 3px;
+    }
+    .mode-track button {
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      font: inherit;
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      padding: 0.45rem 0.7rem;
+      border-radius: 999px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .mode-track button:focus-visible {
+      outline: 2px solid var(--accent2);
+      outline-offset: 1px;
+    }
+    .mode-track button[aria-pressed="true"][data-mode="LOCAL"] {
+      background: rgba(61,214,140,0.18);
+      color: var(--local);
+    }
+    .mode-track button[aria-pressed="true"][data-mode="HYBRID"] {
+      background: rgba(240,180,41,0.18);
+      color: var(--hybrid);
+    }
+    .mode-track button[aria-pressed="true"][data-mode="ONLINE"] {
+      background: rgba(240,113,120,0.18);
+      color: var(--online);
+    }
+    .mode-net {
+      font-family: ui-monospace, Menlo, Consolas, monospace;
+      font-size: 0.72rem;
+      color: var(--muted);
+      min-width: 5.5rem;
+    }
+    .mode-net.on { color: var(--local); }
+    .mode-net.restricted { color: var(--hybrid); }
+    .mode-net.off { color: var(--muted); }
+
+    /* Mode expand panel under nav */
+    .mode-panel {
+      display: none;
+      position: sticky;
+      top: 52px;
+      z-index: 99;
+      background: rgba(18,18,30,0.98);
+      border-bottom: 1px solid var(--border);
+      padding: 0.85rem 1.5rem;
+    }
+    .mode-panel.open { display: block; }
+    .mode-panel-inner {
+      max-width: 1100px;
+      margin: 0 auto;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem 1rem;
+      align-items: center;
+    }
+    .mode-panel label {
+      font-size: 0.75rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .mode-panel input {
+      background: #0c0c18;
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 0.45rem 0.7rem;
+      font-family: ui-monospace, Menlo, Consolas, monospace;
+      font-size: 0.8rem;
+      min-width: 220px;
+    }
+    .mode-panel .hint {
+      color: var(--muted);
+      font-size: 0.8rem;
+      flex: 1;
+      min-width: 180px;
+    }
+    .mode-panel .actions { display: flex; gap: 0.5rem; }
+    .mode-panel button.action {
+      border: 0;
+      border-radius: 8px;
+      padding: 0.45rem 0.9rem;
+      font: inherit;
+      font-size: 0.8rem;
+      font-weight: 650;
+      cursor: pointer;
+    }
+    .mode-panel .btn-apply {
+      background: var(--accent2);
+      color: #0a0a12;
+    }
+    .mode-panel .btn-reset {
+      background: transparent;
+      color: var(--muted);
+      border: 1px solid var(--border) !important;
+    }
+
     main {
       position: relative;
       z-index: 1;
@@ -104,7 +223,6 @@
       line-height: 1.7;
     }
 
-    /* Sections */
     .sections-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
@@ -141,18 +259,14 @@
       gap: 0.6rem;
     }
 
-    .section-header .icon {
-      font-size: 1.3rem;
-    }
+    .section-header .icon { font-size: 1.3rem; }
 
     .chevron {
       color: var(--muted);
       transition: transform 0.3s;
       font-size: 0.8rem;
     }
-    .section-card.open .chevron {
-      transform: rotate(180deg);
-    }
+    .section-card.open .chevron { transform: rotate(180deg); }
 
     .section-body {
       display: none;
@@ -177,9 +291,8 @@
       letter-spacing: 0.05em;
     }
     .badge-sovereign { background: #7c3aed22; color: var(--accent); border: 1px solid #7c3aed44; }
-    .badge-live      { background: #16a34a22; color: #4ade80;       border: 1px solid #16a34a44; }
+    .badge-live      { background: #16a34a22; color: #4ade80; border: 1px solid #16a34a44; }
 
-    /* Status bar */
     .status-bar {
       background: var(--surface);
       border: 1px solid var(--border);
@@ -204,12 +317,13 @@
     }
     .dot-green  { background: #4ade80; }
     .dot-yellow { background: #facc15; }
+    .dot-red    { background: #f07178; }
+    .dot-muted  { background: #64748b; }
     @keyframes pulse {
       0%, 100% { opacity: 1; }
       50%       { opacity: 0.4; }
     }
 
-    /* Back to top */
     #btt {
       position: fixed;
       bottom: 2rem;
@@ -231,13 +345,36 @@
 </head>
 <body>
   <nav>
-    <span class="logo">⚔️ Sovereignty AI Studio</span>
+    <span class="logo">Sovereignty AI Studio</span>
     <a href="#architecture">Architecture</a>
     <a href="#ai">AI Bridge</a>
     <a href="#water">Water Systems</a>
     <a href="#docs">Docs</a>
-    <a href="/api/health" target="_blank">Health ↗</a>
+    <a href="/api/health" target="_blank">Health</a>
+    <span class="nav-spacer"></span>
+    <div class="mode-toggle" aria-label="Runtime mode">
+      <div class="mode-track" role="radiogroup" id="modeTrack">
+        <button type="button" data-mode="LOCAL" aria-pressed="true">LOCAL</button>
+        <button type="button" data-mode="HYBRID" aria-pressed="false">HYBRID</button>
+        <button type="button" data-mode="ONLINE" aria-pressed="false">ONLINE</button>
+      </div>
+      <span class="mode-net off" id="modeNet">network off</span>
+    </div>
   </nav>
+
+  <div class="mode-panel" id="modePanel">
+    <div class="mode-panel-inner">
+      <div>
+        <label for="modeHosts">Allowed hosts (HYBRID)</label><br/>
+        <input id="modeHosts" type="text" placeholder="127.0.0.1,localhost" autocomplete="off" />
+      </div>
+      <p class="hint" id="modeHint">LOCAL is default. Network is not authorization.</p>
+      <div class="actions">
+        <button type="button" class="action btn-apply" id="modeApply">Apply</button>
+        <button type="button" class="action btn-reset" id="modeReset">Reset LOCAL</button>
+      </div>
+    </div>
+  </div>
 
   <main>
     <section class="hero">
@@ -249,8 +386,11 @@
       </p>
     </section>
 
-    <!-- Status bar -->
     <div class="status-bar" id="architecture">
+      <div class="status-item">
+        <span class="dot" id="modeStatusDot"></span>
+        <span>Mode: <strong id="modeStatusText">LOCAL</strong></span>
+      </div>
       <div class="status-item">
         <span class="dot dot-green"></span>
         <span>Sovereign Bridge Active</span>
@@ -274,7 +414,6 @@
 
     <div class="sections-grid" id="ai">
 
-      <!-- Sovereign Bridge -->
       <div class="section-card" onclick="toggle(this)">
         <div class="section-header">
           <h2><span class="icon">🌉</span> Sovereign Agent Bridge</h2>
@@ -292,7 +431,6 @@
         </div>
       </div>
 
-      <!-- Org / Team Layer -->
       <div class="section-card" onclick="toggle(this)">
         <div class="section-header">
           <h2><span class="icon">🏢</span> Org / Team / Project Layer</h2>
@@ -310,7 +448,6 @@
         </div>
       </div>
 
-      <!-- RBAC Roles -->
       <div class="section-card" onclick="toggle(this)">
         <div class="section-header">
           <h2><span class="icon">🛡️</span> Role-Based Access Control</h2>
@@ -332,7 +469,6 @@
         </div>
       </div>
 
-      <!-- Analytics -->
       <div class="section-card" onclick="toggle(this)">
         <div class="section-header">
           <h2><span class="icon">📊</span> Analytics & Audit Trail</h2>
@@ -351,7 +487,6 @@
         </div>
       </div>
 
-      <!-- Water Systems -->
       <div class="section-card" onclick="toggle(this)" id="water">
         <div class="section-header">
           <h2><span class="icon">💧</span> Sovereignty One Water Systems</h2>
@@ -374,7 +509,6 @@
         </div>
       </div>
 
-      <!-- SDT-Boron -->
       <div class="section-card" onclick="toggle(this)">
         <div class="section-header">
           <h2><span class="icon">🔬</span> SDT-Boron Therapy Research</h2>
@@ -384,7 +518,7 @@
           <p>Preclinical sonodynamic therapy research combining ultrasound activation
           with boron-10 enriched sonosensitisers.</p>
           <br/>
-          <p><strong>In vitro result:</strong> 78% glioblastoma cell death (U87-MG, p&lt;0.001)</p>
+          <p><strong>In vitro result:</strong> 78% glioblastoma cell death (U87-MG, p<0.001)</p>
           <p><strong>Murine model:</strong> 65% tumour volume reduction at day 21</p>
           <br/>
           <a href="/docs/sdt_boron_therapy.md">Full research documentation →</a>
@@ -393,7 +527,6 @@
         </div>
       </div>
 
-      <!-- Infrastructure -->
       <div class="section-card" onclick="toggle(this)" id="docs">
         <div class="section-header">
           <h2><span class="icon">🐳</span> Self-Hosted Infrastructure</h2>
@@ -425,14 +558,129 @@
       card.classList.toggle('open');
     }
 
-    // Back to top button
     const btt = document.getElementById('btt');
     window.addEventListener('scroll', () => {
       btt.classList.toggle('visible', window.scrollY > 300);
     });
-
-    // Open first card by default
     document.querySelector('.section-card')?.classList.add('open');
+
+    /* —— Runtime mode toggle (LOCAL / HYBRID / ONLINE) —— */
+    (function () {
+      var KEY = 'sovereignty.runtime.mode.v1';
+      var pending = 'LOCAL';
+      var active = 'LOCAL';
+      var track = document.getElementById('modeTrack');
+      var panel = document.getElementById('modePanel');
+      var hosts = document.getElementById('modeHosts');
+      var hint = document.getElementById('modeHint');
+      var net = document.getElementById('modeNet');
+      var statusDot = document.getElementById('modeStatusDot');
+      var statusText = document.getElementById('modeStatusText');
+      var buttons = Array.prototype.slice.call(track.querySelectorAll('button'));
+
+      function load() {
+        try {
+          var s = JSON.parse(localStorage.getItem(KEY) || '{}');
+          if (s.mode === 'LOCAL' || s.mode === 'HYBRID' || s.mode === 'ONLINE') {
+            active = pending = s.mode;
+            if (typeof s.allowedHosts === 'string') hosts.value = s.allowedHosts;
+          }
+        } catch (e) {}
+      }
+
+      function save() {
+        localStorage.setItem(KEY, JSON.stringify({
+          version: '1.0.0',
+          mode: active,
+          allowedHosts: hosts.value.trim(),
+          networkEnabled: active !== 'LOCAL',
+          updatedAt: new Date().toISOString()
+        }));
+      }
+
+      function paintButtons() {
+        buttons.forEach(function (b) {
+          b.setAttribute('aria-pressed', b.getAttribute('data-mode') === pending ? 'true' : 'false');
+        });
+        panel.classList.toggle('open', pending === 'HYBRID' || pending !== active);
+        if (pending === 'LOCAL' && active === 'LOCAL') {
+          panel.classList.remove('open');
+        }
+        if (pending === 'HYBRID') panel.classList.add('open');
+      }
+
+      function paintStatus() {
+        statusText.textContent = active;
+        statusDot.className = 'dot';
+        if (active === 'LOCAL') {
+          statusDot.classList.add('dot-green');
+          net.className = 'mode-net off';
+          net.textContent = 'network off';
+        } else if (active === 'HYBRID') {
+          statusDot.classList.add('dot-yellow');
+          net.className = 'mode-net restricted';
+          net.textContent = navigator.onLine ? 'restricted' : 'offline';
+        } else {
+          statusDot.classList.add('dot-red');
+          net.className = navigator.onLine ? 'mode-net on' : 'mode-net off';
+          net.textContent = navigator.onLine ? 'online' : 'unreachable';
+        }
+      }
+
+      buttons.forEach(function (b) {
+        b.addEventListener('click', function () {
+          pending = b.getAttribute('data-mode');
+          paintButtons();
+          if (pending === 'LOCAL' && active !== 'LOCAL') {
+            hint.textContent = 'Press Apply to switch to LOCAL.';
+          } else if (pending === 'HYBRID') {
+            hint.textContent = 'HYBRID needs allowed hosts, then Apply.';
+          } else if (pending === 'ONLINE') {
+            hint.textContent = 'ONLINE requires owner acknowledgment on Apply.';
+            panel.classList.add('open');
+          } else {
+            hint.textContent = 'LOCAL is default. Network is not authorization.';
+          }
+        });
+      });
+
+      document.getElementById('modeApply').addEventListener('click', function () {
+        if (pending === 'HYBRID') {
+          var h = hosts.value.trim();
+          if (!h) { hint.textContent = 'HYBRID requires at least one host.'; return; }
+          if (h.indexOf('*') !== -1) { hint.textContent = 'HYBRID forbids wildcard *.'; return; }
+        }
+        if (pending === 'ONLINE') {
+          if (!confirm('Authorize ONLINE remote mode?\n\nNetwork availability is not authorization.')) {
+            hint.textContent = 'ONLINE canceled.';
+            return;
+          }
+        }
+        active = pending;
+        save();
+        paintButtons();
+        paintStatus();
+        hint.textContent = 'Applied ' + active + '.';
+        if (active === 'LOCAL') panel.classList.remove('open');
+      });
+
+      document.getElementById('modeReset').addEventListener('click', function () {
+        pending = active = 'LOCAL';
+        hosts.value = '';
+        save();
+        paintButtons();
+        paintStatus();
+        hint.textContent = 'Reset to LOCAL.';
+        panel.classList.remove('open');
+      });
+
+      window.addEventListener('online', paintStatus);
+      window.addEventListener('offline', paintStatus);
+
+      load();
+      paintButtons();
+      paintStatus();
+    })();
   </script>
 </body>
 </html>

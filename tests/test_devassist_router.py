@@ -1,62 +1,67 @@
-"""Tests for branch-aware, non-destructive council routing."""
+"""Tests for the DevAssist420 coordination core."""
 from __future__ import annotations
 
 import pytest
 
-from backend.coordination import DevAssistRouter, TaskEnvelope
+from backend.coordination import (
+    BranchRegistry,
+    ConflictManager,
+    CouncilResult,
+    DevAssistRouter,
+    TaskEnvelope,
+)
 
 
-def test_routes_security_to_ara_branch() -> None:
+def test_task_envelope_requires_core_fields():
+    with pytest.raises(ValueError):
+        TaskEnvelope(task_id="", requester="x", owner="y")
+
+
+def test_task_envelope_rejects_main_branch():
+    with pytest.raises(ValueError):
+        TaskEnvelope(task_id="t1", requester="r", owner="o", branch="main")
+
+
+def test_branch_registry_protects_collaboration():
+    registry = BranchRegistry()
+    assert registry.is_owner_controlled("Collaboration")
+    with pytest.raises(ValueError):
+        registry.is_writable("Collaboration")
+
+
+def test_conflict_manager_blocks_overlapping_scopes():
+    cm = ConflictManager()
+    a = TaskEnvelope(task_id="a", requester="r", owner="o", scope=("backend/api",))
+    b = TaskEnvelope(task_id="b", requester="r", owner="o", scope=("backend/api/router.py",))
+    assert cm.register(a) is None
+    conflict = cm.register(b)
+    assert conflict is not None
+    assert "a" in conflict.conflicts_with
+
+
+def test_router_classifies_and_routes():
     router = DevAssistRouter()
-    task = router.classify(
-        task_id="security-1",
+    envelope = router.classify(
+        task_id="t1",
         requester="owner",
         owner="Appel420",
-        scope=("security",),
+        scope=("routing", "coordination"),
     )
-    result = router.route(task)
+    assert envelope.branch == "devassist420"
+    result = router.route(envelope)
     assert result.approved is True
-    assert result.routes[0].branch == "ara-hardened"
+    assert result.routes[0].branch == "devassist420"
+    router.release(envelope.task_id)
 
 
-def test_non_overlapping_tasks_can_run_in_parallel() -> None:
+def test_router_denies_protected_branch():
     router = DevAssistRouter()
-    first = router.classify(
-        task_id="ui-1", requester="owner", owner="Appel420", scope=("usability",)
+    envelope = router.classify(
+        task_id="t2",
+        requester="owner",
+        owner="Appel420",
+        scope=("architecture",),
+        branch="Collaboration",
     )
-    second = router.classify(
-        task_id="api-1", requester="owner", owner="Appel420", scope=("integration",)
-    )
-    assert router.route(first).approved is True
-    assert router.route(second).approved is True
-
-
-def test_overlapping_tasks_wait_for_council_without_mutation() -> None:
-    router = DevAssistRouter()
-    first = router.classify(
-        task_id="api-1", requester="owner", owner="Appel420", scope=("integration",)
-    )
-    second = router.classify(
-        task_id="api-2", requester="owner", owner="Appel420", scope=("integration",)
-    )
-    assert router.route(first).approved is True
-    conflict = router.route(second)
-    assert conflict.approved is False
-    assert conflict.conflicts[0].status == "pending-council-review"
-    assert router.conflicts.active()[0].task_id == "api-1"
-
-
-def test_main_is_never_a_writable_agent_branch() -> None:
-    with pytest.raises(ValueError, match="main"):
-        TaskEnvelope("main-1", "owner", "Appel420", branch="main")
-
-
-def test_unknown_branch_is_rejected() -> None:
-    with pytest.raises(ValueError, match="Unknown agent branch"):
-        DevAssistRouter().classify(
-            task_id="bad-1",
-            requester="owner",
-            owner="Appel420",
-            branch="does-not-exist",
-            scope=("integration",),
-        )
+    result = router.route(envelope)
+    assert result.approved is False

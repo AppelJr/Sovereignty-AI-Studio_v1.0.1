@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sovereignty — Runtime Mode</title>
+  <style>
+    :root {
+      --bg: #0b0f14;
+      --panel: #121821;
+      --border: #243041;
+      --text: #e8eef6;
+      --muted: #8b9bb0;
+      --local: #3dd68c;
+      --hybrid: #f0b429;
+      --online: #f07178;
+      --accent: #5b9fd4;
+      --danger: #e85d5d;
+      --ok: #3dd68c;
+      --warn: #f0b429;
+      --off: #6b7c8f;
+      --radius: 12px;
+      --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: var(--font);
+      background: radial-gradient(1200px 600px at 20% -10%, #1a2433 0%, var(--bg) 55%);
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .shell {
+      width: min(520px, 100%);
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      box-shadow: 0 24px 64px rgba(0,0,0,0.45);
+      overflow: hidden;
+    }
+    header {
+      padding: 20px 22px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    header h1 {
+      margin: 0 0 4px;
+      font-size: 1.15rem;
+      font-weight: 650;
+      letter-spacing: 0.02em;
+    }
+    header p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+    .body { padding: 18px 22px 22px; }
+    .status-row {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+    .chip {
+      flex: 1;
+      background: #0e141c;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 12px 14px;
+    }
+    .chip .label {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+    .chip .value {
+      font-family: var(--mono);
+      font-size: 0.95rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: var(--off);
+      box-shadow: 0 0 0 3px rgba(107,124,143,0.2);
+      flex-shrink: 0;
+    }
+    .dot.ok { background: var(--ok); box-shadow: 0 0 0 3px rgba(61,214,140,0.2); }
+    .dot.warn { background: var(--warn); box-shadow: 0 0 0 3px rgba(240,180,41,0.2); }
+    .dot.bad { background: var(--danger); box-shadow: 0 0 0 3px rgba(232,93,93,0.2); }
+    .dot.off { background: var(--off); }
+
+    .mode-label {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+    .toggle {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    .toggle button {
+      appearance: none;
+      border: 1px solid var(--border);
+      background: #0e141c;
+      color: var(--text);
+      border-radius: 10px;
+      padding: 14px 8px;
+      font: inherit;
+      font-weight: 600;
+      font-size: 0.9rem;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+    }
+    .toggle button:hover { border-color: #3a4d66; }
+    .toggle button:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+    .toggle button.active-local {
+      border-color: var(--local);
+      background: rgba(61,214,140,0.12);
+      box-shadow: inset 0 0 0 1px var(--local);
+    }
+    .toggle button.active-hybrid {
+      border-color: var(--hybrid);
+      background: rgba(240,180,41,0.12);
+      box-shadow: inset 0 0 0 1px var(--hybrid);
+    }
+    .toggle button.active-online {
+      border-color: var(--online);
+      background: rgba(240,113,120,0.12);
+      box-shadow: inset 0 0 0 1px var(--online);
+    }
+
+    .detail {
+      background: #0e141c;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      margin-bottom: 14px;
+      font-size: 0.88rem;
+      line-height: 1.45;
+      color: var(--muted);
+    }
+    .detail strong { color: var(--text); }
+    .detail code {
+      font-family: var(--mono);
+      font-size: 0.82rem;
+      color: var(--accent);
+    }
+
+    .hosts {
+      display: none;
+      margin-bottom: 14px;
+    }
+    .hosts.visible { display: block; }
+    .hosts label {
+      display: block;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+    .hosts input {
+      width: 100%;
+      background: #0e141c;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      padding: 10px 12px;
+      font-family: var(--mono);
+      font-size: 0.85rem;
+    }
+    .hosts input:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    .actions {
+      display: flex;
+      gap: 10px;
+    }
+    .actions button {
+      flex: 1;
+      appearance: none;
+      border: none;
+      border-radius: 10px;
+      padding: 12px 14px;
+      font: inherit;
+      font-weight: 650;
+      cursor: pointer;
+    }
+    .btn-apply {
+      background: var(--accent);
+      color: #0b0f14;
+    }
+    .btn-apply:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+    .btn-reset {
+      background: transparent;
+      color: var(--muted);
+      border: 1px solid var(--border) !important;
+    }
+
+    .toast {
+      margin-top: 14px;
+      min-height: 1.2em;
+      font-size: 0.82rem;
+      color: var(--muted);
+      font-family: var(--mono);
+    }
+    .toast.err { color: var(--danger); }
+    .toast.ok { color: var(--ok); }
+
+    footer {
+      padding: 10px 22px 16px;
+      border-top: 1px solid var(--border);
+      font-size: 0.72rem;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+  </style>
+</head>
+<body>
+  <div class="shell" role="application" aria-label="Sovereignty runtime mode panel">
+    <header>
+      <h1>Sovereignty Runtime Mode</h1>
+      <p>Owner-controlled. Network is not authorization.</p>
+    </header>
+
+    <div class="body">
+      <div class="status-row">
+        <div class="chip">
+          <div class="label">Active mode</div>
+          <div class="value"><span class="dot" id="modeDot"></span><span id="modeValue">LOCAL</span></div>
+        </div>
+        <div class="chip">
+          <div class="label">Network</div>
+          <div class="value"><span class="dot" id="netDot"></span><span id="netValue">offline</span></div>
+        </div>
+      </div>
+
+      <div class="mode-label">Select mode</div>
+      <div class="toggle" role="radiogroup" aria-label="Runtime mode">
+        <button type="button" id="btnLocal" data-mode="LOCAL" aria-pressed="true">LOCAL</button>
+        <button type="button" id="btnHybrid" data-mode="HYBRID" aria-pressed="false">HYBRID</button>
+        <button type="button" id="btnOnline" data-mode="ONLINE" aria-pressed="false">ONLINE</button>
+      </div>
+
+      <div class="detail" id="modeDetail">
+        <strong>LOCAL</strong> — offline / loopback-only. Default. No external hosts.
+      </div>
+
+      <div class="hosts" id="hostsBlock">
+        <label for="hostsInput">Allowed hosts (comma-separated)</label>
+        <input id="hostsInput" type="text" placeholder="127.0.0.1,localhost" autocomplete="off" spellcheck="false" />
+      </div>
+
+      <div class="actions">
+        <button type="button" class="btn-apply" id="btnApply">Apply mode</button>
+        <button type="button" class="btn-reset" id="btnReset">Reset to LOCAL</button>
+      </div>
+
+      <div class="toast" id="toast" aria-live="polite"></div>
+    </div>
+
+    <footer>
+      LOCAL is default. HYBRID requires explicit hosts. ONLINE requires owner acknowledgment.
+      Silent promotion is forbidden.
+    </footer>
+  </div>
+
+  <script>
+    (function () {
+      "use strict";
+
+      var STORAGE_KEY = "sovereignty.runtime.mode.v1";
+      var DETAILS = {
+        LOCAL:
+          "<strong>LOCAL</strong> — offline / loopback-only. Default. No external hosts. Providers stay device-local.",
+        HYBRID:
+          "<strong>HYBRID</strong> — loopback plus <em>explicit</em> allowed hosts. Requires a non-empty host list. No wildcard.",
+        ONLINE:
+          "<strong>ONLINE</strong> — owner-authorized remote. Last resort. You must confirm the acknowledgment prompt."
+      };
+
+      var pending = "LOCAL";
+      var active = "LOCAL";
+      var onlineAck = false;
+
+      var el = {
+        modeDot: document.getElementById("modeDot"),
+        modeValue: document.getElementById("modeValue"),
+        netDot: document.getElementById("netDot"),
+        netValue: document.getElementById("netValue"),
+        detail: document.getElementById("modeDetail"),
+        hostsBlock: document.getElementById("hostsBlock"),
+        hostsInput: document.getElementById("hostsInput"),
+        toast: document.getElementById("toast"),
+        btnApply: document.getElementById("btnApply"),
+        btnReset: document.getElementById("btnReset"),
+        buttons: {
+          LOCAL: document.getElementById("btnLocal"),
+          HYBRID: document.getElementById("btnHybrid"),
+          ONLINE: document.getElementById("btnOnline")
+        }
+      };
+
+      function loadState() {
+        try {
+          var raw = localStorage.getItem(STORAGE_KEY);
+          if (!raw) return;
+          var data = JSON.parse(raw);
+          if (data && (data.mode === "LOCAL" || data.mode === "HYBRID" || data.mode === "ONLINE")) {
+            active = data.mode;
+            pending = data.mode;
+            if (typeof data.allowedHosts === "string") {
+              el.hostsInput.value = data.allowedHosts;
+            }
+            onlineAck = !!data.onlineAck;
+          }
+        } catch (e) {
+          /* ignore corrupt storage */
+        }
+      }
+
+      function saveState(mode, hosts, ack) {
+        var payload = {
+          version: "1.0.0",
+          mode: mode,
+          allowedHosts: hosts || "",
+          onlineAck: !!ack,
+          networkEnabled: mode !== "LOCAL",
+          updatedAt: new Date().toISOString()
+        };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+        return payload;
+      }
+
+      function setToast(msg, kind) {
+        el.toast.textContent = msg || "";
+        el.toast.className = "toast" + (kind ? " " + kind : "");
+      }
+
+      function networkProbe() {
+        // Browser-visible connectivity only. Does not authorize ONLINE.
+        var online = typeof navigator !== "undefined" && navigator.onLine === true;
+        if (active === "LOCAL") {
+          el.netDot.className = "dot off";
+          el.netValue.textContent = "disabled (LOCAL)";
+          return;
+        }
+        if (active === "HYBRID") {
+          el.netDot.className = online ? "dot warn" : "dot off";
+          el.netValue.textContent = online ? "restricted (HYBRID)" : "offline";
+          return;
+        }
+        // ONLINE
+        el.netDot.className = online ? "dot ok" : "dot bad";
+        el.netValue.textContent = online ? "reachable" : "unreachable";
+      }
+
+      function paintModeChip() {
+        el.modeValue.textContent = active;
+        el.modeDot.className = "dot";
+        if (active === "LOCAL") el.modeDot.classList.add("ok");
+        else if (active === "HYBRID") el.modeDot.classList.add("warn");
+        else el.modeDot.classList.add("bad");
+      }
+
+      function paintButtons() {
+        ["LOCAL", "HYBRID", "ONLINE"].forEach(function (m) {
+          var btn = el.buttons[m];
+          btn.classList.remove("active-local", "active-hybrid", "active-online");
+          btn.setAttribute("aria-pressed", m === pending ? "true" : "false");
+          if (m === pending) {
+            if (m === "LOCAL") btn.classList.add("active-local");
+            if (m === "HYBRID") btn.classList.add("active-hybrid");
+            if (m === "ONLINE") btn.classList.add("active-online");
+          }
+        });
+        el.detail.innerHTML = DETAILS[pending];
+        el.hostsBlock.classList.toggle("visible", pending === "HYBRID");
+      }
+
+      function selectMode(mode) {
+        pending = mode;
+        paintButtons();
+        setToast("Pending: " + mode + " — press Apply to commit.", "");
+      }
+
+      function applyMode() {
+        var mode = pending;
+        var hosts = (el.hostsInput.value || "").trim();
+
+        if (mode === "HYBRID") {
+          if (!hosts) {
+            setToast("HYBRID requires at least one allowed host.", "err");
+            el.hostsInput.focus();
+            return;
+          }
+          if (hosts.indexOf("*") !== -1) {
+            setToast("HYBRID does not allow wildcard hosts.", "err");
+            return;
+          }
+        }
+
+        if (mode === "ONLINE") {
+          var ok = window.confirm(
+            "ONLINE enables remote traffic.\n\n" +
+              "This is last-resort and requires your acknowledgment.\n" +
+              "Network availability is not authorization.\n\n" +
+              "Type intent: continue only if you authorize ONLINE."
+          );
+          if (!ok) {
+            setToast("ONLINE canceled — no mode change.", "err");
+            return;
+          }
+          onlineAck = true;
+        } else {
+          onlineAck = false;
+        }
+
+        active = mode;
+        var saved = saveState(active, hosts, onlineAck);
+        paintModeChip();
+        networkProbe();
+        setToast(
+          "Applied " + active +
+            (active === "HYBRID" ? " hosts=[" + hosts + "]" : "") +
+            " @ " + saved.updatedAt,
+          "ok"
+        );
+
+        // Optional: notify parent frame / local bridge if embedded
+        try {
+          if (window.parent && window.parent !== window) {
+            window.parent.postMessage(
+              { type: "sovereignty.runtime.mode", payload: saved },
+              "*"
+            );
+          }
+        } catch (e) { /* no parent */ }
+      }
+
+      function resetLocal() {
+        pending = "LOCAL";
+        active = "LOCAL";
+        onlineAck = false;
+        el.hostsInput.value = "";
+        saveState("LOCAL", "", false);
+        paintButtons();
+        paintModeChip();
+        networkProbe();
+        setToast("Reset to LOCAL.", "ok");
+      }
+
+      // Wire controls
+      Object.keys(el.buttons).forEach(function (m) {
+        el.buttons[m].addEventListener("click", function () {
+          selectMode(m);
+        });
+      });
+      el.btnApply.addEventListener("click", applyMode);
+      el.btnReset.addEventListener("click", resetLocal);
+      window.addEventListener("online", networkProbe);
+      window.addEventListener("offline", networkProbe);
+
+      // Boot
+      loadState();
+      paintButtons();
+      paintModeChip();
+      networkProbe();
+      setToast("Ready. Active mode: " + active, "");
+
+      // Best-effort: if served beside modes/runtime-mode.json, display server mode
+      try {
+        fetch("../modes/runtime-mode.json", { cache: "no-store" })
+          .then(function (r) {
+            if (!r.ok) return null;
+            return r.json();
+          })
+          .then(function (j) {
+            if (j && j.mode) {
+              setToast(
+                (el.toast.textContent ? el.toast.textContent + " · " : "") +
+                  "disk mode=" + j.mode,
+                ""
+              );
+            }
+          })
+          .catch(function () { /* offline / missing — fine */ });
+      } catch (e) { /* ignore */ }
+    })();
+  </script>
+</body>
+</html>

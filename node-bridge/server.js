@@ -431,26 +431,11 @@ app.post('/exec/code', (req, res) => {
   const code = (req.body && req.body.code) || '';
   if (!code) return res.status(400).json({ error: 'No code provided' });
   if (lang === 'node' || lang === 'javascript' || lang === 'js') {
-    try {
-      const logs = [];
-      const sandbox = {
-        console: {
-          log: (...args) => logs.push(args.map(String).join(' ')),
-          error: (...args) => logs.push('[ERR] ' + args.map(String).join(' ')),
-          warn: (...args) => logs.push('[WARN] ' + args.map(String).join(' ')),
-        },
-        Math, Date, JSON, parseInt, parseFloat, String, Number, Boolean, Array, Object,
-      };
-      const ctx = vm.createContext(sandbox);
-      const script = new vm.Script(code, { filename: 'exec-code.js', timeout: 10000 });
-      const result = script.runInContext(ctx, { timeout: 10000 });
-      if (result !== undefined && logs.length === 0) {
-        logs.push(typeof result === 'object' ? JSON.stringify(result, null, 2) : String(result));
-      }
-      return res.json({ output: logs.join('\n') || '(no output)', lang });
-    } catch (err) {
-      return res.status(400).json({ output: '', error: err.message, lang });
-    }
+    return res.status(400).json({
+      output: '',
+      error: 'JavaScript execution is disabled for security reasons',
+      lang,
+    });
   }
   if (lang === 'python' || lang === 'py') {
     return execFile('python3', ['-c', code], { timeout: 15000, maxBuffer: 512 * 1024 }, (err, stdout, stderr) => {

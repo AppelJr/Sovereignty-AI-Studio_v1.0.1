@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM python:3.13
 
 WORKDIR /app
 
@@ -11,8 +11,8 @@ COPY plugin_sdk/ ./plugin_sdk/
 COPY gateway/ ./gateway/
 
 ENV PLUGIN_SDK_DIR=/app/plugin_sdk
-ENV GATEWAY_PORT=9001
+ENV GATEWAY_PORT=9897
 
-EXPOSE 9001
+EXPOSE 9897
 
 CMD ["python", "-m", "gateway.main"]

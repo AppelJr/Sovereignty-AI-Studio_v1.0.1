@@ -49,8 +49,8 @@ class DevAssistRouter:
         normalized_scope = tuple(dict.fromkeys(str(item) for item in scope))
         selected_branch = branch or self._select_branch(normalized_scope, requested_agent)
         self.registry.require(selected_branch)
-        selected_owner = self.registry.require(selected_branch)
-        if not selected_owner.allows(normalized_scope):
+        selected_owner = self.registry.get(selected_branch)
+        if selected_owner is None or not selected_owner.allows(normalized_scope):
             raise ValueError(
                 f"Branch {selected_branch!r} does not own requested scope {normalized_scope!r}"
             )
@@ -73,7 +73,9 @@ class DevAssistRouter:
             return CouncilResult.denied(
                 f"Protected or unknown branch is not agent-writable: {envelope.branch}"
             )
-        branch_owner = self.registry.require(envelope.branch)
+        branch_owner = self.registry.get(envelope.branch)
+        if branch_owner is None:
+            return CouncilResult.denied(f"Unknown branch: {envelope.branch}")
         conflict = self.conflicts.register(envelope)
         if conflict is not None:
             return CouncilResult(
