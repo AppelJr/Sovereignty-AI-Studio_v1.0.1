@@ -4,46 +4,58 @@ on:
   push:
     branches: [main, Collaboration, ara-hardened, xAI/Grok, GPT/Codex, claude, duckAI]
   pull_request:
-    branches: [main, Collaboration, ara-hardened, xAI/grok, GPT/Codex, claude, duckAI]
+    branches: [main, Collaboration, ara-hardened, xAI/Grok, GPT/Codex, claude, duckAI]
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
- no-fly-scan:
-     runs-on: ubuntu-latest
-     steps:
-      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-      with:
-      persist-credentials: false
-     
-      - name: "sovereign-guard"
-      shell: bash
-      run: |
-         python3 guard/sovereign-guard.py
+  no-fly-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+
+      - name: Sovereign guard
+        shell: bash
+        run: python3 guard/sovereign-guard.py
+
       - name: Verify scar chain
-      shell: bash
-      run: |
+        shell: bash
+        run: |
           python3 - <<'PY'
-          import json, hashlib, sys
+          import hashlib
+          import json
+          import sys
+
           prev = None
           n = 0
+
           with open("scar/scar.jsonl", encoding="utf-8") as f:
               for line in f:
                   line = line.strip()
                   if not line:
                       continue
+
                   rec = json.loads(line)
                   if rec.get("prev") != prev:
                       print("FAIL: scar chain broken at record", n)
                       sys.exit(1)
-                  payload = json.dumps({k: rec[k] for k in ("prev", "event", "detail", "ts")},
-                                       sort_keys=True, separators=(",", ":"))
+
+                  payload = json.dumps(
+                      {k: rec[k] for k in ("prev", "event", "detail", "ts")},
+                      sort_keys=True,
+                      separators=(",", ":"),
+                  )
                   if hashlib.sha256(payload.encode()).hexdigest() != rec["hash"]:
                       print("FAIL: scar hash mismatch at record", n)
                       sys.exit(1)
+
                   prev = rec["hash"]
                   n += 1
-        print(f"OK: scar chain valid, {n} records")
-         PY
+
+          print(f"OK: scar chain valid, {n} records")
+          PY
