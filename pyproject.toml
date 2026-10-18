@@ -32,7 +32,7 @@ ml = [
     "numpy==2.5.2",
     "torch==2.13.0",
     "onnx==1.22.0",
-    "onnxruntime==1.29.0",
+    "onnxruntime==1.31.0",
     "piper-tts==1.7.0",
 ]
 pqc = [
