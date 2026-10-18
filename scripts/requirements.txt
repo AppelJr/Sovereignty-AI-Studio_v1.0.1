@@ -21,4 +21,4 @@ pyBigWig>=0.3.22
 
 # For deployment only
 flask>=3.0.0
-gunicorn>=21.2.0
+gunicorn>=26.2.0
