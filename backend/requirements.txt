@@ -10,4 +10,4 @@ pydantic[email]==2.13.4
 pydantic-settings==2.16.0
 httpx==0.28.1
 websockets==16.1.1
-python-dotenv==1.2.2
+python-dotenv==1.2.4
