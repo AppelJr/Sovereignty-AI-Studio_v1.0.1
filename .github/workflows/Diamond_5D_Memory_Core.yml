@@ -34,9 +34,9 @@ jobs:
           : "${GH_TOKEN:?GITHUB_TOKEN is required}"
           rm -rf .git
           git init .
-          git remote add origin "https://github.com/${{ GITHUB_REPOSITORY }.git"
+          git remote add origin "https://github.com/${{ github.repository }.git"
           auth="$(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 | tr -d '\n')"
-          git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${{ GITHUB_SHA }"
+          git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${{ github.sha }"
           git checkout --detach FETCH_HEAD
           git config --unset-all http.extraheader 2>/dev/null || true
 
@@ -44,15 +44,15 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          test "${{ GITHUB_ACTIONS:- }" = true
-          test "${{ RUNNER_OS:- }" = Linux
-          case "${{ RUNNER_ARCH:- }" in
+          test "${{ github.actions }" = true
+          test "${{ runner.os }" = Linux
+          case "${{ runner.arch }" in
             X64|ARM64) ;;
-            *) echo "Unsupported runner architecture: ${{ RUNNER_ARCH:-unknown }"
+            *) echo "Unsupported runner architecture: ${{ runner.arch }"
             exit 1
             ;;
           case
-          printf 'runner=%s/%s kernel=%s commit=%s\n' "${{ RUNNER_OS }" "${{ RUNNER_ARCH }" "$(uname -m)" "${{ GITHUB_SHA }"
+          printf 'runner=%s/%s kernel=%s commit=%s\n' "${{ runner.os }" "${{ runner.arch }" "$(uname -m)" "${{ github.sha }"
 
       - name: Rust toolchain
         shell: bash
@@ -75,4 +75,4 @@ jobs:
         run: |
           set -Eeuo pipefail
           echo 'DIAMOND_LATTICE_V0_1=PASS'
-          echo "Validated commit: ${{ GITHUB_SHA }"
+          echo "Validated commit: ${{ github.sha }"
