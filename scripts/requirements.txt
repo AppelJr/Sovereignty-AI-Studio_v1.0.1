@@ -9,7 +9,7 @@ pandas>=2.2.0
 biopython>=1.83
 scikit-learn>=1.4.0
 pysam>=0.22.0
-pybedtools>=0.9.0
+pybedtools>=0.12.1
 pyBigWig>=0.3.22
 
 # Optional (for full single-cell support)
