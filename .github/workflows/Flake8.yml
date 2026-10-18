@@ -3,9 +3,9 @@ name: Flake8 Lint
 on:
   workflow_dispatch:
   push:
-    branches: [ "Collaboration, main, Claude, GPT/Codex, ara-hardened, copilot/main, duckAI, devassist420" ]
+    branches: [Collaboration, main, Claude, "GPT/Codex", ara-hardened, copilot/main, duckAI, devassist420]
   pull_request:
-    branches: [ "Collaboration, main, Claude, GPT/Codex, ara-hardened, copilot/main, duckAI, devassist420" ]
+    branches: [Collaboration, main, Claude, "GPT/Codex", ara-hardened, copilot/main, duckAI, devassist420]
 
 permissions:
   contents: read
