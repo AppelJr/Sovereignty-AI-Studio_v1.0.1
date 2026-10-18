@@ -14,8 +14,8 @@ env:
   PQC_ALGORITHM: ML-DSA-87
 
 jobs:
-    name: macos ARM64
-    runs-on: macos-latest
+    name: runners
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - name: Checkout repository/Runner evidence
