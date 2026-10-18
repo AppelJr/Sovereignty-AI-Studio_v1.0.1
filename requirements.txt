@@ -19,7 +19,7 @@ psycopg2-binary==2.9.13
 asyncpg==0.31.0
 sqlalchemy[asyncio]==2.0.51
 alembic==1.18.5
-redis==8.0.1
+redis==8.1.0
 
 # Web Frameworks
 fastapi==0.139.2
