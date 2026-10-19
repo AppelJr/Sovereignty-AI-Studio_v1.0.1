@@ -5,6 +5,10 @@ The active runtime is the root static SGHv119 dashboard plus the loopback Python
 ## Removed ambiguity
 
 - React is not part of the active frontend. `frontend/package.json` remains dependency-free.
+- Inactive React source under `frontend/src/` was **archived and removed from production** on 2026-10-19.
+  - Archive: `archives/react-src-2026-10-19/` (MANIFEST + README)
+  - SCAR event: `react_src_archived_removed`
+  - Recovery: `git show eab271c49f13a2f78c7e263ccde73ca27511cfd4:frontend/src/...`
 - `START_SERVER.sh` is the canonical launcher.
 - `start-all.sh` is only a compatibility wrapper and no longer starts a second service graph.
 - `scripts/local-ci.sh` is the local test entrypoint.
@@ -21,7 +25,7 @@ The following are reference, experimental, or duplicate implementations and must
 - `sovereign_cicd_orchestrator.py`
 - `v119_cluster.yml`
 - vendored `external/` applications
-- inactive React source under `frontend/src/`
+- archived React source under `archives/react-src-2026-10-19/` (formerly `frontend/src/`)
 
 They remain available for review, but the active runtime has one launcher and one port map.
 
