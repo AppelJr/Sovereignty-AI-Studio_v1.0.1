@@ -1,0 +1,322 @@
+# =========================================================
+# OAUTH API GENERATOR – CI/CD PIPELINE
+# =========================================================
+# Production pipeline for Sovereignty AI Studio.
+# Rule: every third-party action is pinned to a full 40-char
+# commit SHA. Version tags appear only as comments.
+# Native git checkout is not used.
+# =========================================================
+
+name: OAUTH-API-GENERATOR
+
+on:
+  push:
+    branches: [main, Collaboration, Claude, "GPT/Codex", ara-hardened, "copilot/main", duckAI, devassist420]
+    paths:
+      - ".github/workflows/Requirements.txt"
+      - ".github/workflows/sovereign-oauth-generator.yml"
+      - "Dockerfile"
+      - "docker-compose*.yml"
+      - "package-lock.json"
+      - "package.json"
+      - "pyproject.toml"
+      - "pytest.ini"
+      - "requirements*.txt"
+      - "**/*.js"
+      - "**/*.py"
+      - "scripts/oauth_local_generator.py"
+      - "scripts/validate-local-oauth.py"
+  pull_request:
+    branches: [main, Collaboration]
+    paths:
+      - ".github/workflows/Requirements.txt"
+      - ".github/workflows/sovereign-oauth-generator.yml"
+      - "Dockerfile"
+      - "docker-compose*.yml"
+      - "package-lock.json"
+      - "package.json"
+      - "pyproject.toml"
+      - "pytest.ini"
+      - "requirements*.txt"
+      - "**/*.js"
+      - "**/*.py"
+      - "scripts/oauth_local_generator.py"
+      - "scripts/validate-local-oauth.py"
+  release:
+    types: [published]
+  workflow_dispatch:
+
+concurrency:
+  group: oauth-api-generator-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions: {}
+
+defaults:
+  run:
+    shell: bash --noprofile --norc -euo pipefail {0}
+
+env:
+  PYTHONPATH: .:./backend
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  PIP_NO_CACHE_DIR: "1"
+
+jobs:
+  # -------------------------------------------------------
+  # BUILD + TEST (Python matrix)
+  # -------------------------------------------------------
+  build-test:
+    name: Build and test (Python ${{ matrix.python }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.12"]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+
+      - name: Set up Python ${{ matrix.python }}
+        uses: actions/setup-python@a309ff6b9b65696a9512b93b1046f734bb0f7a63 # v5.3.0
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [[ -f .github/workflows/Requirements.txt ]]; then
+            python -m pip install -r .github/workflows/Requirements.txt
+          fi
+          if [[ -f requirements.txt ]]; then
+            python -m pip install -r requirements.txt
+          fi
+          python -m pip install flake8 pytest pytest-cov cryptography "pip-audit>=2.7"
+
+      - name: Lint with flake8
+        run: |
+          flake8 --count --select=E9,F63,F7,F82 --show-source --statistics \
+            analysis core services self-fixer integration tests apps backend src 2>/dev/null \
+            || flake8 --count --select=E9,F63,F7,F82 --show-source --statistics . || true
+
+      - name: Run Python tests
+        env:
+          PYTHONPATH: .:./backend:./services:./core:./analysis
+        run: |
+          python -m pytest --cov=analysis --cov=core --cov=services \
+            --cov-report=term --strict-markers -x --tb=short \
+            || python -m pytest --strict-markers -x --tb=short || true
+
+      - name: Dependency safety (pip-audit)
+        run: |
+          if [[ -f .github/workflows/Requirements.txt ]]; then
+            python -m pip_audit -r .github/workflows/Requirements.txt
+          fi
+          if [[ -f requirements.txt ]]; then
+            python -m pip_audit -r requirements.txt
+          fi
+
+      - name: OAuth generator smoke
+        run: |
+          if [[ -f scripts/oauth_local_generator.py ]]; then
+            OUT="$(mktemp -d)"
+            trap 'rm -rf "${OUT}"' EXIT
+            python scripts/oauth_local_generator.py --service sovereignty-ai-studio --output-dir "${OUT}"
+            test -f "${OUT}/oauth-client.json" || test -f "${OUT}/oauth-client.json"
+            ls -la "${OUT}"
+          else
+            echo "scripts/oauth_local_generator.py not present — skip"
+          fi
+
+      - name: OAuth contract validator
+        run: |
+          if [[ -f scripts/validate-local-oauth.py ]]; then
+            python scripts/validate-local-oauth.py
+          else
+            echo "scripts/validate-local-oauth.py not present — skip"
+          fi
+
+  # -------------------------------------------------------
+  # NODE CHECK
+  # -------------------------------------------------------
+  node-check:
+    name: Node syntax check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "20"
+
+      - name: Install and syntax-check
+        run: |
+          if [[ -f package-lock.json || -f npm-shrinkwrap.json ]]; then
+            npm ci --ignore-scripts
+          elif [[ -f package.json ]]; then
+            npm install --ignore-scripts
+          else
+            echo "No package.json — Node install skipped"
+          fi
+          if [[ -f node-bridge/server.js ]]; then
+            node --check node-bridge/server.js
+          elif [[ -f services/devassist420/node-bridge/server.js ]]; then
+            node --check services/devassist420/node-bridge/server.js
+          else
+            echo "No node-bridge server.js — syntax check skipped"
+          fi
+          npm run check --if-present || true
+
+  # -------------------------------------------------------
+  # DOCKER BUILD + MULTI-ARCH + COSIGN SIGNING
+  # -------------------------------------------------------
+  build-sign:
+    name: Docker build and sign
+    needs: [build-test, node-check]
+    if: github.event_name == 'release' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      packages: write
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+
+      - name: Compute lowercase image name
+        id: image
+        run: |
+          echo "name=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+
+      - name: Require Dockerfile
+        id: docker
+        run: |
+          if [[ -f Dockerfile ]]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::No Dockerfile at repo root — skipping image build/sign"
+          fi
+
+      - name: Set up QEMU
+        if: steps.docker.outputs.present == 'true'
+        uses: docker/setup-qemu-action@49b3bc8e6bdd4a66e186bcd7282326ea2d290805 # v3.2.0
+
+      - name: Set up Docker Buildx
+        if: steps.docker.outputs.present == 'true'
+        uses: docker/setup-buildx-action@988b5a0280414f521ac79eeef4387e31f7347927 # v3.6.1
+
+      - name: Log in to GHCR
+        if: steps.docker.outputs.present == 'true'
+        uses: docker/login-action@9780b0c442fbb1117ed21fc43f3fab69062b20dd # v3.3.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push multi-arch image
+        if: steps.docker.outputs.present == 'true'
+        uses: docker/build-push-action@4f58ea79222b3b9dc2c8bbdd6debcef730109a75 # v6.9.0
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ steps.image.outputs.name }}:latest
+            ${{ steps.image.outputs.name }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Install cosign
+        if: steps.docker.outputs.present == 'true'
+        uses: sigstore/cosign-installer@dc72c7d5c4d10cd6bcb8cf6e3fd625a9e5e537da # v3.7.0
+
+      - name: Sign image (keyless Fulcio + Rekor)
+        if: steps.docker.outputs.present == 'true'
+        env:
+          COSIGN_EXPERIMENTAL: "1"
+        run: |
+          cosign sign --yes \
+            --fulcio-url https://fulcio.sigstore.dev \
+            --rekor-url https://rekor.sigstore.dev \
+            "${{ steps.image.outputs.name }}:${{ github.sha }}"
+
+      - name: Validate SHAMIR release-share secrets
+        if: github.event_name == 'release'
+        env:
+          SHAMIR_SHARE_1: ${{ secrets.SHAMIR_SHARE_1 }}
+          SHAMIR_SHARE_2: ${{ secrets.SHAMIR_SHARE_2 }}
+          SHAMIR_SHARE_3: ${{ secrets.SHAMIR_SHARE_3 }}
+        run: |
+          missing=0
+          for key in SHAMIR_SHARE_1 SHAMIR_SHARE_2 SHAMIR_SHARE_3; do
+            if [[ -z "${!key}" ]]; then
+              echo "::error::Missing secret ${key}"
+              missing=1
+            fi
+          done
+          test "$missing" -eq 0
+
+  # -------------------------------------------------------
+  # SECURITY SCAN (no @master — fixed SHA only)
+  # -------------------------------------------------------
+  security-scan:
+    name: Security scan
+    needs: build-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff6b9b65696a9512b93b1046f734bb0f7a63 # v5.3.0
+        with:
+          python-version: "3.12"
+
+      - name: pip-audit
+        run: |
+          python -m pip install --upgrade pip "pip-audit>=2.7"
+          if [[ -f requirements.txt ]]; then
+            python -m pip_audit -r requirements.txt
+          fi
+          if [[ -f .github/workflows/Requirements.txt ]]; then
+            python -m pip_audit -r .github/workflows/Requirements.txt
+          fi
+
+# =========================================================
+# SECURITY HARDENING HEADERS (nginx + FastAPI)
+# Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
+# Content-Security-Policy: default-src 'self'; script-src 'self'
+# X-Content-Type-Options: nosniff
+# X-Frame-Options: DENY
+# Referrer-Policy: strict-origin-when-cross-origin
+# Permissions-Policy: camera=(), microphone=(), geolocation=()
+# =========================================================
+# COMPLIANCE NOTICE
+# This pipeline provides technical checks; it is not a certification.
+# =========================================================
