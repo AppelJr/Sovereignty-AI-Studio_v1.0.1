@@ -9,22 +9,13 @@ permissions:
 jobs:
   lint-autofix:
     name: Lint autofix
-    runs-on: ubuntu-latest
+    runs-on: ['self-hosted', 'macos', 'arm64']
     steps:
-      - name: Checkout exact commit (native git, full SHA, no external action)
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          test "${#GITHUB_SHA}" -eq 40
-          git init .
-          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
-          auth="$(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 | tr -d '\n')"
-          git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${GITHUB_SHA}"
-          git checkout --detach FETCH_HEAD
-          git config --unset-all http.extraheader 2>/dev/null || true
-          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1 — full SHA only
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
 
       - name: Report workflow state
         shell: bash
@@ -32,6 +23,6 @@ jobs:
           set -euo pipefail
           echo "WORKFLOW_VISIBLE=true"
           echo "WORKFLOW_FILE=.github/workflows/lint-autofix-recovery.yml"
-          echo "RUNNER=${RUNNER_NAME:-none}/${RUNNER_OS:-none}/${RUNNER_ARCH:-none}"
+          echo "RUNNER=${RUNNER_NAME}/${RUNNER_OS}/${RUNNER_ARCH}"
           echo "COMMIT=${GITHUB_SHA}"
           uname -m

@@ -13,30 +13,25 @@ permissions:
 jobs:
   flake8-recovery:
     name: Flake8 recovery / visible execution
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
+    runs-on: ['self-hosted', 'macos', 'arm64']
     steps:
-      - name: Checkout exact commit (native git, full SHA, no external action)
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          test "${#GITHUB_SHA}" -eq 40
-          git init .
-          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
-          auth="$(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 | tr -d '\n')"
-          git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${GITHUB_SHA}"
-          git checkout --detach FETCH_HEAD
-          git config --unset-all http.extraheader 2>/dev/null || true
-          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1 — full SHA only
+        with:
+          fetch-depth: 1
+          ref: ${{ github.sha }}
 
-      - name: Install flake8 (system Python)
+      - name: Set up Python
+        uses: actions/setup-python@a309ff6b9b65696a9512b93b1046f734bb0f7a63 # v5.3.0 — full SHA only
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install flake8
         shell: bash
         run: |
           set -Eeuo pipefail
-          python3 --version
-          python3 -m pip install --upgrade pip flake8
+          python -m pip install --upgrade pip flake8
 
       - name: Run flake8
         shell: bash
