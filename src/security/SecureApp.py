@@ -23,13 +23,8 @@ from sqlalchemy.sql import func
 from app.config import settings
 from app.core.database import Base
 
-# ============================================================
-# 1. SECURITY: JWT + PASSWORD HASHING
-# ============================================================
-
 pwd_context: CryptContext = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-# Never empty, never "none", never auto-detect from token header alone.
 ALLOWED_JWT_ALGORITHMS: List[str] = [
     a.strip()
     for a in str(getattr(settings, "algorithm", "HS256") or "HS256").split(",")
@@ -53,7 +48,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
 
 
-def get_password_hash(password: str) -> bool:
+def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)
 
 
@@ -75,20 +70,12 @@ def verify_token(token: str) -> Optional[str]:
         return None
 
 
-# ============================================================
-# 2. REDIS CACHE CONNECTION
-# ============================================================
-
 redis_client: redis.Redis = redis.from_url(settings.redis_url, decode_responses=True)
 
 
 def get_redis() -> redis.Redis:
     return redis_client
 
-
-# ============================================================
-# 3. MEDIA ORM MODEL (SQLAlchemy)
-# ============================================================
 
 class Media(Base):
     __tablename__ = "media"
