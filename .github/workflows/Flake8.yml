@@ -1,11 +1,11 @@
-name: Flake8 Lint 
+name: Flake8 Lint
 
 on:
   workflow_dispatch:
   push:
-    branches: [ "Collaboration, main, Claude, GPT/Codex, ara-hardened, copilot/main, duckAI, devassist420" ]
+    branches: [Collaboration, main, Claude, "GPT/Codex", ara-hardened, copilot/main, duckAI, devassist420]
   pull_request:
-    branches: [ "Collaboration, main, Claude, GPT/Codex, ara-hardened, copilot/main, duckAI, devassist420" ]
+    branches: [Collaboration, main, Claude, "GPT/Codex", ara-hardened, copilot/main, duckAI, devassist420]
 
 permissions:
   contents: read
@@ -13,22 +13,31 @@ permissions:
 jobs:
   flake8-recovery:
     name: Flake8 recovery / visible execution
-    runs-on: ['self-hosted, macos, arm64']
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - name: Checkout
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-        with:
-          fetch-depth: 1
-      - name: Set up Python
-        uses: actions/setup-python@a309ff6b9b65696a9512b93b1046f734bb0f7a63 # v5.3.0
-        with:
-          python-version: '3.11'
-          cache: pip
-      - name: Install flake8
+      - name: Checkout exact commit (native git, full SHA, no external action)
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -Eeuo pipefail
-          python -m pip install --upgrade pip flake8
+          test "${#GITHUB_SHA}" -eq 40
+          git init .
+          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          auth="$(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 | tr -d '\n')"
+          git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${GITHUB_SHA}"
+          git checkout --detach FETCH_HEAD
+          git config --unset-all http.extraheader 2>/dev/null || true
+          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
+
+      - name: Install flake8 (system Python)
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 --version
+          python3 -m pip install --upgrade pip flake8
+
       - name: Run flake8
         shell: bash
         run: |
