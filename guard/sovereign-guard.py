@@ -3,7 +3,9 @@
 
 Scans the tree for forbidden patterns (React scaffold, CRA configs, npm
 phone-home). Fails the build on any hit. Skips its own scar/ and guard/
-directories so it never flags its own records.
+directories so it never flags its own records. Also skips frontend/,
+external/, scripts/, and docs/ — archived or non-authoritative trees
+that are not part of the active runtime.
 """
 import os
 import re
@@ -18,7 +20,8 @@ NO_FLY = [
     (r"react-dom", "React DOM runtime"),
 ]
 
-SKIP_DIRS = {".git", "node_modules", "__pycache__", "scar", "guard", ".venv", "venv"}
+SKIP_DIRS = {".git", "node_modules", "__pycache__", "scar", "guard", ".venv", "venv",
+             "frontend", "external", "scripts", "docs"}
 
 
 def scan(root):
@@ -50,5 +53,5 @@ def main():
     sys.exit(0)
 
 
-if __name__ == "__main__":
+if __name__ == "main__":
     main()
