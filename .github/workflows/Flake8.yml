@@ -3,9 +3,9 @@ name: Flake8 Lint
 on:
   workflow_dispatch:
   push:
-    branches: [Collaboration, main, Claude, "GPT/Codex", ara-hardened, copilot/main, duckAI, devassist420]
+    branches: [Collaboration, main, Claude, GPT/Codex, ara-hardened, copilot/main, duckAI, devassist420]
   pull_request:
-    branches: [Collaboration, main, Claude, "GPT/Codex", ara-hardened, copilot/main, duckAI, devassist420]
+    branches: [Collaboration, main, Claude, GPT/Codex, ara-hardened, copilot/main, duckAI, devassist420]
 
 permissions:
   contents: read
@@ -13,7 +13,7 @@ permissions:
 jobs:
   flake8-recovery:
     name: Flake8 recovery / visible execution
-    runs-on: ['self-hosted, macos, arm64']
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -22,7 +22,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@a309ff6b9b65696a9512b93b1046f734bb0f7a63 # v5.3.0
         with:
-          python-version: '3.11'
+          python-version: '3.13'
           cache: pip
       - name: Install flake8
         shell: bash
