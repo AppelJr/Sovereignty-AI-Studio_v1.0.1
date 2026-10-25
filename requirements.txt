@@ -34,7 +34,7 @@ numpy==2.5.2
 torch==2.13.0
 onnx==1.22.0
 onnxruntime==1.31.0
-piper-tts==1.7.0
+piper-tts==1.8.0
 pennylane==0.45.1
 pyttsx3==2.99
 vosk==0.3.45
