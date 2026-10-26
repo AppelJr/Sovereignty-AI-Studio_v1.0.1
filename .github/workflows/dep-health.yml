@@ -4,14 +4,14 @@ on:
   push:
     branches: [main, Collaboration, Claude, ara-hardened, duckAI]
   pull_request:
-    branches: [main, Collaboration]
+    branches: [main, Collaboration, Claude, ara-hardened, duckAI]
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: dep-health-${{ github.ref }
+  group: dep-health-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -22,7 +22,7 @@ jobs:
     steps:
       - name: Checkout exact commit (native git, no external action)
         env:
-          GH_TOKEN: ${{ github.token }
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -52,7 +52,7 @@ jobs:
     steps:
       - name: Checkout exact commit (native git, no external action)
         env:
-          GH_TOKEN: ${{ github.token }
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -80,7 +80,7 @@ jobs:
     steps:
       - name: Checkout exact commit (native git, no external action)
         env:
-          GH_TOKEN: ${{ github.token }
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -113,7 +113,7 @@ jobs:
     steps:
       - name: Checkout exact commit (native git, no external action)
         env:
-          GH_TOKEN: ${{ github.token }
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -139,8 +139,7 @@ jobs:
                       raise SystemExit(f'{name}:{number}: tab character is not allowed')
           print('requirements files are structurally valid')
           PY
-
-  summary:
+     summary:
     name: Honesty and integrity — summary
     if: always()
     needs: [python-audit, python-outdated, node-audit, requirements-lint]
@@ -148,19 +147,32 @@ jobs:
     steps:
       - name: Report verdict
         shell: bash
+        env:
+          PYTHON_AUDIT: ${{ needs.python-audit.result }}
+          PYTHON_REQUIREMENTS: ${{ needs.python-outdated.result }}
+          NODE_AUDIT: ${{ needs.node-audit.result }}
+          REQUIREMENTS_LINT: ${{ needs.requirements-lint.result }}
         run: |
           set -Eeuo pipefail
-          echo "## Dependency Health — Honesty and integrity" >> "${{ github.step_summary }}"
-          echo "" >> "${{ github.step_summary }}"
-          echo "| Check | Result |" >> "${{ github.step_summary }}"
-          echo "| --- | --- |" >> "${{ github.step_summary }}"
-          echo "| Python CVE audit (pip-audit) | ${{ needs.python-audit.result }} |" >> "${{ github.step_summary }}"
-          echo "| Python requirements validation | ${{ needs.python-outdated.result }} |" >> "${{ github.step_summary }}"
-          echo "| Node.js CVE audit (npm audit) | ${{ needs.node-audit.result }} |" >> "${{ github.step_summary }}"
-          echo "| Requirements lint | ${{ needs.requirements-lint.result }} |" >> "${{ github.step_summary }}"
-          echo "" >> "${{ github.step_summary }}"
-          if [[ "${{ needs.python-audit.result }}" != "success" || "${{ needs.python-outdated.result }}" != "success" || "${{ needs.node-audit.result }}" != "success" || "${{ needs.requirements-lint.result }}" != "success" ]]; then
-            echo "One or more checks failed. This gate reports real findings — no fake greens." >> "${{ github.step_summary }}"
+
+          {
+            echo "## Dependency Health — Honesty and integrity"
+            echo
+            echo "| Check | Result |"
+            echo "| --- | --- |"
+            echo "| Python CVE audit (pip-audit) | ${PYTHON_AUDIT} |"
+            echo "| Python requirements validation | ${PYTHON_REQUIREMENTS} |"
+            echo "| Node.js CVE audit (npm audit) | ${NODE_AUDIT} |"
+            echo "| Requirements lint | ${REQUIREMENTS_LINT} |"
+            echo
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [[ "$PYTHON_AUDIT" != "success" ||
+                "$PYTHON_REQUIREMENTS" != "success" ||
+                "$NODE_AUDIT" != "success" ||
+                "$REQUIREMENTS_LINT" != "success" ]]; then
+            echo "One or more checks failed. This gate reports real findings — no fake greens." >> "$GITHUB_STEP_SUMMARY"
             exit 1
           fi
-          echo "All checks passed." >> "${{ github.step_summary }}"
+
+            echo "All checks passed." >> "$GITHUB_STEP_SUMMARY"
