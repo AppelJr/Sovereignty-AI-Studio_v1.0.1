@@ -248,4 +248,4 @@ merkle_log.append({"type": "BACKEND_STARTED", "version": "GateOne-Sovereign-MLDS
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8443, log_level="warning")
+    uvicorn.run(app, host="127.0.0.1", port=9443, log_level="warning")

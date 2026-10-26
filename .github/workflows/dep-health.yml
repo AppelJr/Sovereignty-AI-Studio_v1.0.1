@@ -4,7 +4,7 @@ on:
   push:
     branches: [main, Collaboration, Claude, ara-hardened, duckAI]
   pull_request:
-    branches: [main, Collaboration]
+    branches: [main, Collaboration, Claude, ara-hardened, duckAI]
   workflow_dispatch:
 
 permissions:
@@ -97,17 +97,17 @@ jobs:
           set -Eeuo pipefail
           if [[ -f node-bridge/package.json ]]; then
             cd node-bridge
-            npm install --package-lock-only 2>/dev/null || npm install --package-lock
+            npm install --package-lock-only
             npm audit --audit-level=moderate
           elif [[ -f package.json ]]; then
-            npm install --package-lock-only 2>/dev/null || npm install --package-lock
+            npm install --package-lock-only
             npm audit --audit-level=moderate
           else
             echo "No package.json present — audit skipped"
           fi
 
-  requirements-lint:
-    name: Lint requirements files
+    requirements-lint:
+      - name: Lint requirements files
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -139,8 +139,7 @@ jobs:
                       raise SystemExit(f'{name}:{number}: tab character is not allowed')
           print('requirements files are structurally valid')
           PY
-
-  summary:
+     summary:
     name: Honesty and integrity — summary
     if: always()
     needs: [python-audit, python-outdated, node-audit, requirements-lint]
@@ -149,10 +148,10 @@ jobs:
       - name: Report verdict
         shell: bash
         env:
-          PYTHON_AUDIT: ${{ needs.python-audit.result }
-          PYTHON_REQUIREMENTS: ${{ needs.python-outdated.result }
-          NODE_AUDIT: ${{ needs.node-audit.result }
-          REQUIREMENTS_LINT: ${{ needs.requirements-lint.result }
+          PYTHON_AUDIT: ${{ needs.python-audit.result }}
+          PYTHON_REQUIREMENTS: ${{ needs.python-outdated.result }}
+          NODE_AUDIT: ${{ needs.node-audit.result }}
+          REQUIREMENTS_LINT: ${{ needs.requirements-lint.result }}
         run: |
           set -Eeuo pipefail
 
@@ -166,14 +165,14 @@ jobs:
             echo "| Node.js CVE audit (npm audit) | ${NODE_AUDIT} |"
             echo "| Requirements lint | ${REQUIREMENTS_LINT} |"
             echo
-          } >> "$BASH_STEP_SUMMARY"
+          } >> "$GITHUB_STEP_SUMMARY"
 
           if [[ "$PYTHON_AUDIT" != "success" ||
                 "$PYTHON_REQUIREMENTS" != "success" ||
                 "$NODE_AUDIT" != "success" ||
                 "$REQUIREMENTS_LINT" != "success" ]]; then
-            echo "One or more checks failed. This gate reports real findings — no fake greens." >> "$BASH_STEP_SUMMARY"
+            echo "One or more checks failed. This gate reports real findings — no fake greens." >> "$GITHUB_STEP_SUMMARY"
             exit 1
           fi
 
-          echo "All checks passed." >> "$BASH_STEP_SUMMARY"
+            echo "All checks passed." >> "$GITHUB_STEP_SUMMARY"
