@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: dep-health-${{ github.ref }}
+  group: dep-health-${{ github.ref }
   cancel-in-progress: false
 
 jobs:
@@ -22,7 +22,7 @@ jobs:
     steps:
       - name: Checkout exact commit (native git, no external action)
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -52,7 +52,7 @@ jobs:
     steps:
       - name: Checkout exact commit (native git, no external action)
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -80,7 +80,7 @@ jobs:
     steps:
       - name: Checkout exact commit (native git, no external action)
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -113,7 +113,7 @@ jobs:
     steps:
       - name: Checkout exact commit (native git, no external action)
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }
         shell: bash
         run: |
           set -Eeuo pipefail
