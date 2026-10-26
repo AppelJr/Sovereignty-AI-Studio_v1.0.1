@@ -73,8 +73,8 @@ jobs:
             echo "No requirements.txt present — validation skipped"
           fi
 
-  node-audit:
-    name: Node.js — CVE audit (npm audit)
+    node-audit:
+      - name: Node.js — CVE audit (npm audit)
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -139,8 +139,8 @@ jobs:
                       raise SystemExit(f'{name}:{number}: tab character is not allowed')
           print('requirements files are structurally valid')
           PY
-     summary:
-    name: Honesty and integrity — summary
+     summar:
+      - name: Honesty and integrity — summary
     if: always()
     needs: [python-audit, python-outdated, node-audit, requirements-lint]
     runs-on: ubuntu-latest
