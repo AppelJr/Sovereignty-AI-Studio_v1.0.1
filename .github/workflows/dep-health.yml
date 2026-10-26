@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: dep-health-${{ github.ref }
+  group: dep-health-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -22,17 +22,24 @@ jobs:
     steps:
       - name: Checkout exact commit (native git, no external action)
         env:
-          GH_TOKEN: ${{ github.token }
+          GH_TOKEN: ${{ github.token }}
+          GH_REPOSITORY: ${{ github.repository }}
+          GH_SHA: ${{ github.sha }}
         shell: bash
         run: |
           set -Eeuo pipefail
           git init .
-          git remote add origin "https://github.com/${{ github.repository }}.git"
+          git remote add origin "https://github.com/${GH_REPOSITORY}.git"
           auth="$(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 | tr -d '\n')"
-          git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${{ github.sha }}"
+          git -c http.extraheader="AUTHORIZATION: basic ${auth}" \
+            fetch --no-tags --depth=1 origin "${GH_SHA}"
           git checkout --detach FETCH_HEAD
-          git config --unset-all http.extraheader 2>/dev/null || true
-          git rev-parse --short HEAD
+          actual_sha="$(git rev-parse HEAD)"
+          if [[ "$actual_sha" != "$GH_SHA" ]]; then
+            echo "Checked-out SHA ${actual_sha} does not match requested SHA ${GH_SHA}" >&2
+            exit 1
+          fi
+          echo "Checked out full SHA: ${actual_sha}"
 
       - name: Install pip-audit and run audit
         shell: bash
@@ -45,23 +52,31 @@ jobs:
             echo "No requirements.txt present — audit skipped"
           fi
 
-    python-outdated:
+  python-outdated:
     name: Python — requirements validation
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - name: Checkout exact commit (native git, no external action)
         env:
-          GH_TOKEN: ${{ github.token }
+          GH_TOKEN: ${{ github.token }}
+          GH_REPOSITORY: ${{ github.repository }}
+          GH_SHA: ${{ github.sha }}
         shell: bash
         run: |
           set -Eeuo pipefail
           git init .
-          git remote add origin "https://github.com/${{ github.repository }}.git"
+          git remote add origin "https://github.com/${GH_REPOSITORY}.git"
           auth="$(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 | tr -d '\n')"
-          git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${{ github.sha }}"
+          git -c http.extraheader="AUTHORIZATION: basic ${auth}" \
+            fetch --no-tags --depth=1 origin "${GH_SHA}"
           git checkout --detach FETCH_HEAD
-          git config --unset-all http.extraheader 2>/dev/null || true
+          actual_sha="$(git rev-parse HEAD)"
+          if [[ "$actual_sha" != "$GH_SHA" ]]; then
+            echo "Checked-out SHA ${actual_sha} does not match requested SHA ${GH_SHA}" >&2
+            exit 1
+          fi
+          echo "Checked out full SHA: ${actual_sha}"
 
       - name: Validate requirements syntax
         shell: bash
@@ -73,56 +88,72 @@ jobs:
             echo "No requirements.txt present — validation skipped"
           fi
 
-    node-audit:
-      - name: Node.js — CVE audit (npm audit)
+  node-audit:
+    name: Node.js — CVE audit (npm audit)
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - name: Checkout exact commit (native git, no external action)
         env:
-          GH_TOKEN: ${{ github.token }
+          GH_TOKEN: ${{ github.token }}
+          GH_REPOSITORY: ${{ github.repository }}
+          GH_SHA: ${{ github.sha }}
         shell: bash
         run: |
           set -Eeuo pipefail
           git init .
-          git remote add origin "https://github.com/${{ github.repository }}.git"
+          git remote add origin "https://github.com/${GH_REPOSITORY}.git"
           auth="$(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 | tr -d '\n')"
-          git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${{ github.sha }}"
+          git -c http.extraheader="AUTHORIZATION: basic ${auth}" \
+            fetch --no-tags --depth=1 origin "${GH_SHA}"
           git checkout --detach FETCH_HEAD
-          git config --unset-all http.extraheader 2>/dev/null || true
+          actual_sha="$(git rev-parse HEAD)"
+          if [[ "$actual_sha" != "$GH_SHA" ]]; then
+            echo "Checked-out SHA ${actual_sha} does not match requested SHA ${GH_SHA}" >&2
+            exit 1
+          fi
+          echo "Checked out full SHA: ${actual_sha}"
 
-      - name: Run npm audit when package.json present
+      - name: Run npm audit when package.json is present
         shell: bash
         run: |
           set -Eeuo pipefail
           if [[ -f node-bridge/package.json ]]; then
             cd node-bridge
-            npm install --package-lock-only
+            npm install --package-lock-only --ignore-scripts --no-audit --no-fund
             npm audit --audit-level=moderate
           elif [[ -f package.json ]]; then
-            npm install --package-lock-only
+            npm install --package-lock-only --ignore-scripts --no-audit --no-fund
             npm audit --audit-level=moderate
           else
             echo "No package.json present — audit skipped"
           fi
 
-    requirements-lint:
-      - name: Lint requirements files
+  requirements-lint:
+    name: Lint requirements files
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - name: Checkout exact commit (native git, no external action)
         env:
-          GH_TOKEN: ${{ github.token }
+          GH_TOKEN: ${{ github.token }}
+          GH_REPOSITORY: ${{ github.repository }}
+          GH_SHA: ${{ github.sha }}
         shell: bash
         run: |
           set -Eeuo pipefail
           git init .
-          git remote add origin "https://github.com/${{ github.repository }}.git"
+          git remote add origin "https://github.com/${GH_REPOSITORY}.git"
           auth="$(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 | tr -d '\n')"
-          git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${{ github.sha }}"
+          git -c http.extraheader="AUTHORIZATION: basic ${auth}" \
+            fetch --no-tags --depth=1 origin "${GH_SHA}"
           git checkout --detach FETCH_HEAD
-          git config --unset-all http.extraheader 2>/dev/null || true
+          actual_sha="$(git rev-parse HEAD)"
+          if [[ "$actual_sha" != "$GH_SHA" ]]; then
+            echo "Checked-out SHA ${actual_sha} does not match requested SHA ${GH_SHA}" >&2
+            exit 1
+          fi
+          echo "Checked out full SHA: ${actual_sha}"
 
       - name: Validate requirements files
         shell: bash
@@ -130,16 +161,23 @@ jobs:
           set -Eeuo pipefail
           python3 - <<'PY'
           import pathlib
-          for name in ('requirements.txt',):
+
+          for name in ("requirements.txt",):
               path = pathlib.Path(name)
               if not path.exists():
                   continue
-              for number, line in enumerate(path.read_text(encoding='utf-8').splitlines(), 1):
-                  if '\t' in line:
-                      raise SystemExit(f'{name}:{number}: tab character is not allowed')
-          print('requirements files are structurally valid')
+              for number, line in enumerate(
+                  path.read_text(encoding="utf-8").splitlines(), 1
+              ):
+                  if "\t" in line:
+                      raise SystemExit(
+                          f"{name}:{number}: tab character is not allowed"
+                      )
+
+          print("requirements files are structurally valid")
           PY
-   summar:
+
+  summary:
     name: Honesty and integrity — summary
     if: always()
     needs: [python-audit, python-outdated, node-audit, requirements-lint]
@@ -175,4 +213,4 @@ jobs:
             exit 1
           fi
 
-            echo "All checks passed." >> "$GITHUB_STEP_SUMMARY"
+          echo "All checks passed." >> "$GITHUB_STEP_SUMMARY"
