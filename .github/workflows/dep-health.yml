@@ -14,10 +14,6 @@ concurrency:
   group: dependency-health-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
-# This repository policy permits only AppelJr-owned actions. To avoid an
-# allow-list dependency on actions/checkout or actions/setup-python, the jobs
-# use the runner's native git, Python, pip, and npm tooling directly.
-
 env:
   REPO_URL: https://github.com/${{ github.repository }}.git
 
@@ -30,13 +26,15 @@ jobs:
       - name: Checkout repository without third-party actions
         shell: bash
         env:
-          GITHUB_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -Eeuo pipefail
           git init .
           git remote add origin "$REPO_URL"
-          git -c http.extraheader="AUTHORIZATION: bearer ${GITHUB_TOKEN}" fetch --depth=1 origin "$GITHUB_SHA"
+          auth="$(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 -w0)"
+          git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --depth=1 origin "${GITHUB_SHA}"
           git checkout --detach FETCH_HEAD
+          git config --unset-all http.extraheader 2>/dev/null || true
       - name: Audit requirements.txt
         shell: bash
         run: |
@@ -52,15 +50,20 @@ jobs:
       - name: Checkout repository without third-party actions
         shell: bash
         env:
-          GITHUB_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -Eeuo pipefail
           git init .
           git remote add origin "$REPO_URL"
-          git -c http.extraheader="AUTHORIZATION: bearer ${GITHUB_TOKEN}" fetch --depth=1 origin "$GITHUB_SHA"
+          auth="$(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 -w0)"
+          git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --depth=1 origin "${GITHUB_SHA}"
           git checkout --detach FETCH_HEAD
+          git config --unset-all http.extraheader 2>/dev/null || true
       - name: Install project dependencies
-        run: python3 -m pip install -r requirements.txt
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m pip install -r requirements.txt
 
   node-audit:
     name: Node.js — CVE audit
@@ -70,13 +73,15 @@ jobs:
       - name: Checkout repository without third-party actions
         shell: bash
         env:
-          GITHUB_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -Eeuo pipefail
           git init .
           git remote add origin "$REPO_URL"
-          git -c http.extraheader="AUTHORIZATION: bearer ${GITHUB_TOKEN}" fetch --depth=1 origin "$GITHUB_SHA"
+          auth="$(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 -w0)"
+          git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --depth=1 origin "${GITHUB_SHA}"
           git checkout --detach FETCH_HEAD
+          git config --unset-all http.extraheader 2>/dev/null || true
       - name: Run npm audit when package.json present
         shell: bash
         run: |
@@ -108,15 +113,19 @@ jobs:
       - name: Checkout repository without third-party actions
         shell: bash
         env:
-          GITHUB_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -Eeuo pipefail
           git init .
           git remote add origin "$REPO_URL"
-          git -c http.extraheader="AUTHORIZATION: bearer ${GITHUB_TOKEN}" fetch --depth=1 origin "$GITHUB_SHA"
+          auth="$(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 -w0)"
+          git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --depth=1 origin "${GITHUB_SHA}"
           git checkout --detach FETCH_HEAD
+          git config --unset-all http.extraheader 2>/dev/null || true
       - name: Validate requirements.txt
+        shell: bash
         run: |
+          set -Eeuo pipefail
           python3 - <<'PY'
           from pathlib import Path
           path = Path('requirements.txt')
