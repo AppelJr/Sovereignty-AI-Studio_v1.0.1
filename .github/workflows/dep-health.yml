@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: dep-health-${{ github.ref }}
+  group: dep-health-${{ github.ref }
   cancel-in-progress: false
 
 jobs:
@@ -22,14 +22,14 @@ jobs:
     steps:
       - name: Checkout exact commit (native git, no external action)
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }
         shell: bash
         run: |
           set -Eeuo pipefail
           git init .
-          git remote add origin "https://github.com/${BASH_REPOSITORY}.git"
+          git remote add origin "https://github.com/${{ github.repository }}.git"
           auth="$(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 | tr -d '\n')"
-          git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${BASH_SHA}"
+          git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${{ github.sha }}"
           git checkout --detach FETCH_HEAD
           git config --unset-all http.extraheader 2>/dev/null || true
           git rev-parse --short HEAD
@@ -52,14 +52,14 @@ jobs:
     steps:
       - name: Checkout exact commit (native git, no external action)
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }
         shell: bash
         run: |
           set -Eeuo pipefail
           git init .
-          git remote add origin "https://github.com/${BASH_REPOSITORY}.git"
+          git remote add origin "https://github.com/${{ github.repository }}.git"
           auth="$(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 | tr -d '\n')"
-          git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${BASH_SHA}"
+          git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${{ github.sha }}"
           git checkout --detach FETCH_HEAD
           git config --unset-all http.extraheader 2>/dev/null || true
 
@@ -80,14 +80,14 @@ jobs:
     steps:
       - name: Checkout exact commit (native git, no external action)
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }
         shell: bash
         run: |
           set -Eeuo pipefail
           git init .
-          git remote add origin "https://github.com/${BASH_REPOSITORY}.git"
+          git remote add origin "https://github.com/${{ github.repository }}.git"
           auth="$(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 | tr -d '\n')"
-          git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${BASH_SHA}"
+          git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${{ github.sha }}"
           git checkout --detach FETCH_HEAD
           git config --unset-all http.extraheader 2>/dev/null || true
 
@@ -113,14 +113,14 @@ jobs:
     steps:
       - name: Checkout exact commit (native git, no external action)
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }
         shell: bash
         run: |
           set -Eeuo pipefail
           git init .
-          git remote add origin "https://github.com/${BASH_REPOSITORY}.git"
+          git remote add origin "https://github.com/${{ github.repository }}.git"
           auth="$(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 | tr -d '\n')"
-          git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${BASH_SHA}"
+          git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${{ github.sha }}"
           git checkout --detach FETCH_HEAD
           git config --unset-all http.extraheader 2>/dev/null || true
 
@@ -150,17 +150,17 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          echo "## Dependency Health — Honesty and integrity" >> "$BASH_STEP_SUMMARY"
-          echo "" >> "$BASH_STEP_SUMMARY"
-          echo "| Check | Result |" >> "$BASH_STEP_SUMMARY"
-          echo "| --- | --- |" >> "$BASH_STEP_SUMMARY"
-          echo "| Python CVE audit (pip-audit) | ${{ needs.python-audit.result }} |" >> "$BASH_STEP_SUMMARY"
-          echo "| Python requirements validation | ${{ needs.python-outdated.result }} |" >> "$BASH_STEP_SUMMARY"
-          echo "| Node.js CVE audit (npm audit) | ${{ needs.node-audit.result }} |" >> "$BASH_STEP_SUMMARY"
-          echo "| Requirements lint | ${{ needs.requirements-lint.result }} |" >> "$BASH_STEP_SUMMARY"
-          echo "" >> "$BASH_STEP_SUMMARY"
+          echo "## Dependency Health — Honesty and integrity" >> "${{ github.step_summary }}"
+          echo "" >> "${{ github.step_summary }}"
+          echo "| Check | Result |" >> "${{ github.step_summary }}"
+          echo "| --- | --- |" >> "${{ github.step_summary }}"
+          echo "| Python CVE audit (pip-audit) | ${{ needs.python-audit.result }} |" >> "${{ github.step_summary }}"
+          echo "| Python requirements validation | ${{ needs.python-outdated.result }} |" >> "${{ github.step_summary }}"
+          echo "| Node.js CVE audit (npm audit) | ${{ needs.node-audit.result }} |" >> "${{ github.step_summary }}"
+          echo "| Requirements lint | ${{ needs.requirements-lint.result }} |" >> "${{ github.step_summary }}"
+          echo "" >> "${{ github.step_summary }}"
           if [[ "${{ needs.python-audit.result }}" != "success" || "${{ needs.python-outdated.result }}" != "success" || "${{ needs.node-audit.result }}" != "success" || "${{ needs.requirements-lint.result }}" != "success" ]]; then
-            echo "One or more checks failed. This gate reports real findings — no fake greens." >> "$BASH_STEP_SUMMARY"
+            echo "One or more checks failed. This gate reports real findings — no fake greens." >> "${{ github.step_summary }}"
             exit 1
           fi
-          echo "All checks passed." >> "$BASH_STEP_SUMMARY"
+          echo "All checks passed." >> "${{ github.step_summary }}"
