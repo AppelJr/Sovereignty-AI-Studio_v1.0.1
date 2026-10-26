@@ -106,8 +106,8 @@ jobs:
             echo "No package.json present — audit skipped"
           fi
 
-  requirements-lint:
-    name: Lint requirements files
+    requirements-lint:
+      - name: Lint requirements files
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
