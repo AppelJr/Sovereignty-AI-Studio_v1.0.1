@@ -4,9 +4,19 @@ from __future__ import annotations
 import pytest
 
 from backend.coordination.devassist_adapter import DevAssistExecutionAdapter
-from backend.coordination.evidence_adapter import EvidenceAdapter
+from backend.coordination.evidence_adapter import (
+    EvidenceAdapter,
+    EvidenceWriteError,
+    SCARLedgerSink,
+)
 from backend.coordination.genesis_adapter import GenesisRouterAdapter
 from backend.coordination.task_envelope import TaskEnvelope
+from sovereign.scar.ledger import EventClass, SCARActor, SCARLedger
+
+
+class TestRoot:
+    def sign(self, payload: bytes) -> bytes:
+        return payload[:32]
 
 
 def task(mode: str = "offline") -> TaskEnvelope:
@@ -56,3 +66,50 @@ def test_evidence_adapter_delegates_to_existing_stores() -> None:
     ).record(receipt, route)
     assert scar_events == [event]
     assert repmhl_records[0]["receipt_hash"] == receipt.receipt_hash
+
+
+def test_evidence_sink_is_required() -> None:
+    with pytest.raises(TypeError, match="append_scar"):
+        EvidenceAdapter(append_scar=None)  # type: ignore[arg-type]
+
+
+def test_scar_sink_writes_to_canonical_ledger() -> None:
+    ledger = SCARLedger("device:test", TestRoot())
+    adapter = DevAssistExecutionAdapter(lambda _task, _route: {"status": "COMPLETED"})
+    route = GenesisRouterAdapter().decide(task(), approved())
+    receipt = adapter.execute(task(), route)
+    event = EvidenceAdapter(append_scar=SCARLedgerSink(ledger)).record(receipt, route)
+    assert len(ledger.events) == 1
+    stored = ledger.events[0]
+    assert stored.event_type == "EXECUTION_RECEIPT"
+    assert stored.actor is SCARActor.DEVICE
+    assert stored.event_class is EventClass.AUDIT
+    assert stored.metadata["task_id"] == "task-1"
+    assert stored.metadata["event_hash"] == event["event_hash"]
+    assert ledger.verify_chain()
+
+
+def test_scar_append_failure_fails_closed() -> None:
+    adapter = DevAssistExecutionAdapter(lambda _task, _route: {"status": "COMPLETED"})
+    route = GenesisRouterAdapter().decide(task(), approved())
+    receipt = adapter.execute(task(), route)
+
+    def fail(_event: dict) -> None:
+        raise OSError("disk full")
+
+    with pytest.raises(EvidenceWriteError, match="SCAR append failed"):
+        EvidenceAdapter(append_scar=fail).record(receipt, route)
+
+
+def test_repmhl_failure_fails_closed_after_scar_write() -> None:
+    scar_events: list[dict] = []
+    adapter = DevAssistExecutionAdapter(lambda _task, _route: {"status": "COMPLETED"})
+    route = GenesisRouterAdapter().decide(task(), approved())
+    receipt = adapter.execute(task(), route)
+
+    def fail(_event: dict) -> None:
+        raise OSError("repmhl unavailable")
+
+    with pytest.raises(EvidenceWriteError, match="REPMHL binding failed"):
+        EvidenceAdapter(append_scar=scar_events.append, record_repmhl=fail).record(receipt, route)
+    assert len(scar_events) == 1
