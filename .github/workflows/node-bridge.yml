@@ -1,37 +1,65 @@
 name: Node Bridge CI
 
 on:
+  push:
+    branches: [Collaboration]
+    paths:
+      - "node-bridge/**"
+      - ".github/workflows/node-bridge.yml"
+  pull_request:
+    branches: [Collaboration]
+    paths:
+      - "node-bridge/**"
+      - ".github/workflows/node-bridge.yml"
   workflow_dispatch:
-
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 permissions:
   contents: read
 
+concurrency:
+  group: node-bridge-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
-  test:
-    name: Node Bridge tests
+  test-and-audit:
+    name: Node 24 • install, security audit, tests
     runs-on: ubuntu-latest
-    timeout-minutes: 60 
+    timeout-minutes: 20
     steps:
-      - name: Checkout repository at exact commit
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Checkout exact commit
+        uses: actions/checkout@v4
+
+      - name: Set up supported Node.js runtime
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: node-bridge/package-lock.json
+
+      - name: Verify runtime matches package engine
         shell: bash
         run: |
           set -Eeuo pipefail
-          git init .
-          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
-          auth="$(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 | tr -d '\n')"
-          git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${GITHUB_SHA}"
-          git checkout --detach FETCH_HEAD
-          git config --unset-all http.extraheader 2>/dev/null || true
-      - name: Set up Node.js
-        run: node --version
-      - name: Install dependencies
+          node --version
+          npm --version
+          node -e 'const major=Number(process.versions.node.split(".")[0]); if (major < 24) { console.error("FAIL: Node.js >=24 required"); process.exit(1); }'
+
+      - name: Install exact lockfile without lifecycle scripts
         working-directory: node-bridge
-        run: npm install --no-fund
-      - name: Run tests
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Assert patched qs version is installed
+        working-directory: node-bridge
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          node -e 'const p=require("qs/package.json"); console.log("qs="+p.version); if (p.version !== "6.16.1") process.exit(1)'
+          npm ls qs --all
+
+      - name: Fail closed on moderate-or-higher npm advisories
+        working-directory: node-bridge
+        run: npm audit --audit-level=moderate
+
+      - name: Run Node Bridge tests
         working-directory: node-bridge
         run: npm test
