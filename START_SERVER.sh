@@ -41,7 +41,8 @@ export SG_ALLOW_BACKGROUND_POLLING="0"
 export SG_ENABLE_WEBSOCKET="${SG_ENABLE_WEBSOCKET:-0}"
 export SG_ENABLE_SSE="${SG_ENABLE_SSE:-0}"
 export SG_RUNTIME_OWNER="SGHv119.html"
-export CORS_ORIGIN="${CORS_ORIGIN:-http://127.0.0.1:$STATIC_PORT}"
+# Local-only bridge; permit the dashboard whether opened as localhost or 127.0.0.1.
+export CORS_ORIGIN="${CORS_ORIGIN:-*}"
 
 pids=()
 cleanup() {
