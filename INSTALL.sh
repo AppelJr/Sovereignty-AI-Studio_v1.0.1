@@ -38,8 +38,8 @@ if [[ ! -f requirements-runtime.txt ]]; then
   echo "ERROR: requirements-runtime.txt is missing from the repository root." >&2
   exit 1
 fi
-if [[ ! -f package-lock.json || ! -f node-bridge/package-lock.json ]]; then
-  echo "ERROR: npm lockfiles are required for deterministic installation." >&2
+if [[ ! -f package.json || ! -f package-lock.json ]]; then
+  echo "ERROR: root package.json and package-lock.json are required for deterministic installation." >&2
   exit 1
 fi
 
@@ -57,7 +57,6 @@ fi
 
 "$VENV_PYTHON" -m pip install "${PIP_ARGS[@]}" -r requirements-runtime.txt
 npm ci "${NPM_ARGS[@]}" --ignore-scripts
-npm --prefix node-bridge ci "${NPM_ARGS[@]}" --ignore-scripts
 
 "$VENV_PYTHON" - <<'PY'
 import websockets
