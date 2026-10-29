@@ -31,7 +31,7 @@ Flask==3.1.3
 
 # AI / Inference / Voice
 numpy==2.5.2
-torch==2.13.0
+torch==2.14.1
 onnx==1.22.0
 onnxruntime==1.31.0
 piper-tts==1.8.0
