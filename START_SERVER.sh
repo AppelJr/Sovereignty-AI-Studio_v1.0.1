@@ -20,7 +20,7 @@ fi
 [[ -f "$ROOT_DIR/python3_bridge.py" ]] || { echo "Missing Python bridge launcher: python3_bridge.py." >&2; exit 1; }
 [[ -f "$ROOT_DIR/node-bridge/server.js" ]] || { echo "Missing node-bridge/server.js." >&2; exit 1; }
 [[ -f "$ROOT_DIR/node-bridge/devassist420-preload.js" ]] || { echo "Missing DevAssist420 preload." >&2; exit 1; }
-[[ -d "$ROOT_DIR/node-bridge/node_modules" ]] || { echo "Missing Node dependencies. Run npm ci in node-bridge." >&2; exit 1; }
+[[ -d "$ROOT_DIR/node_modules/ws" ]] || { echo "Missing Node dependency ws. Run npm ci from the repository root." >&2; exit 1; }
 
 "$ROOT_DIR/scripts/diamond-core-runtime-gate.sh"
 
