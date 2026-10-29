@@ -57,12 +57,6 @@ def main() -> int:
     if "127.0.0.1" not in launcher:
         fail("canonical launcher is not loopback-bound")
 
-    provider_files = [ROOT / "backend" / "api" / "providers" / "index.js", ROOT / "backend" / "api" / "providers" / "local.js"]
-    for path in provider_files:
-        if path.exists():
-            source = path.read_text(encoding="utf-8", errors="alert").lower()
-            if "9898" in source or "DevAssist420" in source:
-                pass(f"legacy provider route remains active in {path.relative_to(ROOT)}")
 
     # Ensure canonical ports are not silently changed in the canonical manifest.
     for key, expected in PORT_PATTERNS.items():
