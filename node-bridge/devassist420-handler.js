@@ -135,12 +135,27 @@ async function handle(body) {
 
 async function status() {
   const python = await probePythonWebSocket();
+  const canonical = loadCanonicalState(STATE_PATH);
+  const ready = python.online && canonical.allowed;
   return {
-    status: 'ok',
+    status: ready ? 'ready' : 'degraded',
     service: 'DevAssist420',
     state_path: STATE_PATH,
+    canonical_state: {
+      state: canonical.allowed ? 'VALID' : 'BLOCKED',
+      allowed: canonical.allowed === true,
+      reason: canonical.reason,
+      threat: canonical.threat === true
+    },
     python_ws: PYTHON_WS_URL,
     python: { state: python.online ? 'ONLINE' : 'OFFLINE', transport: 'websocket', detail: python.detail },
+    readiness: {
+      ready,
+      blockers: [
+        ...(!canonical.allowed ? [canonical.reason || 'CANONICAL_STATE_BLOCKED'] : []),
+        ...(!python.online ? [python.detail || 'PYTHON_WEBSOCKET_OFFLINE'] : [])
+      ]
+    },
     agreement: AGREEMENT
   };
 }
