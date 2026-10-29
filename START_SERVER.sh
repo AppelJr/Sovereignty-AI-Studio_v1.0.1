@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 # Sovereignty AI Studio — canonical local runtime launcher.
-# One launcher, one runtime owner, fail-closed Diamond Core contract gate.
 set -Eeuo pipefail
 
 ROOT_DIR="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
@@ -19,10 +18,9 @@ fi
 [[ -x "$PYTHON_BIN" ]] || { echo "Missing local Python runtime: $PYTHON_BIN. Run ./INSTALL.sh first." >&2; exit 1; }
 [[ -f "$ROOT_DIR/bridge.py" ]] || { echo "Missing bridge.py." >&2; exit 1; }
 [[ -f "$ROOT_DIR/node-bridge/server.js" ]] || { echo "Missing node-bridge/server.js." >&2; exit 1; }
+[[ -f "$ROOT_DIR/node-bridge/devassist420-preload.js" ]] || { echo "Missing DevAssist420 preload." >&2; exit 1; }
 [[ -d "$ROOT_DIR/node-bridge/node_modules" ]] || { echo "Missing Node dependencies. Run npm ci in node-bridge." >&2; exit 1; }
 
-# Diamond Core is an admission gate, not an optional health check.
-# No service starts until the pure-software contract passes.
 "$ROOT_DIR/scripts/diamond-core-runtime-gate.sh"
 
 for port in "$PY_PORT" "$NODE_PORT" "$STATIC_PORT"; do
@@ -54,40 +52,22 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-SG_PORT="$PY_PORT" \
-SG_HOST=127.0.0.1 \
-SG_NETWORK_MODE="$NETWORK_MODE" \
-SG_DEVICE_MODE="$SG_DEVICE_MODE" \
-SG_ENABLE_REMOTE_NETWORK="$SG_ENABLE_REMOTE_NETWORK" \
-SG_ALLOW_BACKGROUND_POLLING="$SG_ALLOW_BACKGROUND_POLLING" \
-SG_ENABLE_WEBSOCKET="$SG_ENABLE_WEBSOCKET" \
-SG_ENABLE_SSE="$SG_ENABLE_SSE" \
-"$PYTHON_BIN" "$ROOT_DIR/bridge.py" &
+SG_PORT="$PY_PORT" SG_HOST=127.0.0.1 SG_NETWORK_MODE="$NETWORK_MODE" SG_DEVICE_MODE="$SG_DEVICE_MODE" SG_ENABLE_REMOTE_NETWORK="$SG_ENABLE_REMOTE_NETWORK" SG_ALLOW_BACKGROUND_POLLING="$SG_ALLOW_BACKGROUND_POLLING" SG_ENABLE_WEBSOCKET="$SG_ENABLE_WEBSOCKET" SG_ENABLE_SSE="$SG_ENABLE_SSE" "$PYTHON_BIN" "$ROOT_DIR/bridge.py" &
 pids+=("$!")
 
-NODE_BRIDGE_PORT="$NODE_PORT" \
-NODE_BRIDGE_HOST=127.0.0.1 \
-SG_BRIDGE_HTTP_URL="http://127.0.0.1:$PY_PORT" \
-CORS_ORIGIN="$CORS_ORIGIN" \
-SG_NETWORK_MODE="$NETWORK_MODE" \
-SG_DEVICE_MODE="$SG_DEVICE_MODE" \
-SG_ENABLE_REMOTE_NETWORK="$SG_ENABLE_REMOTE_NETWORK" \
-SG_ALLOW_BACKGROUND_POLLING="$SG_ALLOW_BACKGROUND_POLLING" \
-SG_ENABLE_WEBSOCKET="$SG_ENABLE_WEBSOCKET" \
-SG_ENABLE_SSE="$SG_ENABLE_SSE" \
-"$NODE_BIN" "$ROOT_DIR/node-bridge/server.js" &
+NODE_BRIDGE_PORT="$NODE_PORT" NODE_BRIDGE_HOST=127.0.0.1 SG_BRIDGE_HTTP_URL="http://127.0.0.1:$PY_PORT" CORS_ORIGIN="$CORS_ORIGIN" SG_NETWORK_MODE="$NETWORK_MODE" SG_DEVICE_MODE="$SG_DEVICE_MODE" SG_ENABLE_REMOTE_NETWORK="$SG_ENABLE_REMOTE_NETWORK" SG_ALLOW_BACKGROUND_POLLING="$SG_ALLOW_BACKGROUND_POLLING" SG_ENABLE_WEBSOCKET="$SG_ENABLE_WEBSOCKET" SG_ENABLE_SSE="$SG_ENABLE_SSE" NODE_OPTIONS="--require=$ROOT_DIR/node-bridge/devassist420-preload.js ${NODE_OPTIONS:-}" "$NODE_BIN" "$ROOT_DIR/node-bridge/server.js" &
 pids+=("$!")
 
 "$PYTHON_BIN" -m http.server "$STATIC_PORT" --bind 127.0.0.1 --directory "$ROOT_DIR" &
 pids+=("$!")
 
 echo "Canonical Sovereignty AI Studio runtime running:"
-echo "  dashboard: http://127.0.0.1:$STATIC_PORT/SGHv119.html"
-echo "  Python:    http://127.0.0.1:$PY_PORT"
+echo "  dashboard: http://127.0.0.1:$STATIC_PORT/DevAssist420SGHv119.html"
+echo "  Python:    ws://127.0.0.1:$PY_PORT"
 echo "  Node:      http://127.0.0.1:$NODE_PORT"
+echo "  DevAssist: http://127.0.0.1:$NODE_PORT/api/devassist/status"
 echo "  mode:      $SG_DEVICE_MODE / $SG_NETWORK_MODE"
 echo "  diamond:   PASS (startup admitted)"
-
 echo "Press Ctrl+C to stop."
 wait -n "${pids[@]}"
 exit $?
