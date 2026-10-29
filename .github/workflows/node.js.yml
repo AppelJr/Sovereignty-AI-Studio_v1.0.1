@@ -2,7 +2,7 @@ name: Node.js CI
 
 on:
   push:
-    branches: [Collaboration]
+    branches: [Collaboration, codex/sovereign-failover-merkle-20261029]
   pull_request:
     branches: [Collaboration]
   workflow_dispatch:
@@ -43,5 +43,6 @@ jobs:
             echo "No package.json — Node job skipped"
             exit 0
           fi
+          npm run check
           npm run build --if-present
           npm test --if-present

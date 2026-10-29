@@ -218,6 +218,16 @@ class BridgeServer:
 
         reply = await self._chat_sovereign(msg, sys_prompt, agent)
 
+        # Provider failure is a failure, never a successful assistant response.
+        if reply.startswith("[Sovereign bridge error:"):
+            await self.send(ws, {
+                "type": "ai_error",
+                "agent": agent,
+                "error": reply,
+                "ts": int(time.time() * 1000),
+            })
+            return
+
         # Persist AI reply to memory
         if self.hydrator:
             try:
