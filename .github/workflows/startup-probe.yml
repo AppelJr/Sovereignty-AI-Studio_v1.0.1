@@ -13,13 +13,14 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: ${{ github.sha }}  # pin to the triggering SHA, not HEAD of branch
+          ref: "${{ github.sha }}"  
+          # pin to the triggering SHA, not HEAD of branch
           fetch-depth: 1
       - name: Hatch — full SHA payload
         shell: bash
         run: |
           set -Eeuo pipefail
-          SHA="${{ github.sha }}"
+          SHA= "${{ github.sha }}"
           printf 'FULL_SHA=%s\n' "$SHA"
           LEN=${#SHA}
           printf 'HEAD_SHA_LEN=%s\n' "$LEN"
