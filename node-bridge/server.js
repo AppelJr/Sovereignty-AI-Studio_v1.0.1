@@ -59,6 +59,7 @@ const EXEC_CODE_TOKEN = process.env.EXEC_CODE_TOKEN || '';
 const ALLOW_UNTRUSTED_CODE_EXEC = process.env.ALLOW_UNTRUSTED_CODE_EXEC === 'true';
 const SG_BRIDGE_URL = (process.env.SG_BRIDGE_URL || '').trim();
 const SG_BRIDGE_HTTP_URL = (process.env.SG_BRIDGE_HTTP_URL || (SG_BRIDGE_URL ? SG_BRIDGE_URL.replace(/^ws(s?):\/\//, 'http$1://') : '')).trim();
+const PYTHON_WS_URL = (process.env.SOVEREIGN_PYTHON_WS_URL || SG_BRIDGE_URL || SG_BRIDGE_HTTP_URL.replace(/^http(s?):\/\//, 'ws$1://') || 'ws://127.0.0.1:9897').trim();
 const TLS_CERT = process.env.TLS_CERT || '';
 const TLS_KEY = process.env.TLS_KEY || '';
 const TLS_CA = process.env.TLS_CA || '';
@@ -284,7 +285,7 @@ app.get('/api/agents/status', async (_req, res) => {
     gateway: { url: GATEWAY_URL, status: 'offline', port: 9001 },
     backend: { url: BACKEND_URL, status: 'offline', port: 8002 },
     weather: { url: WEATHER_URL, status: 'offline', port: 8001 },
-    py_bridge: { url: SG_BRIDGE_URL || 'ws://127.0.0.1:9897', status: 'offline', port: 9897, role: 'python-bridge', transport: 'websocket' },
+    py_bridge: { url: PYTHON_WS_URL, status: 'offline', port: 9897, role: 'python-bridge', transport: 'websocket' },
   };
 
   const checkAgent = (key) =>
