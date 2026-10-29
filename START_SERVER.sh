@@ -3,6 +3,7 @@
 set -Eeuo pipefail
 
 ROOT_DIR="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+cd "$ROOT_DIR"
 PYTHON_BIN="${PYTHON_BIN:-$ROOT_DIR/.venv/bin/python}"
 NODE_BIN="${NODE_BIN:-node}"
 PY_PORT="${SG_PORT:-9897}"
@@ -41,6 +42,9 @@ export SG_ALLOW_BACKGROUND_POLLING="0"
 export SG_ENABLE_WEBSOCKET="${SG_ENABLE_WEBSOCKET:-0}"
 export SG_ENABLE_SSE="${SG_ENABLE_SSE:-0}"
 export SG_RUNTIME_OWNER="SGHv119.html"
+# Resolve policy and audit paths against the repository, not the caller\x27s cwd.
+export SOVEREIGN_STATE_PATH="${SOVEREIGN_STATE_PATH:-$ROOT_DIR/state/canonical.json}"
+export SCAR_PATH="${SCAR_PATH:-$ROOT_DIR/AUDIT/devassist-device.jsonl}"
 # Local-only bridge; permit the dashboard whether opened as localhost or 127.0.0.1.
 export CORS_ORIGIN="${CORS_ORIGIN:-*}"
 
