@@ -1,0 +1,74 @@
+IMPORTANT🫱🏼‍🫲🏽  Chain of Command AI – Heavy Judge Flow Diagram (Color-Coded Lanes + YANK Loop)
+
+                 ┌──────────────────┐
+                 │    User Input    │
+                 └─────────┬────────┘
+                           │
+                           ▼
+              ┌───────────────────────────┐
+              │   Smart Provider Router   │
+              │ (context + risk analysis) │
+              └─────────┬─────────────────┘
+__________|  
+|         |  DevAssist420  |           │         |         |                |
+                 |┌────────────────┼────────────────┐
+                 ▼                ▼             ▼
+   ╔════════════╗    ╔════════════╗    ╔════════════╗
+   ║  Grok      ║    ║ GPT/Codex  ║    ║  Claude     ║
+   ║  (Blue)    ║    ║  (Green)   ║    ║ (Purple)   ║
+   ╚════════════╝    ╚════════════╝    ╚════════════╝
+   Adversarial        Reasoning/Code      Medical/Safety
+          │                │                │         ▼                ▼ 
+|         └───────────► Council Layer                |◄————-────┘
+▼                      (Aggregates + Votes)———————————————-|
+ ___________               │   
+  |        |——————————|    ▼
+  ▼        |        Heavy Judge Gate (Red)____FAIL__Escrow_|———-|   |
+  ▼        ▼          ▼    |   ▼ 
+┌─|────────┼──────────|———-|———| 
+|______________________________|
+▼          ▼          ▼      | ▼
+(Green)   PASS      REWRITE  |YANK
+|          │          │      │
+▼          ▼          ▼      ▼               Final Output      Final   Output 
+                   │         │          │                  |         |
+                   └─────────|──────┐   │                            |      ▼
+                             Envelope
+|                                   │                                    |                                   |
+▼                                   │  Loop back for Rework———————————————-|                |                                   |
+|                                   |    ▼              _____________________|                     ▼              | READ Twice everything     |              |  must be thorough                  |Council Layer | READ Twice         ▼            |______|_______|     ▼              |             ▼      ▼       | Measure twice cut once               ▼              ▼
+|              |—————|———————|——————|                                                                             |                    ▼       ▼      |
+|                    |       |      ▼                    
+|_______ (Second Review / Escalation)       
+|                    |       ▼      │
+|                    ▼       ▼      ▼
+|                    |  |____|__|__|        |                    ▼  ▼    |     |
+——————————————————-——|——|Heavy Judge|
+|                    ▼  |——————————-▼          │                    |       |      |
+|                    |       ▼      ▼         ▼ ___________________|____Final Output               |                    ▼              |
+                Orchestrator        |              
+│                    |              ▼ 
+                DevAssist420    Ledgers         |                    ▼              |
+|                    |▼             ▼   ┌────────────────────|┴─────────────|─── ▼——————————──┐       ||             |            |            |       ▼|▼            |
+|            |       |||            ▼               ▼            ▼       |||            |                       
+|         SHA3-512 hash▼            |           SCAR / REPMHL Log    |▼|            | 
+▼                    |||            │                        
+|                    ▼|▼          |—▼-|
+|                    |||         _▼___▼_ ▼                    |||         |$$|$$|
+|________________|___|||_________|__|__|  |  |  |  |___|__|Shortcut:|  | ▼ ||          ▼  ▼  |   ▼  |   ▼  |  ▼ ||  ▼   ▼|      
+Speak_|_Show_|_Save_|_Copy|_Files_|
+
+Lane Colors & Functions:
+	⁃	Blue (Grok) – Adversarial checks
+	⁃	Green (GPT/Codex) – Reasoning and code generation
+	⁃	Purple (Claude) – Medical / safety-sensitive tasks
+	⁃	Red (Heavy Judge) – Final quality and risk gate
+
+Key Features:
+	1.	User input flows through Smart Provider Router → Model Lanes → Council.
+	2.	Council aggregates multi-model outputs and passes them to Heavy Judge.
+	3.	Heavy Judge decides: PASS, REWRITE, or YANK.
+	4.	YANK triggers a feedback loop back to Council for rework and escalation.
+	5.	Final output is hashed (SHA3-512), optionally signed, and logged (SCAR / REPMHL).
+	6.	Output delivered via Shortcut: Speak / Show / Save.
+
