@@ -40,20 +40,25 @@ jobs:
           test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
           git config --unset-all http.extraheader 2>/dev/null || true
 
-      - name: Set up Node.js 24 (action pinned to full commit SHA)
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
-        with:
-          node-version: "24"
-          cache: npm
-          cache-dependency-path: node-bridge/package-lock.json
-
-      - name: Verify runtime matches package engine
+      - name: Select preinstalled Node.js 24 (no third-party actions)
         shell: bash
         run: |
           set -Eeuo pipefail
+          node24_bin=""
+          for candidate in /opt/hostedtoolcache/node/24*/x64/bin; do
+            if [[ -x "$candidate/node" && -x "$candidate/npm" ]]; then
+              node24_bin="$candidate"
+            fi
+          done
+          if [[ -z "$node24_bin" ]]; then
+            echo "FAIL: hosted runner does not provide preinstalled Node.js 24" >&2
+            exit 1
+          fi
+          echo "$node24_bin" >> "$GITHUB_PATH"
+          export PATH="$node24_bin:$PATH"
           node --version
           npm --version
-          node -e 'const major=Number(process.versions.node.split(".")[0]); if (major < 24) { console.error("FAIL: Node.js >=24 required"); process.exit(1); }'
+          node -e 'if (Number(process.versions.node.split(".")[0]) !== 24) { console.error("FAIL: Node.js 24 required"); process.exit(1); }'
 
       - name: Install exact lockfile without lifecycle scripts
         working-directory: node-bridge
