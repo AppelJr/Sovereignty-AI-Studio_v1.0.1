@@ -38,8 +38,7 @@ export NODE_BRIDGE_HOST="127.0.0.1"
 export SG_DEVICE_MODE="${SG_DEVICE_MODE:-ghost}"
 export SG_ENABLE_REMOTE_NETWORK="0"
 export SG_ALLOW_BACKGROUND_POLLING="0"
-# DevAssist inference uses ws://127.0.0.1:$PY_PORT; enable the actual transport by default.
-export SG_ENABLE_WEBSOCKET="${SG_ENABLE_WEBSOCKET:-1}"
+export SG_ENABLE_WEBSOCKET="${SG_ENABLE_WEBSOCKET:-0}"
 export SG_ENABLE_SSE="${SG_ENABLE_SSE:-0}"
 export SG_RUNTIME_OWNER="SGHv119.html"
 # Local-only bridge; permit the dashboard whether opened as localhost or 127.0.0.1.
