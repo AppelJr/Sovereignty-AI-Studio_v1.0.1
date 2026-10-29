@@ -50,6 +50,23 @@ function pipeline() {
   });
 }
 
+function probePythonWebSocket(timeoutMs = 2000) {
+  return new Promise((resolve) => {
+    let settled = false;
+    const ws = new WebSocket(PYTHON_WS_URL);
+    const finish = (online, detail) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      try { ws.close(); } catch {}
+      resolve({ online, detail });
+    };
+    const timer = setTimeout(() => finish(false, 'PYTHON_WS_TIMEOUT'), timeoutMs);
+    ws.once('open', () => finish(true, 'websocket_connected'));
+    ws.once('error', (error) => finish(false, error && error.message ? error.message : 'PYTHON_WS_ERROR'));
+  });
+}
+
 function authorize(body) {
   const request = normalize(body);
   if (body.owner_authenticated !== true) return { state: 'REQUIRE_APPROVAL', reason: 'OWNER_AUTHENTICATION_REQUIRED', request, agreement: AGREEMENT };
@@ -116,9 +133,24 @@ async function handle(body) {
   return execute({ request: authorization.request, capability_id: authorization.capability_id, session_id: authorization.session_id, epoch: authorization.epoch });
 }
 
+async function status() {
+  const python = await probePythonWebSocket();
+  return {
+    status: 'ok',
+    service: 'DevAssist420',
+    state_path: STATE_PATH,
+    python_ws: PYTHON_WS_URL,
+    python: { state: python.online ? 'ONLINE' : 'OFFLINE', transport: 'websocket', detail: python.detail },
+    agreement: AGREEMENT
+  };
+}
+
 function route(req, res) {
   const url = new URL(req.url, 'http://127.0.0.1');
-  if (req.method === 'GET' && (url.pathname === '/api/devassist/status' || url.pathname === '/api/devassist420/status')) return json(res, 200, { status: 'ok', service: 'DevAssist420', state_path: STATE_PATH, python_ws: PYTHON_WS_URL, agreement: AGREEMENT });
+  if (req.method === 'GET' && (url.pathname === '/api/devassist/status' || url.pathname === '/api/devassist420/status')) {
+    status().then(value => json(res, 200, value)).catch(error => json(res, 503, { status: 'error', service: 'DevAssist420', reason: error.message, agreement: AGREEMENT }));
+    return true;
+  }
   if (req.method === 'GET' && url.pathname === '/api/devassist/agreement') return json(res, 200, AGREEMENT);
   if (req.method !== 'POST' || !['/api/devassist420/authorize','/api/devassist/authorize','/api/devassist420/execute','/api/devassist/execute','/api/devassist/message'].includes(url.pathname)) return false;
   let raw = '';
