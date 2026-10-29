@@ -120,10 +120,10 @@ jobs:
           set -Eeuo pipefail
           if [[ -f node-bridge/package.json ]]; then
             cd node-bridge
-            npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+            npm ci --ignore-scripts --no-audit --no-fund
             npm audit --audit-level=moderate
           elif [[ -f package.json ]]; then
-            npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+            npm ci --ignore-scripts --no-audit --no-fund
             npm audit --audit-level=moderate
           else
             echo "No package.json present — audit skipped"
