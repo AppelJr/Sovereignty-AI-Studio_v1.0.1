@@ -43,7 +43,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: oauth-api-generator-${{ github.ref }
+  group: oauth-api-generator-${{ github.ref }}
   cancel-in-progress: false
 
 permissions: {}
