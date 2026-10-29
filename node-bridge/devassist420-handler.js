@@ -101,8 +101,11 @@ function infer(request) {
       system: 'You are the authorized local Sovereignty AI Studio assistant. Be accurate. Never fabricate access, actions, files, model identity, or evidence.'
     })));
     ws.on('message', raw => {
-      try { const msg = JSON.parse(String(raw)); if (msg.type === 'ai_response') finish(resolve, msg); }
-      catch (e) { finish(reject, e); }
+      try {
+        const msg = JSON.parse(String(raw));
+        if (msg.type === 'ai_response') finish(resolve, msg);
+        else if (msg.type === 'ai_error') finish(reject, new Error(msg.error || 'LOCAL_INFERENCE_FAILED'));
+      } catch (e) { finish(reject, e); }
     });
     ws.once('error', e => finish(reject, e));
   });
