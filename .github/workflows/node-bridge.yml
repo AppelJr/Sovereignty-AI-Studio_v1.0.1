@@ -54,7 +54,7 @@ jobs:
             echo "FAIL: hosted runner does not provide preinstalled Node.js 24" >&2
             exit 1
           fi
-          echo "${ node24_bin }" >> "${ GITHUB_PATH }"
+          echo "$node24_bin" >> "$GITHUB_PATH"
           export PATH="$node24_bin:$PATH"
           node --version
           npm --version
