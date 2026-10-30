@@ -1,0 +1,70 @@
+--- a/DevAssist420_Test.html
++++ b/DevAssist420_Test.html
+@@ -4263,13 +4263,32 @@
+ 
+ /* ── Bridge ── */
+ var _ws=null,_wsState='disconnected',_wsRetry=0,_wsMsgQ=[];
++
++/* Gate One: loopback-only bridge URL guard (CodeQL SSRF #530/#531) */
++function _sgIsLoopbackUrl(u){
++  try{
++    var s=String(u||'');
++    var m=s.match(/^(wss?|https?):\/\/([^\/:?]+)(?::(\d+))?/i);
++    if(!m)return false;
++    var host=m[2].toLowerCase();
++    if(host==='127.0.0.1'||host==='localhost'||host==='[::1]'||host==='::1')return true;
++    return false;
++  }catch(e){return false;}
++}
++function _sgAssertLoopback(u,kind){
++  if(_sgIsLoopbackUrl(u))return true;
++  try{log('error','BLOCKED non-loopback '+kind+': '+String(u).slice(0,80));}catch(e){}
++  try{auditEntry('SSRF_BLOCKED',{kind:kind,url:String(u).slice(0,120)});}catch(e){}
++  return false;
++}
++
+ function bridgeConnect(){
+   if(!CFG.bridgeRelay)return;
+   if(window._sgBridgeInsecure)return;
+   if(_ws&&_ws.readyState<=1)return;
+   _wsState='connecting'; updateDot();
+   try{
+-    _ws=new WebSocket(CFG.bridgeWsUrl);
++    if(!_sgAssertLoopback(CFG.bridgeWsUrl,'WebSocket')){ _wsState='error'; updateDot(); return; } _ws=new WebSocket(CFG.bridgeWsUrl);
+     _ws.onopen=function(){ _wsState='connected'; _wsRetry=0; log('info','Bridge connected'); auditEntry('BRIDGE_UP',{url:CFG.bridgeWsUrl}); _wsMsgQ.forEach(function(m){try{_ws.send(m);}catch(e){}}); _wsMsgQ=[]; updateDot(); };
+     _ws.onclose=function(){ _wsState='disconnected'; updateDot(); _wsRetry++; if(!window._sgBridgeInsecure && _wsRetry<=5)setTimeout(bridgeConnect,Math.min(2000*_wsRetry,15000)); };
+     _ws.onerror=function(){ _wsState='error'; updateDot(); };
+@@ -4295,12 +4314,12 @@
+   var s=JSON.stringify(Object.assign({source:'sg_agent',ts:Date.now()},payload));
+   if(_ws&&_ws.readyState===1){try{_ws.send(s);return;}catch(e){}}
+   if(_wsMsgQ.length<50)_wsMsgQ.push(s);
+-  try{fetch(CFG.bridgeHttpUrl,{method:'POST',headers:{'Content-Type':'application/json'},body:s}).catch(function(){});}catch(e){}
++  try{if(_sgAssertLoopback(CFG.bridgeHttpUrl,'fetch'))fetch(CFG.bridgeHttpUrl,{method:'POST',headers:{'Content-Type':'application/json'},body:s}).catch(function(){});}catch(e){}
+ }
+ function handleMsg(msg){
+   if(!msg||!msg.type)return;
+-  if(msg.type==='agent_config'){ Object.assign(CFG,msg.config||{}); saveCFG(); log('info','Config from bridge',msg.config); }
+-  if(msg.type==='agent_patch'&&msg.code&&CFG.patchSandbox){ applyPatch(msg.code,'bridge-'+Date.now(),true); }
++  if(msg.type==='agent_config'){ var _c=msg.config||{}; var _allow=['autoRepair','logLevel','repairThrottleMs','alertThreshold','sealIntervalMs','maxRepairLog','maxErrorLog']; for(var _i=0;_i<_allow.length;_i++){ if(_c[_allow[_i]]!==undefined) CFG[_allow[_i]]=_c[_allow[_i]]; } if(_c.bridgeWsUrl && _sgIsLoopbackUrl(_c.bridgeWsUrl)) CFG.bridgeWsUrl=_c.bridgeWsUrl; if(_c.bridgeHttpUrl && _sgIsLoopbackUrl(_c.bridgeHttpUrl)) CFG.bridgeHttpUrl=_c.bridgeHttpUrl; saveCFG(); log('info','Config from bridge (allowlisted)',{keys:Object.keys(_c)}); }
++  if(msg.type==='agent_patch'&&msg.code){ applyPatch(msg.code,'bridge-'+Date.now(),true); }
+   if(msg.type==='agent_repair'&&msg.repair&&REPAIRS[msg.repair]){ try{REPAIRS[msg.repair].fix();}catch(e){} }
+   if(msg.type==='agent_ping'){ bridgeSend({type:'agent_pong',state:getState()}); }
+ }
+@@ -4312,8 +4331,16 @@
+ /* ── Live Patcher ── */
+ var _patchLog=[];
+ function applyPatch(code,pid,fromBridge){
+-  var entry={id:pid,ts:Date.now(),code:code.slice(0,200),status:'pending',fromBridge:!!fromBridge};
++  var entry={id:pid,ts:Date.now(),code:String(code||'').slice(0,200),status:'pending',fromBridge:!!fromBridge};
+   _patchLog.unshift(entry); if(_patchLog.length>100)_patchLog.pop();
++  /* CodeQL #588/#589: never execute remote/bridge-supplied code strings */
++  if(fromBridge || !window._sgOwnerAllowLivePatch){
++    entry.status='denied';
++    entry.error='LIVE_PATCH_DENIED';
++    try{log('error','Patch denied (Gate One): '+pid+' fromBridge='+!!fromBridge);}catch(e){}
++    try{auditEntry('PATCH_DENIED',{id:pid,fromBridge:!!fromBridge});}catch(e){}
++    return false;
++  }
+   if(CFG.patchSandbox){ try{new Function(code);}catch(e){ entry.status='syntax_error'; entry.error=e.message; log('error','Patch syntax error: '+pid,e.message); auditEntry('PATCH_REJECTED',{id:pid,err:e.message}); return false; } }
+   try{
+     var fn=new Function('window','document','SGCrypto','BRIDGE','toast','addAudit',code);

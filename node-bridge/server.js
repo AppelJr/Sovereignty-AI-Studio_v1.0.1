@@ -59,6 +59,7 @@ const EXEC_CODE_TOKEN = process.env.EXEC_CODE_TOKEN || '';
 const ALLOW_UNTRUSTED_CODE_EXEC = process.env.ALLOW_UNTRUSTED_CODE_EXEC === 'true';
 const SG_BRIDGE_URL = (process.env.SG_BRIDGE_URL || '').trim();
 const SG_BRIDGE_HTTP_URL = (process.env.SG_BRIDGE_HTTP_URL || (SG_BRIDGE_URL ? SG_BRIDGE_URL.replace(/^ws(s?):\/\//, 'http$1://') : '')).trim();
+const PYTHON_WS_URL = (process.env.SOVEREIGN_PYTHON_WS_URL || SG_BRIDGE_URL || SG_BRIDGE_HTTP_URL.replace(/^http(s?):\/\//, 'ws$1://') || 'ws://127.0.0.1:9897').trim();
 const TLS_CERT = process.env.TLS_CERT || '';
 const TLS_KEY = process.env.TLS_KEY || '';
 const TLS_CA = process.env.TLS_CA || '';
@@ -284,13 +285,42 @@ app.get('/api/agents/status', async (_req, res) => {
     gateway: { url: GATEWAY_URL, status: 'offline', port: 9001 },
     backend: { url: BACKEND_URL, status: 'offline', port: 8002 },
     weather: { url: WEATHER_URL, status: 'offline', port: 8001 },
-    py_bridge: { url: SG_BRIDGE_HTTP_URL, status: 'offline', port: 9897, role: 'python-bridge' },
+    py_bridge: { url: PYTHON_WS_URL, status: 'offline', port: 9897, role: 'python-bridge', transport: 'websocket' },
   };
 
   const checkAgent = (key) =>
     new Promise((resolve) => {
       const baseUrl = agents[key].url;
       if (!baseUrl) return resolve();
+
+      // The Python bridge is WebSocket-only. Probing it with HTTP /health
+      // always reports it offline even when ws://127.0.0.1:9897 is accepting clients.
+      if (key === 'py_bridge') {
+        let settled = false;
+        let socket;
+        const finish = (online, detail) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
+          if (online) {
+            agents[key].status = 'online';
+            agents[key].detail = { transport: 'websocket', detail };
+          } else {
+            agents[key].detail = { transport: 'websocket', detail };
+          }
+          try { if (socket) socket.close(); } catch { /* ignore close races */ }
+          resolve();
+        };
+        const timer = setTimeout(() => finish(false, 'websocket probe timed out'), 2500);
+        try {
+          socket = new WsClient(baseUrl);
+          socket.once('open', () => finish(true, 'websocket connected'));
+          socket.once('error', (error) => finish(false, error && error.message ? error.message : 'websocket error'));
+        } catch (error) {
+          finish(false, error && error.message ? error.message : 'websocket creation failed');
+        }
+        return;
+      }
 
       let target;
       try {

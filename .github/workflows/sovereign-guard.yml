@@ -2,9 +2,10 @@ name: sovereign-guard
 
 on:
   push:
-    branches: [main, Collaboration, ara-hardened, Grok, GPT/Codex]
+    branches: [main, Collaboration, ara-hardened, xAI/Grok, GPT/Codex, claude, duckAI]
   pull_request:
-    branches: [main, Collaboration]
+    branches: [main, Collaboration, ara-hardened, xAI/Grok, GPT/Codex, claude, duckAI]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -13,32 +14,57 @@ jobs:
   no-fly-scan:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout commit 
+        env:
+          GH_TOKEN: ${{ github.token}}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git init .
+          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          auth="$(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 | tr -d '\n')"
+          git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${GITHUB_SHA}"
+          git checkout --detach FETCH_HEAD
+          git config --unset-all http.extraheader 2>/dev/null || true
+          git rev-parse --short HEAD
 
-      - name: Run sovereign-guard.py
-        run: python3 guard/sovereign-guard.py .
+      - name: Sovereign guard
+        shell: bash
+        run: python3 guard/sovereign-guard.py
 
       - name: Verify scar chain
+        shell: bash
         run: |
           python3 - <<'PY'
-          import json, hashlib, sys
+          import hashlib
+          import json
+          import sys
+
           prev = None
           n = 0
-          with open("scar/scar.jsonl") as f:
+
+          with open("scar/scar.jsonl", encoding="utf-8") as f:
               for line in f:
                   line = line.strip()
                   if not line:
                       continue
+
                   rec = json.loads(line)
                   if rec.get("prev") != prev:
                       print("FAIL: scar chain broken at record", n)
                       sys.exit(1)
-                  payload = json.dumps({k: rec[k] for k in ("prev","event","detail","ts")},
-                                       sort_keys=True, separators=(",", ":"))
+
+                  payload = json.dumps(
+                      {k: rec[k] for k in ("prev", "event", "detail", "ts")},
+                      sort_keys=True,
+                      separators=(",", ":"),
+                  )
                   if hashlib.sha256(payload.encode()).hexdigest() != rec["hash"]:
                       print("FAIL: scar hash mismatch at record", n)
                       sys.exit(1)
+
                   prev = rec["hash"]
                   n += 1
+
           print(f"OK: scar chain valid, {n} records")
           PY

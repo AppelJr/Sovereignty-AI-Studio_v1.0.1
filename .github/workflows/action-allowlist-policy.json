@@ -35,8 +35,10 @@
   "enforcement": "Any action matching a blocked pattern fails closed. Unknown third-party actions not on either list are PROPOSED to the owner - not silently banned, not silently allowed.",
   "provenance": {
     "authored_by": "Grok lane",
-    "authored_at": "2026-10-06T12:10:00Z",
+    "authored_at": "2026-10-18T23:15:00Z",
     "owner": "AppelJr",
-    "owner_authority": "final approval retained by owner"
+    "owner_authority": "final approval retained by owner",
+    "prior_version_sha": "658c90acae2793fe24fae5a0156de89011326ae7",
+    "change": "Restored aquasecurity/*, sigstore/*, docker/* to approved; added explicit checkout@11bd7190... entry; removed them from blocked. Provenance timestamp updated to this land."
   }
 }

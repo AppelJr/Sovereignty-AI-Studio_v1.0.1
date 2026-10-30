@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0",
   "canonical_runtime": {
-    "dashboard": "SGHv119.html",
+    "dashboard": "DevAssist420SGHv119.html",
     "launcher": "START_SERVER.sh",
     "python_bridge": "bridge.py",
     "node_bridge": "node-bridge/server.js",
@@ -9,7 +9,9 @@
     "repository_registry": "integration/repository-registry.json",
     "transport": "frontend/runtime/transport.js",
     "hawking_channel": "frontend/runtime/hawking-channel.js",
-    "hawking_integration": "frontend/runtime/sg-hawking-integration.js"
+    "hawking_integration": "frontend/runtime/sg-hawking-integration.js",
+    "devassist_handler": "node-bridge/devassist420-handler.js",
+    "devassist_preload": "node-bridge/devassist420-preload.js"
   },
   "ports": {
     "dashboard": 9898,
