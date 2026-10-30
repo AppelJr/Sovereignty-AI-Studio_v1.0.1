@@ -16,6 +16,7 @@ on:
 permissions:
   contents: read
 
+# A newer run on the same ref must never silently cancel this validation.
 concurrency:
   group: node-bridge-ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
@@ -24,9 +25,10 @@ jobs:
   test-and-audit:
     name: Node 24 • install, security audit, tests
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - name: Checkout exact commit with native git
+        timeout-minutes: 3
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -41,11 +43,14 @@ jobs:
           git config --unset-all http.extraheader 2>/dev/null || true
 
       - name: Select preinstalled Node.js 24 (no third-party actions)
+        timeout-minutes: 2
         shell: bash
         run: |
           set -Eeuo pipefail
+          shopt -s nullglob
+          candidates=(/opt/hostedtoolcache/node/24*/x64/bin)
           node24_bin=""
-          for candidate in /opt/hostedtoolcache/node/24*/x64/bin; do
+          for candidate in "${candidates[@]}"; do
             if [[ -x "$candidate/node" && -x "$candidate/npm" ]]; then
               node24_bin="$candidate"
             fi
@@ -61,10 +66,12 @@ jobs:
           node -e 'if (Number(process.versions.node.split(".")[0]) !== 24) { console.error("FAIL: Node.js 24 required"); process.exit(1); }'
 
       - name: Install exact lockfile without lifecycle scripts
+        timeout-minutes: 5
         working-directory: node-bridge
         run: npm ci --ignore-scripts --no-audit --no-fund
 
       - name: Assert patched qs version is installed
+        timeout-minutes: 2
         working-directory: node-bridge
         shell: bash
         run: |
@@ -73,9 +80,16 @@ jobs:
           npm ls qs --all
 
       - name: Fail closed on moderate-or-higher npm advisories
+        timeout-minutes: 5
         working-directory: node-bridge
         run: npm audit --audit-level=moderate
 
       - name: Run Node Bridge tests
+        timeout-minutes: 8
         working-directory: node-bridge
-        run: npm test
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          echo "Starting Node Bridge tests at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          npm test
+          echo "Node Bridge tests completed at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
