@@ -2,7 +2,7 @@
   "platform": "SGHV119",
   "version": "1.0.0-genesis",
   "mode": "local-first",
-  "entrypoint": "SGHV119.html",
+  "entrypoint": "DevAssist420SGHv119.html",
   "command_bus": "helpers/command_bus.js",
   "bridge": "node-bridge",
   "guardian": {
@@ -24,7 +24,7 @@
     "fail_closed_when_crypto_provider_missing": true
   },
   "allowed_active_roots": [
-    "SGHV119.html",
+    "DevAssist420SGHv119.html",
     "PLATFORM.json",
     "agent-workspaces.json",
     "helpers/",
