@@ -27,6 +27,7 @@ vm.runInNewContext(source, context);
   const api = context.SovereignDevAssist420;
   assert(api);
 
+  context.SGHV119_OWNER_SESSION = null;
   const unauthenticated = await api.requestCapability({
     purpose: 'test',
     resource: { kind: 'model', id: 'grok-4-heavy', provider: 'xai', operation: 'model-load' },
@@ -34,6 +35,7 @@ vm.runInNewContext(source, context);
   assert.strictEqual(unauthenticated.state, 'REQUIRE_APPROVAL');
   assert.strictEqual(calls.length, 0);
 
+  context.SGHV119_OWNER_SESSION = 'signed-test-session-proof';
   responses.push({ ok: true, body: {
     state: 'AUTHORIZED', capability_id: 'cap-test', session_id: 'sess-test', epoch: 17,
   }});
