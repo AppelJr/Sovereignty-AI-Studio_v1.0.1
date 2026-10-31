@@ -123,7 +123,7 @@ describe('Node Bridge – WebSocket', () => {
 
   it('broadcasts notifications to connected clients', async () => {
     const addr = server.address();
-    const ws = new WebSocket(`ws://localhost:${addr.port}/ws/alerts`, { perMessageDeflate: false });
+    const ws = new WebSocket(`ws://localhost:${addr.port}/ws/alerts`);
     await new Promise((resolve, reject) => {
       ws.once('open', () => {
         try {
