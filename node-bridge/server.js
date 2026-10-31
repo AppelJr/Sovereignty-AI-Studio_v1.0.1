@@ -382,16 +382,40 @@ app.get('/api/metrics', (_req, res) => {
 app.get('/api/bridge/status', (_req, res) => {
   res.json({
     service: 'node-bridge',
-    status: 'online',
+    status: 'healthy',
     port: PORT,
+    uptime: process.uptime(),
     uptime_s: process.uptime(),
+    services: { api: BACKEND_URL, weather: WEATHER_URL, gateway: GATEWAY_URL },
     backends: { api: BACKEND_URL, weather: WEATHER_URL, gateway: GATEWAY_URL },
+    websocket_clients: clients.size,
     timestamp: new Date().toISOString(),
   });
 });
 
 app.post('/api/bridge/notify', (req, res) => {
-  res.json({ ok: true, delivered: 0 });
+  const body = req.body && typeof req.body === 'object' ? req.body : {};
+  const type = typeof body.type === 'string' ? body.type.trim() : '';
+  const title = typeof body.title === 'string' ? body.title.trim() : '';
+  if (!type || !title) {
+    return res.status(400).json({ ok: false, error: 'type and title are required', code: 'INVALID_NOTIFICATION' });
+  }
+  const alert = {
+    ...body,
+    type: type.slice(0, 64),
+    title: title.slice(0, 200),
+    severity: ['info', 'warning', 'error', 'critical'].includes(body.severity) ? body.severity : 'info',
+    timestamp: new Date().toISOString(),
+  };
+  const payload = JSON.stringify(alert);
+  let delivered = 0;
+  for (const client of clients) {
+    if (client.readyState === 1) {
+      try { client.send(payload); delivered += 1; }
+      catch (error) { console.error('[ws/alerts] notification delivery failed:', error.message); }
+    }
+  }
+  return res.status(200).json({ ok: true, delivered, alert });
 });
 
 function unavailable(res, capability) {
@@ -556,7 +580,7 @@ wssAlerts.on('connection', (ws) => {
       return;
     }
     if (msg.type === 'ping') {
-      ws.send(JSON.stringify({ type: 'pong', ts: Date.now() }));
+      ws.send(JSON.stringify({ type: 'pong', timestamp: new Date().toISOString(), ts: Date.now() }));
       return;
     }
     const out = JSON.stringify({ type: 'broadcast', ...(msg || {}), ts: new Date().toISOString() });
@@ -594,7 +618,7 @@ wssRoot.on('connection', (ws) => {
       return;
     }
     if (msg.type === 'ping') {
-      ws.send(JSON.stringify({ type: 'pong', ts: Date.now() }));
+      ws.send(JSON.stringify({ type: 'pong', timestamp: new Date().toISOString(), ts: Date.now() }));
       return;
     }
     ws.send(JSON.stringify({ type: 'ack', received: msg.type || 'unknown' }));
@@ -611,13 +635,15 @@ wssRoot.on('connection', (ws) => {
   });
 });
 
-server.listen(PORT, '127.0.0.1', () => {
-  console.log(`[node-bridge] listening on 127.0.0.1:${PORT} (TLS=${Boolean(useTLS)}) mode=${NETWORK_MODE}`);
-});
-
 server.on('error', (err) => {
   console.error('[node-bridge] server error:', err.message);
-  process.exit(1);
+  if (require.main === module) process.exitCode = 1;
 });
 
-module.exports = { app, server, clients, rootClients };
+if (require.main === module) {
+  server.listen(PORT, '127.0.0.1', () => {
+    console.log(`[node-bridge] listening on 127.0.0.1:${PORT} (TLS=${Boolean(useTLS)}) mode=${NETWORK_MODE}`);
+  });
+}
+
+module.exports = { app, server, clients, rootClients, wss: wssAlerts, wssAlerts, wssRoot };
