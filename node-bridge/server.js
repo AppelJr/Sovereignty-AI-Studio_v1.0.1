@@ -113,7 +113,7 @@ app.use((_req, res, next) => {
   const origin = process.env.CORS_ORIGIN || 'null';
   res.setHeader('Access-Control-Allow-Origin', origin);
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PATCH,DELETE,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Sovereignty-Protocol,X-Sovereignty-Owner-Session,X-SGHV119-Owner-Session');
   if (_req.method === 'OPTIONS') return res.sendStatus(204);
   next();
 });
