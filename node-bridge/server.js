@@ -532,8 +532,8 @@ if (useTLS) {
   server = http.createServer(app);
 }
 
-const wssAlerts = new WebSocketServer({ server, path: '/ws/alerts' });
-const wssRoot = new WebSocketServer({ server, path: '/' });
+const wssAlerts = new WebSocketServer({ server, path: '/ws/alerts', perMessageDeflate: false });
+const wssRoot = new WebSocketServer({ server, path: '/', perMessageDeflate: false });
 
 function handleWsExec(msg, ws) {
   if (!ALLOW_UNTRUSTED_CODE_EXEC) {
