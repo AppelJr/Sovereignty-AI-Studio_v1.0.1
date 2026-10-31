@@ -10,8 +10,8 @@ trying to make every historical file active at once.
 ```text
 DevAssist420SGHv119.html
   -> START_SERVER.sh
-      -> bridge.py (:9897)
-      -> node-bridge/server.js (:9899)
+      -> python3_bridge.py (:9897)
+      -> server.js (:9899)
       -> static server (:9898)
   -> frontend/runtime/transport.js
   -> frontend/runtime/hawking-channel.js
