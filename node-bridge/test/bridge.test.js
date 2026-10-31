@@ -99,7 +99,7 @@ describe('Node Bridge – Notify', () => {
 describe('Node Bridge – WebSocket', () => {
   it('responds to ping with pong', async () => {
     const addr = server.address();
-    const ws = new WebSocket(`ws://localhost:${addr.port}/ws/alerts`);
+    const ws = new WebSocket(`ws://localhost:${addr.port}/ws/alerts`, { perMessageDeflate: false });
 
     const pong = await new Promise((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error('timeout waiting for pong')), 3000);
