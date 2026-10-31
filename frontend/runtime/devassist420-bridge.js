@@ -45,7 +45,7 @@
       purpose: requireNonEmpty(request.purpose, 'purpose'),
       risk_notes: Object.freeze(risks),
       reward_notes: Object.freeze(rewards),
-      owner_authenticated: request.owner_authenticated === true,
+      session_id: request.session_id ? String(request.session_id) : null,
       session_id: request.session_id ? String(request.session_id) : null,
     });
   }
@@ -53,14 +53,15 @@
   async function requestCapability(input, options) {
     const request = normalizeRequest(input);
     const opts = options || {};
-    if (!request.owner_authenticated) {
+    const proof = opts.ownerSession || root.SGHV119_OWNER_SESSION;
+    if (typeof proof !== 'string' || !proof) {
       return { state: 'REQUIRE_APPROVAL', reason: 'OWNER_AUTHENTICATION_REQUIRED', request };
     }
 
     const endpoint = opts.endpoint || '/api/devassist420/authorize';
     const response = await fetch(endpoint, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Sovereignty-Protocol': 'devassist420-v1' },
+      headers: { 'Content-Type': 'application/json', 'X-Sovereignty-Protocol': 'devassist420-v1', 'X-Sovereignty-Owner-Session': proof },
       body: JSON.stringify(request),
       credentials: 'same-origin',
     });
@@ -85,10 +86,12 @@
     }
 
     const opts = options || {};
+    const proof = opts.ownerSession || root.SGHV119_OWNER_SESSION;
+    if (typeof proof !== 'string' || !proof) throw new Error('OWNER_SESSION_REQUIRED');
     const endpoint = opts.endpoint || '/api/devassist420/execute';
     const response = await fetch(endpoint, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Sovereignty-Protocol': 'devassist420-v1' },
+      headers: { 'Content-Type': 'application/json', 'X-Sovereignty-Protocol': 'devassist420-v1', 'X-Sovereignty-Owner-Session': proof },
       credentials: 'same-origin',
       body: JSON.stringify({
         request: normalizeRequest(input),
