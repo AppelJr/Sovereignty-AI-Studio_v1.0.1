@@ -113,7 +113,7 @@ app.use((_req, res, next) => {
   const origin = process.env.CORS_ORIGIN || 'null';
   res.setHeader('Access-Control-Allow-Origin', origin);
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PATCH,DELETE,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Sovereignty-Protocol,X-Sovereignty-Owner-Session,X-SGHV119-Owner-Session');
   if (_req.method === 'OPTIONS') return res.sendStatus(204);
   next();
 });
@@ -532,8 +532,36 @@ if (useTLS) {
   server = http.createServer(app);
 }
 
-const wssAlerts = new WebSocketServer({ server, path: '/ws/alerts' });
-const wssRoot = new WebSocketServer({ server, path: '/' });
+// Use one HTTP upgrade listener for both WebSocket paths. Attaching multiple
+// WebSocketServer instances to the same HTTP server installs competing upgrade
+// listeners and can corrupt frame handling on some Node/ws combinations.
+const wssAlerts = new WebSocketServer({ noServer: true, perMessageDeflate: false });
+const wssRoot = new WebSocketServer({ noServer: true, perMessageDeflate: false });
+
+server.on('upgrade', (request, socket, head) => {
+  let pathname;
+  try {
+    pathname = new URL(request.url, 'http://127.0.0.1').pathname;
+  } catch {
+    socket.destroy();
+    return;
+  }
+
+  const target = pathname === '/ws/alerts'
+    ? wssAlerts
+    : pathname === '/'
+      ? wssRoot
+      : null;
+
+  if (!target) {
+    socket.destroy();
+    return;
+  }
+
+  target.handleUpgrade(request, socket, head, (ws) => {
+    target.emit('connection', ws, request);
+  });
+});
 
 function handleWsExec(msg, ws) {
   if (!ALLOW_UNTRUSTED_CODE_EXEC) {

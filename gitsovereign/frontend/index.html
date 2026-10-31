@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>GitSovereign</title>
+<link rel="manifest" href="manifest.json" />
+<meta name="theme-color" content="#0B0F14" />
+<link rel="stylesheet" href="dashboard/dashboard.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <nav class="sidebar">
+      <div class="brand"><span class="dot"></span>GitSovereign</div>
+      <button class="nav-item active" data-view="dashboard">Dashboard</button>
+      <button class="nav-item" data-view="builder">Builder</button>
+      <button class="nav-item" data-view="voice">Voice</button>
+      <button class="nav-item" data-view="repos">Repositories</button>
+      <button class="nav-item" data-view="evidence">Evidence</button>
+      <div class="sidebar-footer">
+        MODE: LOCAL/OFFLINE<br/>
+        NETWORK: <span id="net-status">checking…</span>
+      </div>
+    </nav>
+
+    <main class="main">
+      <section id="view-dashboard">
+        <header class="page-header">
+          <div>
+            <h1>Dashboard</h1>
+            <p>Owner-controlled workspace. Nothing here calls out unless you configure it to.</p>
+          </div>
+        </header>
+        <div class="grid-3">
+          <div class="panel"><h2>Runtime</h2><div id="stat-runtime">—</div></div>
+          <div class="panel"><h2>Voice engine</h2><div id="stat-voice">Piper — not loaded</div></div>
+          <div class="panel"><h2>Evidence chain</h2><div id="stat-evidence">0 events</div></div>
+        </div>
+        <div class="panel">
+          <h2>Recent evidence</h2>
+          <div id="dashboard-evidence-feed"></div>
+        </div>
+      </section>
+
+      <section id="view-builder" style="display:none">
+        <header class="page-header">
+          <div><h1>Builder</h1><p>Drag widgets onto the canvas. Layout state is saved locally.</p></div>
+          <button class="primary" id="builder-export">Export page</button>
+        </header>
+        <div class="builder-layout">
+          <div class="widget-palette">
+            <div class="widget-chip" draggable="true" data-widget="chat">Chat panel</div>
+            <div class="widget-chip" draggable="true" data-widget="voice">Voice control</div>
+            <div class="widget-chip" draggable="true" data-widget="chart">Chart</div>
+            <div class="widget-chip" draggable="true" data-widget="repo-status">Repo status</div>
+            <div class="widget-chip" draggable="true" data-widget="evidence-feed">Evidence feed</div>
+            <div class="widget-chip" draggable="true" data-widget="markdown">Markdown block</div>
+          </div>
+          <div class="builder-canvas" id="builder-canvas"></div>
+        </div>
+      </section>
+
+      <section id="view-voice" style="display:none">
+        <header class="page-header">
+          <div><h1>Voice</h1><p>Piper neural TTS. Runs on-device. Nothing recorded leaves this session.</p></div>
+        </header>
+        <div class="panel">
+          <div style="display:flex; align-items:center; gap:20px;">
+            <button class="mic-button" id="mic-toggle">●</button>
+            <div style="flex:1"><div class="transcript" id="voice-transcript">Say something, or type below and press Speak.</div></div>
+          </div>
+          <div style="margin-top:14px; display:flex; gap:10px;">
+            <input id="voice-input" type="text" placeholder="Type text to speak…" style="flex:1; background:var(--panel-raised); border:1px solid var(--line); color:var(--text); padding:10px 12px; border-radius:10px;" />
+            <button class="primary" id="voice-speak">Speak</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="view-repos" style="display:none">
+        <header class="page-header"><div><h1>Repositories</h1><p>Connected via your own git remotes. No hosted lock-in.</p></div></header>
+        <div class="panel"><p style="color:var(--muted)">Configure remotes in <code>backend/server/config.json</code>.</p></div>
+      </section>
+
+      <section id="view-evidence" style="display:none">
+        <header class="page-header"><div><h1>Evidence</h1><p>Append-only. Every authorization decision, visible.</p></div></header>
+        <div class="panel"><div id="evidence-full-feed"></div></div>
+      </section>
+    </main>
+  </div>
+
+  <script src="dashboard/dashboard.js" type="module"></script>
+  <script src="builder/builder.js" type="module"></script>
+  <script src="voice/piper-engine.js" type="module"></script>
+</body>
+</html>

@@ -5,7 +5,7 @@ const path = require('node:path');
 
 const DEFAULT_PATH = path.resolve(process.env.SOVEREIGN_PROVIDER_POLICY_PATH ||
   path.join(__dirname, '..', '..', 'config', 'provider-policy.v1.1.json'));
-const KNOWN = new Set(['xai', 'local', 'openai', 'anthropic', 'custom']);
+const KNOWN = new Set(['xai', 'local', 'openai', 'anthropic', 'custom', 'google', 'meta', 'mistral']);
 
 function validatePolicy(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value) ||
@@ -14,10 +14,11 @@ function validatePolicy(value) {
       !Array.isArray(value.default_allow) ||
       !Array.isArray(value.default_block) ||
       !value.providers || typeof value.providers !== 'object' ||
-      !Array.isArray(value.custom_endpoint_allowlist)) {
+      !Array.isArray(value.custom_endpoint_allowlist) ||
+      !Array.isArray(value.blocked_providers)) {
     throw new Error('PROVIDER_POLICY_INVALID');
   }
-  for (const id of [...value.default_allow, ...value.default_block]) {
+  for (const id of [...value.default_allow, ...value.default_block, ...value.blocked_providers]) {
     if (typeof id !== 'string' || !KNOWN.has(id)) throw new Error('PROVIDER_POLICY_UNKNOWN_ID');
   }
   for (const [id, entry] of Object.entries(value.providers)) {

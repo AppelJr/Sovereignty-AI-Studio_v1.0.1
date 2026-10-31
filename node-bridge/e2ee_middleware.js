@@ -9,7 +9,7 @@
  * Requires:
  *   SGHV119_E2EE_BOOTSTRAP_SECRET=<32+ chars>
  *
- * Request shape from SGHV119.html:
+ * Request shape from DevAssist420SGHv119.html:
  *   Header: X-SGHV119-E2EE: quad-ratchet-v1
  *   Body:   { encrypted: true, envelope: {...} }
  */

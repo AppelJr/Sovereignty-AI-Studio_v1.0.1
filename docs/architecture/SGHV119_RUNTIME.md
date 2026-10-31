@@ -1,6 +1,6 @@
 # SGHV119 Runtime Contract
 
-`SGHV119.html` is the presentation surface for the Studio ecosystem. It must report real runtime state rather than treating declared capabilities as active.
+`DevAssist420SGHv119.html` is the presentation surface for the Studio ecosystem. It must report real runtime state rather than treating declared capabilities as active.
 
 ## State vocabulary
 
