@@ -35,7 +35,7 @@ IGNORE_DIRS = {
 DEFAULT_POLICY: Dict[str, Any] = {
     "platform": "SGHV119",
     "version": "unknown",
-    "entrypoint": "SGHV119.html",
+    "entrypoint": "DevAssist420SGHv119.html",
     "command_bus": "helpers/command_bus.js",
     "guardian": {"mode": "report-only", "reports": "automation/reports", "fail_on": ["critical"]},
     "runtime": {
@@ -51,7 +51,7 @@ DEFAULT_POLICY: Dict[str, Any] = {
         "fail_closed_when_crypto_provider_missing": True,
     },
     "allowed_active_roots": [
-        "SGHV119.html",
+        "DevAssist420SGHv119.html",
         "PLATFORM.json",
         "agent-workspaces.json",
         "helpers/",
@@ -80,7 +80,7 @@ CHECK_CATALOG: Dict[str, Dict[str, str]] = {
     "platform-entrypoint": {
         "title": "Canonical entrypoint",
         "policy": "PLATFORM.entrypoint",
-        "recommendation": "Restore the configured SGHV119 entrypoint or update PLATFORM.json intentionally.",
+        "recommendation": "Restore the configured DevAssist420SGHv119 entrypoint or update PLATFORM.json intentionally.",
     },
     "command-bus-present": {
         "title": "Command bus present",

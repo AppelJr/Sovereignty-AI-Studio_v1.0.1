@@ -3,8 +3,8 @@
   "canonical_runtime": {
     "dashboard": "DevAssist420SGHv119.html",
     "launcher": "START_SERVER.sh",
-    "python_bridge": "bridge.py",
-    "node_bridge": "node-bridge/server.js",
+    "python_bridge": "python3_bridge.py",
+    "node_bridge": "server.js",
     "local_ci": "scripts/local-ci.sh",
     "repository_registry": "integration/repository-registry.json",
     "transport": "frontend/runtime/transport.js",
@@ -20,8 +20,9 @@
   },
   "aliases": {
     "start-all.sh": "START_SERVER.sh",
-    "python3_bridge.py": "bridge.py",
-    "sovereignty_full_server.py": "bridge.py"
+    "sovereignty_full_server.py": "python3_bridge.py",
+    "server.js": "node-bridge/server.js",
+    "node-bridge/server.js": "server.js"
   },
   "legacy_or_separate_runtimes": [
     "server_9897.py",

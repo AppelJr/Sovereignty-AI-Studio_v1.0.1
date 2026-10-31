@@ -1,6 +1,6 @@
 # SGHv119 Hawking wiring
 
-The monolithic `SGHv119.html` must load these scripts in this order before creating its dashboard status indicator:
+The monolithic `DevAssist420SGHv119.html` must load these scripts in this order before creating its dashboard status indicator:
 
 ```html
 <script src="frontend/runtime/hawking-channel.js"></script>

@@ -66,7 +66,7 @@ This integration keeps DevAssist420 separate from the Studio repository while ma
 
 ## Boundary
 
-`SGHv119.html` → `sghv119-bootstrap.js` → `devassist420-bridge.js` → local DevAssist service → Human/Policy Gate → FoldAuthority → execution.
+`DevAssist420SGHv119.html` → `sghv119-bootstrap.js` → `devassist420-bridge.js` → local DevAssist service → Human/Policy Gate → FoldAuthority → execution.
 
 The browser adapter is deliberately **not** an authority source. It cannot grant capabilities, manufacture a Fold capability, or bypass owner authentication.
 

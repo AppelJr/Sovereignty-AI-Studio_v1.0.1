@@ -9,7 +9,7 @@ const root = path.resolve(__dirname, '..', '..');
 const dashboardPath = path.join(root, 'SGHv119.html');
 const source = fs.readFileSync(dashboardPath, 'utf8');
 
-assert.ok(!source.toLowerCase().includes('trimmed for brevity'), 'SGHv119.html is truncated');
+assert.ok(!source.toLowerCase().includes('trimmed for brevity'), 'DevAssist420SGHv119.html is truncated');
 
 const runtimeFiles = [
   'frontend/runtime/hawking-channel.js',

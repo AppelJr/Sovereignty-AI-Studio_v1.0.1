@@ -40,7 +40,7 @@
 | Apple M4 Neural Engine | `m4_neural.tops` (38), `m4_neural.memory` (unified) |
 | Doc link | `m4_neural.href` |
 
-## Minimal fetch for SGHv119.html
+## Minimal fetch for DevAssist420SGHv119.html
 
 ```javascript
 async function refreshLocalStatus() {
