@@ -99,11 +99,14 @@ describe('Node Bridge – Notify', () => {
 describe('Node Bridge – WebSocket', () => {
   it('responds to ping with pong', async () => {
     const addr = server.address();
-    const ws = new WebSocket(`ws://localhost:${addr.port}/ws/alerts`, { perMessageDeflate: false });
+    const ws = new WebSocket(`ws://localhost:${addr.port}/ws/alerts`);
 
     const pong = await new Promise((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error('timeout waiting for pong')), 3000);
-      ws.on('open', () => ws.send(JSON.stringify({ type: 'ping' })));
+      ws.on('open', () => {
+        assert.equal(ws.extensions, '', 'server must not negotiate permessage-deflate');
+        ws.send(JSON.stringify({ type: 'ping' }));
+      });
       ws.on('message', (raw) => {
         const message = JSON.parse(raw);
         if (message.type !== 'pong') return; // Ignore the initial welcome frame.
@@ -121,7 +124,17 @@ describe('Node Bridge – WebSocket', () => {
   it('broadcasts notifications to connected clients', async () => {
     const addr = server.address();
     const ws = new WebSocket(`ws://localhost:${addr.port}/ws/alerts`, { perMessageDeflate: false });
-    await new Promise((r) => ws.on('open', r));
+    await new Promise((resolve, reject) => {
+      ws.once('open', () => {
+        try {
+          assert.equal(ws.extensions, '', 'server must not negotiate permessage-deflate');
+          resolve();
+        } catch (error) {
+          reject(error);
+        }
+      });
+      ws.once('error', reject);
+    });
 
     const msgPromise = new Promise((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error('timeout waiting for notification')), 3000);
