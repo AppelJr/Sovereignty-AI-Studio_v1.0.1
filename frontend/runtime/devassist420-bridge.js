@@ -41,6 +41,11 @@
     return Object.freeze({
       request_id: request.request_id || (root.crypto && root.crypto.randomUUID
         ? root.crypto.randomUUID() : 'devassist-' + Date.now()),
+      text: typeof request.text === 'string' && request.text.trim() ? request.text.trim() :
+        (typeof request.request_text === 'string' && request.request_text.trim() ? request.request_text.trim() : requireNonEmpty(request.purpose, 'purpose')),
+      action: resource.operation,
+      provider: resource.provider,
+      prefer: request.prefer === 'external' ? 'external' : 'local',
       resource,
       purpose: requireNonEmpty(request.purpose, 'purpose'),
       risk_notes: Object.freeze(risks),
@@ -105,9 +110,34 @@
     return response.json();
   }
 
+  async function getProviderPolicy(options) {
+    const opts = options || {};
+    const response = await fetch(opts.endpoint || '/api/devassist420/provider-policy', {
+      method: 'GET', credentials: 'same-origin', cache: 'no-store',
+      headers: { 'Accept': 'application/json' },
+    });
+    if (!response.ok) throw new Error('PROVIDER_POLICY_UNAVAILABLE');
+    return response.json();
+  }
+
+  async function updateProviderPolicy(policy, options) {
+    const opts = options || {};
+    const proof = opts.ownerSession || root.SGHV119_OWNER_SESSION;
+    if (typeof proof !== 'string' || !proof) throw new Error('OWNER_SESSION_REQUIRED');
+    const response = await fetch(opts.endpoint || '/api/devassist420/provider-policy', {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', 'X-Sovereignty-Owner-Session': proof },
+      body: JSON.stringify({ policy }),
+    });
+    if (!response.ok) throw new Error('PROVIDER_POLICY_UPDATE_DENIED');
+    return response.json();
+  }
+
   root.SovereignDevAssist420 = Object.freeze({
     requestCapability,
     executeAuthorized,
     normalizeRequest,
+    getProviderPolicy,
+    updateProviderPolicy,
   });
 })(window);
