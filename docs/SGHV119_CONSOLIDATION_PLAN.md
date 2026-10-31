@@ -2,14 +2,14 @@
 
 ## Problem
 
-`SGHV119.html` is becoming a catch-all file. That makes the system harder to audit, harder to run on iPhone, and harder to secure.
+`DevAssist420DevAssist420SGHv119.html` is becoming a catch-all file. That makes the system harder to audit, harder to run on iPhone, and harder to secure.
 
 The correct fix is not another giant dashboard. The correct fix is a small static control surface with a strict helper spine.
 
 ## Target Shape
 
 ```text
-SGHV119.html
+DevAssist420DevAssist420SGHv119.html
   -> helpers/command-bus.js
   -> helpers/bridge-adapter.js
   -> helpers/voice-adapter.js
@@ -21,7 +21,7 @@ SGHV119.html
 
 ## Rules
 
-1. `SGHV119.html` stays small.
+1. `DevAssist420DevAssist420SGHv119.html` stays small.
 2. No React.
 3. No browser `ws://` control channel.
 4. No vendor key-generation API.
@@ -72,7 +72,7 @@ The command bus routes the command to the correct helper.
 
 ## Shrink Plan
 
-1. Freeze `SGHV119.html` as a shell only.
+1. Freeze `DevAssist420DevAssist420SGHv119.html` as a shell only.
 2. Move inline JavaScript into helpers.
 3. Remove React frontend from active runtime.
 4. Replace socket assumptions with HTTPS command calls.
@@ -82,7 +82,7 @@ The command bus routes the command to the correct helper.
 
 ## Definition of Done
 
-`SGHV119.html` should only contain:
+`DevAssist420DevAssist420SGHv119.html` should only contain:
 
 - Layout
 - Mobile UI controls
