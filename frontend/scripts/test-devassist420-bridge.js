@@ -10,6 +10,7 @@ const responses = [];
 const context = {
   crypto: { randomUUID: () => 'test-request' },
   window: null,
+  SGHV119_OWNER_SESSION: 'signed-test-session-proof',
   fetch: async (url, options) => {
     calls.push({ url, options });
     const next = responses.shift();
@@ -27,7 +28,6 @@ vm.runInNewContext(source, context);
   assert(api);
 
   const unauthenticated = await api.requestCapability({
-    owner_authenticated: false,
     purpose: 'test',
     resource: { kind: 'model', id: 'grok-4-heavy', provider: 'xai', operation: 'model-load' },
   });
@@ -38,11 +38,11 @@ vm.runInNewContext(source, context);
     state: 'AUTHORIZED', capability_id: 'cap-test', session_id: 'sess-test', epoch: 17,
   }});
   const authorized = await api.requestCapability({
-    owner_authenticated: true,
     purpose: 'test',
     resource: { kind: 'model', id: 'grok-4-heavy', provider: 'xai', operation: 'model-load' },
   });
   assert.strictEqual(authorized.state, 'AUTHORIZED');
+  assert.strictEqual(calls[0].options.headers['X-Sovereignty-Owner-Session'], 'signed-test-session-proof');
 
   responses.push({ ok: true, body: { state: 'EXECUTED' } });
   const result = await api.executeAuthorized(authorized, {
@@ -51,6 +51,7 @@ vm.runInNewContext(source, context);
     resource: { kind: 'model', id: 'grok-4-heavy', provider: 'xai', operation: 'model-load' },
   });
   assert.strictEqual(result.state, 'EXECUTED');
+  assert.strictEqual(calls[1].options.headers['X-Sovereignty-Owner-Session'], 'signed-test-session-proof');
   assert.strictEqual(calls.length, 2);
   assert(calls[0].url.includes('/api/devassist420/authorize'));
   assert(calls[1].url.includes('/api/devassist420/execute'));
