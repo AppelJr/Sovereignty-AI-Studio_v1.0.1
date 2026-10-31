@@ -21,7 +21,8 @@
   "aliases": {
     "start-all.sh": "START_SERVER.sh",
     "python3_bridge.py": "bridge.py",
-    "sovereignty_full_server.py": "bridge.py"
+    "sovereignty_full_server.py": "bridge.py",
+    "server.js": "node-bridge/server.js"
   },
   "legacy_or_separate_runtimes": [
     "server_9897.py",
