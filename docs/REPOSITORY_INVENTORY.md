@@ -7,8 +7,8 @@ Its supported entry points are:
 
 - `DevAssist420SGHv119.html` — canonical KODER dashboard.
 - `START_SERVER.sh` — local dashboard, Python bridge, and Node bridge launcher.
-- `bridge.py` — Python local bridge.
-- `node-bridge/` — Node HTTP/API bridge.
+- `python3_bridge.py` — Python bridge launcher for the existing `bridge` package.
+- `server.js` — root compatibility entry point for the existing `node-bridge/server.js` implementation.
 - `backend/` and `gateway/` — self-hosted service stack.
 
 First-party Studio code also lives in `agents/`, `ai_agents/`, `ai_core/`,
