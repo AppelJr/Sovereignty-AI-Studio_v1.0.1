@@ -73,9 +73,7 @@ jobs:
       - name: Assert patched qs version is installed
         timeout-minutes: 2
         working-directory: node-bridge
-        shell: bash
         run: |
-          set -Eeuo pipefail
           node -e 'const p=require("qs/package.json"); console.log("qs="+p.version); if (p.version !== "6.16.1") process.exit(1)'
           npm ls qs --all
 
