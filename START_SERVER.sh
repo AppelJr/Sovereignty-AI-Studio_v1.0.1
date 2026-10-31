@@ -41,7 +41,7 @@ export SG_ENABLE_REMOTE_NETWORK="0"
 export SG_ALLOW_BACKGROUND_POLLING="0"
 export SG_ENABLE_WEBSOCKET="${SG_ENABLE_WEBSOCKET:-0}"
 export SG_ENABLE_SSE="${SG_ENABLE_SSE:-0}"
-export SG_RUNTIME_OWNER="SGHv119.html"
+export SG_RUNTIME_OWNER="DevAssist420SGHv119.html"
 # Resolve policy and audit paths against the repository, not the caller\x27s cwd.
 export SOVEREIGN_STATE_PATH="${SOVEREIGN_STATE_PATH:-$ROOT_DIR/state/canonical.json}"
 export SCAR_PATH="${SCAR_PATH:-$ROOT_DIR/AUDIT/devassist-device.jsonl}"
