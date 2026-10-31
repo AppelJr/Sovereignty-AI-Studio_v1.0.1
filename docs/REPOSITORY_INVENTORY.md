@@ -5,7 +5,7 @@
 The repository root is the only supported Sovereignty AI Studio runtime.
 Its supported entry points are:
 
-- `SGHv119.html` — KODER dashboard.
+- `DevAssist420SGHv119.html` — canonical KODER dashboard.
 - `START_SERVER.sh` — local dashboard, Python bridge, and Node bridge launcher.
 - `bridge.py` — Python local bridge.
 - `node-bridge/` — Node HTTP/API bridge.
