@@ -16,7 +16,6 @@ on:
 permissions:
   contents: read
 
-# A newer run on the same ref must never silently cancel this validation.
 concurrency:
   group: node-bridge-ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
@@ -25,71 +24,33 @@ jobs:
   test-and-audit:
     name: Node 24 • install, security audit, tests
     runs-on: ubuntu-latest
-    timeout-minutes: 25
-    steps:
-      - name: Checkout exact commit with native git
-        timeout-minutes: 3
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          git init .
-          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
-          auth="$(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 | tr -d '\n')"
-          git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${GITHUB_SHA}"
-          git checkout --detach FETCH_HEAD
-          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
-          git config --unset-all http.extraheader 2>/dev/null || true
 
-      - name: Select preinstalled Node.js 24 (no third-party actions)
-        timeout-minutes: 2
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          shopt -s nullglob
-          candidates=(/opt/hostedtoolcache/node/24*/x64/bin)
-          node24_bin=""
-          for candidate in "${candidates[@]}"; do
-            if [[ -x "$candidate/node" && -x "$candidate/npm" ]]; then
-              node24_bin="$candidate"
-            fi
-          done
-          if [[ -z "$node24_bin" ]]; then
-            echo "FAIL: hosted runner does not provide preinstalled Node.js 24" >&2
-            exit 1
-          fi
-          echo "$node24_bin" >> "$GITHUB_PATH"
-          export PATH="$node24_bin:$PATH"
-          node --version
-          npm --version
-          node -e 'if (Number(process.versions.node.split(".")[0]) !== 24) { console.error("FAIL: Node.js 24 required"); process.exit(1); }'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
 
       - name: Install exact lockfile without lifecycle scripts
-        timeout-minutes: 5
         working-directory: node-bridge
         run: npm ci --ignore-scripts --no-audit --no-fund
 
       - name: Assert patched qs version is installed
-        timeout-minutes: 2
         working-directory: node-bridge
-        shell: bash
         run: |
-          set -Eeuo pipefail
           node -e 'const p=require("qs/package.json"); console.log("qs="+p.version); if (p.version !== "6.16.1") process.exit(1)'
           npm ls qs --all
 
       - name: Fail closed on moderate-or-higher npm advisories
-        timeout-minutes: 5
         working-directory: node-bridge
         run: npm audit --audit-level=moderate
 
       - name: Run Node Bridge tests
-        timeout-minutes: 8
         working-directory: node-bridge
-        shell: bash
         run: |
-          set -Eeuo pipefail
           echo "Starting Node Bridge tests at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
           npm test
           echo "Node Bridge tests completed at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
