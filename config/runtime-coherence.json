@@ -20,7 +20,7 @@
   },
   "aliases": {
     "start-all.sh": "START_SERVER.sh",
-    "sovereignty_full_server.py": "bridge.py",
+    "sovereignty_full_server.py": "python3_bridge.py",
     "server.js": "node-bridge/server.js",
     "node-bridge/server.js": "server.js"
   },
