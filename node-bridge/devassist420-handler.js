@@ -179,7 +179,7 @@ function updateProviderPolicy(body, proof) {
   const session = authenticate(proof, canonical, 'provider.policy.write');
   const p = verifiedPipeline(session.identity_id);
   const policy = writePolicy(body.policy);
-  const evidence = p.record({ participant: session.identity_id, action: 'provider_policy_update', result: 'ALLOW', details: { policy_version: policy.policy_version, storage: 'server-authoritative' } });
+  const evidence = recordVerified(p, { participant: session.identity_id, action: 'provider_policy_update', result: 'ALLOW', details: { policy_version: policy.policy_version, storage: 'server-authoritative' } });
   if (!evidence || evidence.ok !== true) throw new Error('SCAR_PERSISTENCE_FAILED');
   return { state: 'UPDATED', policy, evidence };
 }
