@@ -18,7 +18,7 @@ function validatePolicy(value) {
       !Array.isArray(value.blocked_providers)) {
     throw new Error('PROVIDER_POLICY_INVALID');
   }
-  for (const id of [...value.default_allow, ...value.default_block]) {
+  for (const id of [...value.default_allow, ...value.default_block, ...value.blocked_providers]) {
     if (typeof id !== 'string' || !KNOWN.has(id)) throw new Error('PROVIDER_POLICY_UNKNOWN_ID');
   }
   for (const [id, entry] of Object.entries(value.providers)) {
