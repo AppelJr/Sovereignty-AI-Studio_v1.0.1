@@ -69,8 +69,8 @@ The primary local dashboard/runtime path is **PHPWin** -> Python bridge -> Node 
 DevAssist420SGHv119.html
   -> START_SERVER.sh
       -> static dashboard :9898
-      -> bridge.py         :9897
-      -> node-bridge/server.js :9899
+      -> python3_bridge.py :9897
+      -> server.js         :9899
   -> frontend/runtime/transport.js
   -> frontend/runtime/hawking-channel.js
   -> frontend/runtime/sg-hawking-integration.js
