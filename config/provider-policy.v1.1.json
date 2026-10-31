@@ -1,0 +1,28 @@
+{
+  "schema_version": "1.0.0",
+  "policy_version": "1.1.0",
+  "storage_key": "sgk_provider_policy_v1",
+  "owner_controlled": true,
+  "unknown_provider": "DENY",
+  "default_allow": ["xai", "local", "openai", "anthropic", "custom"],
+  "default_block": ["google", "meta", "mistral"],
+  "providers": {
+    "xai": {"decision": "ALLOW", "endpoint_mode": "fixed"},
+    "local": {"decision": "ALLOW", "endpoint_mode": "loopback"},
+    "openai": {"decision": "ALLOW", "endpoint_mode": "fixed"},
+    "anthropic": {"decision": "ALLOW", "endpoint_mode": "fixed"},
+    "custom": {"decision": "ALLOW", "endpoint_mode": "explicit_allowlist"}
+  },
+  "blocked_providers": ["google", "meta", "mistral"],
+  "custom_endpoint_allowlist": [],
+  "network": {
+    "remote_default": "DENY",
+    "require_https": true,
+    "respect_existing_network_gate": true
+  },
+  "authentication": {
+    "session_proof_required": true,
+    "keycloak_mtls_fedramp_boundaries_preserved": true
+  },
+  "historical_precedence": "policy-1.1.0-supersedes-conflicting-older-defaults"
+}
