@@ -71,6 +71,12 @@ function verifiedPipeline(ownerId) {
   return p;
 }
 
+function recordVerified(p, event) {
+  const chain = p.scar.verifyChain();
+  if (!chain.ok) throw new Error('SCAR_CHAIN_INVALID');
+  return p.record(event);
+}
+
 function probePythonWebSocket(timeoutMs = 2000) {
   return new Promise((resolve) => {
     let settled = false;
@@ -92,20 +98,18 @@ function authorize(body, proof) {
   const canonical = loadCanonicalState(STATE_PATH);
   const session = authenticate(proof, canonical, 'ai.inference');
   const request = normalize(body, session.identity_id, session.session_id);
-  if (request.prefer === 'external' || request.provider !== 'local') {
-    const decision = decideProvider(request.provider);
-    if (decision.decision !== 'ALLOW') {
+  const providerDecision = decideProvider(request.provider);
+  if (providerDecision.decision !== 'ALLOW') {
       const p = verifiedPipeline(session.identity_id);
-      const evidence = p.record({ participant: session.identity_id, action: request.action, result: 'DENY', details: { reason: decision.reason, provider: request.provider, policy_version: decision.policy_version || null } });
-      return { state: 'DENY', reason: decision.reason, request, evidence, agreement: AGREEMENT };
-    }
-    // Policy permission is necessary, but this handler only implements the
-    // local Python inference transport. Never misroute an external provider.
-    return { state: 'DENY', reason: 'PROVIDER_ADAPTER_NOT_CONNECTED_TO_CANONICAL_EXECUTION_PATH', request, provider_policy: decision, agreement: AGREEMENT };
+      const evidence = recordVerified(p, { participant: session.identity_id, action: request.action, result: 'DENY', details: { reason: providerDecision.reason, provider: request.provider, policy_version: providerDecision.policy_version || null } });
+      return { state: 'DENY', reason: providerDecision.reason, request, evidence, agreement: AGREEMENT };
+  }
+  if (request.prefer === 'external' || request.provider !== 'local') {
+    return { state: 'DENY', reason: 'PROVIDER_ADAPTER_NOT_CONNECTED_TO_CANONICAL_EXECUTION_PATH', request, provider_policy: providerDecision, agreement: AGREEMENT };
   }
   const p = verifiedPipeline(session.identity_id);
   const route = p.devassist.route(canonical, request);
-  const evidence = p.record({ participant: session.identity_id, action: request.action, result: route.route === 'deny' ? 'DENY' : 'ALLOW', details: { route: route.route, reason: route.reason, policy_reason: route.policy_reason, session_id: session.session_id } });
+  const evidence = recordVerified(p, { participant: session.identity_id, action: request.action, result: route.route === 'deny' ? 'DENY' : 'ALLOW', details: { route: route.route, reason: route.reason, policy_reason: route.policy_reason, session_id: session.session_id } });
   if (!evidence || evidence.ok !== true) return { state: 'DENY', reason: 'SCAR_PERSISTENCE_FAILED', request, agreement: AGREEMENT };
   if (route.route !== 'local') return { state: route.route === 'resource_wait' ? 'REQUIRE_APPROVAL' : 'DENY', reason: route.reason, request, evidence, agreement: AGREEMENT };
   const authorization = {
@@ -155,11 +159,11 @@ async function execute(body, proof) {
   const p = verifiedPipeline(session.identity_id);
   try {
     const response = await infer(request);
-    const evidence = p.record({ participant: session.identity_id, action: request.action, result: 'ALLOW', details: { route: 'local', transport: PYTHON_WS_URL, response_hash: response.hash || null, request_id: request.request_id, session_id: session.session_id } });
+    const evidence = recordVerified(p, { participant: session.identity_id, action: request.action, result: 'ALLOW', details: { route: 'local', transport: PYTHON_WS_URL, response_hash: response.hash || null, request_id: request.request_id, session_id: session.session_id } });
     if (!evidence || evidence.ok !== true) return { state: 'DENY', reason: 'SCAR_PERSISTENCE_FAILED', agreement: AGREEMENT };
     return { state: 'EXECUTED', response: response.text || '', agent: response.agent || 'devassist420', hash: response.hash || null, ts: response.ts || Date.now(), evidence, agreement: AGREEMENT };
   } catch (error) {
-    const evidence = p.record({ participant: session.identity_id, action: request.action, result: 'FAIL', details: { route: 'local', error: error.message, request_id: request.request_id, session_id: session.session_id } });
+    const evidence = recordVerified(p, { participant: session.identity_id, action: request.action, result: 'FAIL', details: { route: 'local', error: error.message, request_id: request.request_id, session_id: session.session_id } });
     return { state: 'FAIL', reason: 'LOCAL_INFERENCE_UNAVAILABLE', detail: error.message, evidence, agreement: AGREEMENT };
   }
 }
