@@ -57,10 +57,12 @@ fi
 
 "$VENV_PYTHON" -m pip install "${PIP_ARGS[@]}" -r requirements-runtime.txt
 npm ci "${NPM_ARGS[@]}" --ignore-scripts
+npm ci --prefix node-bridge "${NPM_ARGS[@]}" --ignore-scripts
 
 "$VENV_PYTHON" - <<'PY'
 import websockets
 print(f"Python runtime dependencies verified (websockets {websockets.__version__})")
 PY
 node --check node-bridge/server.js
+node --check server.js
 echo "Installation complete. Configure only an approved local inference provider, then run ./START_SERVER.sh."
