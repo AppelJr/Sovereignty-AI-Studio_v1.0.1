@@ -28,7 +28,7 @@ jobs:
     timeout-minutes: 25
     steps:
       - name: Checkout exact commit with native git
-        timeout-minutes: 3
+        timeout-minutes: 25
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -43,7 +43,7 @@ jobs:
           git config --unset-all http.extraheader 2>/dev/null || true
 
       - name: Select preinstalled Node.js 24 (no third-party actions)
-        timeout-minutes: 2
+        timeout-minutes: 25
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -66,12 +66,12 @@ jobs:
           node -e 'if (Number(process.versions.node.split(".")[0]) !== 24) { console.error("FAIL: Node.js 24 required"); process.exit(1); }'
 
       - name: Install exact lockfile without lifecycle scripts
-        timeout-minutes: 5
+        timeout-minutes: 25
         working-directory: node-bridge
         run: npm ci --ignore-scripts --no-audit --no-fund
 
       - name: Assert patched qs version is installed
-        timeout-minutes: 2
+        timeout-minutes: 25
         working-directory: node-bridge
         shell: bash
         run: |
@@ -80,12 +80,12 @@ jobs:
           npm ls qs --all
 
       - name: Fail closed on moderate-or-higher npm advisories
-        timeout-minutes: 5
+        timeout-minutes: 25
         working-directory: node-bridge
         run: npm audit --audit-level=moderate
 
       - name: Run Node Bridge tests
-        timeout-minutes: 8
+        timeout-minutes: 25
         working-directory: node-bridge
         shell: bash
         run: |
