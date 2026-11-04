@@ -1,10 +1,11 @@
 {
-  "schema_version": "1.0",
+  "schema_version": "1.1",
   "canonical_runtime": {
     "dashboard": "DevAssist420SGHv119.html",
+    "dashboard_server": "server_9898.js",
     "launcher": "START_SERVER.sh",
     "python_bridge": "python3_bridge.py",
-    "node_bridge": "server.js",
+    "unified_server": "Unified_Server.js",
     "local_ci": "scripts/local-ci.sh",
     "repository_registry": "integration/repository-registry.json",
     "transport": "frontend/runtime/transport.js",
@@ -14,15 +15,18 @@
     "devassist_preload": "node-bridge/devassist420-preload.js"
   },
   "ports": {
-    "dashboard": 9898,
     "python_bridge": 9897,
-    "node_bridge": 9899
+    "dashboard": 9898,
+    "unified_server": 9899,
+    "keycloak_http": 8080,
+    "keycloak_https": 8443,
+    "redis_internal": 6379,
+    "postgres_internal": 5432
   },
   "aliases": {
     "start-all.sh": "START_SERVER.sh",
-    "sovereignty_full_server.py": "python3_bridge.py",
-    "server.js": "node-bridge/server.js",
-    "node-bridge/server.js": "server.js"
+    "server.js": "Unified_Server.js",
+    "sovereignty_full_server.py": "bridge.py"
   },
   "legacy_or_separate_runtimes": [
     "server_9897.py",
