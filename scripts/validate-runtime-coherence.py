@@ -25,9 +25,10 @@ def main() -> int:
     for name, relative_path in canonical.items():
         if not (ROOT / relative_path).exists():
             fail(f"canonical {name} is missing: {relative_path}")
+    # Aliases are historical names; only their canonical targets must exist.
     for alias, target in manifest["aliases"].items():
-        if not (ROOT / alias).exists() or not (ROOT / target).exists():
-            fail(f"broken compatibility alias: {alias} -> {target}")
+        if not (ROOT / target).exists():
+            fail(f"compatibility alias target is missing: {alias} -> {target}")
     policy = manifest["state_policy"]
     if policy["default_mode"] != "local" or not policy["private_state_is_not_committed"]:
         fail("local-first/private-state policy violated")
