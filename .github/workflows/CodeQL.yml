@@ -1,27 +1,71 @@
-name: CodeQL Scan
+name: Sovereign Static Security Gate (native runner)
 
+# This is a repository-local static gate, not GitHub CodeQL analysis.
+# It intentionally uses no third-party Actions and does not claim SARIF results.
 on:
-  branches:
-  - Collaboration
-  - main
-  pull:
-  branches:
-  - Collaboration
-  - main
+  workflow_dispatch:
+  push:
+    branches:
+      - Collaboration
+      - main
+  pull_request:
+    branches:
+      - Collaboration
+      - main
+
 permissions:
   contents: read
 
+concurrency:
+  group: sovereign-static-security-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
-  analyze:
-  - name: Local Security Gate
+  static-security:
+    name: Native runtime and syntax gates
     runs-on: ubuntu-latest
-    timeout-minutes: 60
-  - name: Checkout repository without external actions
-   GH_TOKEN: ${{ github.token }}
-  shell: bash
-  run: |
-     set -Eeuo pipefail git init .
-     git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
-     auth="$(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 -w0)"
-     git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${GITHUB_SHA} 
-     git checkout --detach
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact commit without external Actions
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git init .
+          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          auth="$(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 | tr -d '\n')"
+          git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${GITHUB_SHA}"
+          git checkout --detach FETCH_HEAD
+          git config --unset-all http.extraheader 2>/dev/null || true
+          git rev-parse --short HEAD
+
+      - name: Validate canonical runtime and port ownership
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 scripts/validate-runtime-coherence.py
+
+      - name: Validate shell entrypoints
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          bash -n START_SERVER.sh INSTALL.sh
+
+      - name: Validate Node entrypoint syntax
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          node --check server_9898.js
+          node --check Unified_Server.js
+          node --check server.js
+          node --check node-bridge/server.js
+          node --check node-bridge/devassist420-handler.js
+          node --check tests/test_dashboard_server.js
+
+      - name: Validate Python runtime manifest syntax
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m json.tool config/runtime-coherence.json >/dev/null
+          python3 -m json.tool config/provider-policy.v1.1.json >/dev/null
