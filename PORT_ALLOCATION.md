@@ -23,3 +23,11 @@ Open the dashboard at:
     http://127.0.0.1:9898/
 
 Do not start legacy server aliases alongside the canonical entry points; that would create port collisions and split runtime ownership.
+
+## Current compatibility boundary
+
+Port 9897 provides GET /api/health and the established WebSocket protocol. The HTTP mutation routes /api/brain, /api/ai, /api/keys, /api/speak, /api/audit, /api/rotate-key, and /api/conflicts are NOT IMPLEMENTED on 9897 until the signed owner-session and SCAR adapters are connected. Do not infer route availability from this port map.
+
+Run the interactive read-only device smoke test with:
+
+    npm run test:live

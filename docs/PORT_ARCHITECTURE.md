@@ -38,7 +38,7 @@ The runtime has three application-facing services. Port ownership is exclusive; 
 - Brain/memory operations and session continuity
 - Key rotation and audit events
 - STT/TTS integration, including local Piper
-- Health and backend APIs
+- HTTP health compatibility at GET /api/health and /health; WebSocket message operations remain the current AI/memory/token interface
 
 ### 9898 — Frontend / Dashboard
 
@@ -121,3 +121,7 @@ Unified Node WebSocket:
 8. A missing service is reported as unavailable; no alternate port or remote fallback is silently selected.
 9. Keycloak identity is not inferred from a browser label or voice.
 10. Orchestrator and dashboard are not authorization authorities.
+
+## REST compatibility status
+
+The Python bridge currently exposes GET /api/health and /health over the same listener as its WebSocket service. Existing AI, memory, and token operations remain on the established WebSocket message protocol. The following HTTP routes from the target architecture are not yet proven or exposed on 9897 and must remain marked NOT IMPLEMENTED until their authorization and audit adapters are wired: /api/ai, /api/keys, /api/speak, /api/audit, /api/rotate-key, and /api/conflicts. Do not create unauthenticated HTTP mutation aliases for these operations.

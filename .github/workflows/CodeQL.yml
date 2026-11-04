@@ -63,6 +63,13 @@ jobs:
           node --check node-bridge/devassist420-handler.js
           node --check tests/test_dashboard_server.js
 
+      - name: Test Python bridge HTTP health contract
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m pip install --disable-pip-version-check --no-input websockets==17.3
+          python3 -m unittest discover -s tests -p 'test_bridge_health.py' -v
+
       - name: Validate Python runtime manifest syntax
         shell: bash
         run: |

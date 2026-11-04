@@ -13,6 +13,7 @@ All AI requests route through ai_core.sovereign_bridge.
 
 import asyncio
 import hashlib
+from http import HTTPStatus
 import json
 import logging
 import os
@@ -479,6 +480,27 @@ class BridgeServer:
     # Lifecycle
     # ------------------------------------------------------------------
 
+    def process_http_request(self, connection, request):
+        """Expose read-only HTTP health while retaining WebSocket on the same port."""
+        path = request.path.split("?", 1)[0]
+        if path not in {"/health", "/api/health"}:
+            return None
+        payload = {
+            "status": "ok",
+            "service": "sovereignty-python-bridge",
+            "port": self.port,
+            "transport": "websocket+http-health",
+            "memory": self.memory is not None,
+            "tokens": self.tokens is not None,
+            "clients": len(self.clients),
+            "network_mode": os.environ.get("SG_NETWORK_MODE", "offline"),
+        }
+        response = connection.respond(HTTPStatus.OK, json.dumps(payload))
+        response.headers["Content-Type"] = "application/json; charset=utf-8"
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        return response
+
     async def start(self):
         if not WS_OK:
             log.error("FATAL: websockets is not installed.")
@@ -505,6 +527,8 @@ class BridgeServer:
             ping_interval=20,
             ping_timeout=30,
             max_size=50 * 1024 * 1024,
+            process_request=self.process_http_request,
+            server_header=None,
         )
         log.info("Bridge LIVE → ws://%s:%s", self.host, self.port)
         await asyncio.Future()  # intentional: keep server alive until cancellation/interruption
