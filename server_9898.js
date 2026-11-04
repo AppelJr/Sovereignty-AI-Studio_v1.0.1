@@ -18,6 +18,7 @@ const EVENT_TYPES = new Set(['status', 'audit', 'memory', 'voice', 'checkpoint',
 const BLOCKED_ROOTS = new Set([
   '.git', '.github', '.venv', 'AUDIT', 'backend', 'config', 'data', 'docs',
   'external', 'models', 'node_modules', 'scripts', 'secrets', 'state', 'tests',
+  'logs', 'reports', 'memory', 'tokens', 'keys', 'artifacts', 'certs', 'certificates',
   'piper-tts', 'gitsovereign'
 ]);
 const SENSITIVE_KEY = /secret|token|api[_-]?key|password|private[_-]?key|credential|transcript|raw[_-]?audio/i;
@@ -80,6 +81,7 @@ function timingSafeToken(actual, expected) {
 
 function createDashboardServer(options = {}) {
   const root = path.resolve(options.root || __dirname);
+  const realRoot = fs.realpathSync(root);
   const upstreamPort = Number(options.upstreamPort || process.env.PORT_UNIFIED || process.env.NODE_BRIDGE_PORT || 9899);
   const maxProxyBytes = Number(options.maxProxyBytes || 20 * 1024 * 1024);
   const subscriptions = new Map();
@@ -191,18 +193,25 @@ function createDashboardServer(options = {}) {
       json(res, 404, { state: 'NOT_FOUND' });
       return;
     }
-    fs.stat(file, (statError, stat) => {
-      if (statError || !stat.isFile()) {
+    fs.realpath(file, (realError, realFile) => {
+      const relative = realError ? '..' : path.relative(realRoot, realFile);
+      if (realError || relative.startsWith('..' + path.sep) || path.isAbsolute(relative)) {
         json(res, 404, { state: 'NOT_FOUND' });
         return;
       }
-      res.writeHead(200, {
-        'Content-Type': MIME[path.extname(file).toLowerCase()],
-        'Content-Length': stat.size,
-        'Cache-Control': 'no-store'
+      fs.stat(realFile, (statError, stat) => {
+        if (statError || !stat.isFile()) {
+          json(res, 404, { state: 'NOT_FOUND' });
+          return;
+        }
+        res.writeHead(200, {
+          'Content-Type': MIME[path.extname(realFile).toLowerCase()],
+          'Content-Length': stat.size,
+          'Cache-Control': 'no-store'
+        });
+        if (req.method === 'HEAD') res.end();
+        else fs.createReadStream(realFile).pipe(res);
       });
-      if (req.method === 'HEAD') res.end();
-      else fs.createReadStream(file).pipe(res);
     });
   });
 
@@ -248,6 +257,7 @@ function createDashboardServer(options = {}) {
 
 function start() {
   const host = process.env.DASHBOARD_HOST || '127.0.0.1';
+  if (!['127.0.0.1', '::1', 'localhost'].includes(host)) throw new Error('DASHBOARD_BIND_MUST_BE_LOOPBACK');
   const port = Number.parseInt(process.env.PORT || process.env.STATIC_PORT || '9898', 10);
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('DASHBOARD_PORT_INVALID');
   const app = createDashboardServer();

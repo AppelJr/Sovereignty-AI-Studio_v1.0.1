@@ -28,12 +28,20 @@ fi
 [[ -d "$ROOT_DIR/node_modules/ws" ]] || { echo "Missing root ws dependency. Run npm ci." >&2; exit 1; }
 [[ -d "$ROOT_DIR/node-bridge/node_modules/express" || -d "$ROOT_DIR/node_modules/express" ]] || { echo "Missing Node bridge dependencies. Run npm ci --prefix node-bridge." >&2; exit 1; }
 "$ROOT_DIR/scripts/diamond-core-runtime-gate.sh"
-for port in "$PY_PORT" "$DASHBOARD_PORT" "$UNIFIED_PORT"; do
-  if command -v lsof >/dev/null 2>&1 && lsof -iTCP:"$port" -sTCP:LISTEN -n >/dev/null 2>&1; then
-    echo "Port $port is already in use; refusing partial startup." >&2
-    exit 1
-  fi
-done
+"$PYTHON_BIN" - "$PY_PORT" "$DASHBOARD_PORT" "$UNIFIED_PORT" <<'PY'
+import socket
+import sys
+
+for raw in sys.argv[1:]:
+    port = int(raw)
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        sock.bind(("127.0.0.1", port))
+    except OSError as exc:
+        raise SystemExit(f"Port {port} is unavailable; refusing partial startup: {exc}")
+    finally:
+        sock.close()
+PY
 export PIPER_MODEL="${PIPER_MODEL:-$ROOT_DIR/models/en_US-lessac-medium.onnx}"
 export PIPER_DIR="${PIPER_DIR:-$ROOT_DIR/piper-tts}"
 export SG_NETWORK_MODE="$NETWORK_MODE"

@@ -13,6 +13,7 @@ All AI requests route through ai_core.sovereign_bridge.
 
 import asyncio
 import hashlib
+import ipaddress
 from http import HTTPStatus
 import json
 import logging
@@ -102,6 +103,14 @@ class BridgeServer:
     """
 
     def __init__(self, host: str = HOST, port: int = PORT):
+        if host.lower() != 'localhost':
+            try:
+                if not ipaddress.ip_address(host).is_loopback:
+                    raise ValueError(f'BridgeServer must bind to loopback, got {host!r}')
+            except ValueError as exc:
+                if 'must bind to loopback' in str(exc):
+                    raise
+                raise ValueError(f'BridgeServer must bind to loopback, got {host!r}') from exc
         self.host = host
         self.port = port
         self.clients: set = set()

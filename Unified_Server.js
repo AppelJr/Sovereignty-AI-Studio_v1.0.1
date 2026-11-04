@@ -7,6 +7,7 @@ const { server } = require('./node-bridge/server');
 
 function start() {
   const host = process.env.UNIFIED_HOST || process.env.NODE_BRIDGE_HOST || '127.0.0.1';
+  if (!['127.0.0.1', '::1', 'localhost'].includes(host)) throw new Error('UNIFIED_BIND_MUST_BE_LOOPBACK');
   const rawPort = process.env.PORT_UNIFIED || process.env.NODE_BRIDGE_PORT || '9899';
   const port = Number.parseInt(rawPort, 10);
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('UNIFIED_SERVER_PORT_INVALID');

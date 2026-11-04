@@ -43,6 +43,10 @@ class BridgeHealthRequestTests(unittest.TestCase):
         self.assertTrue(connection.response.headers["Content-Type"].startswith("application/json"))
         self.assertEqual(connection.response.headers["Cache-Control"], "no-store")
 
+    def test_bridge_rejects_non_loopback_bind(self) -> None:
+        with self.assertRaises(ValueError):
+            BridgeServer(host="0.0.0.0", port=9897)
+
     def test_bridge_health_hook_does_not_intercept_other_http_paths(self) -> None:
         self.assertIsNone(
             self.bridge.process_http_request(
