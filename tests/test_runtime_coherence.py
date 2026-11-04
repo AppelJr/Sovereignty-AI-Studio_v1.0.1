@@ -36,7 +36,7 @@ def test_aliases_do_not_become_new_runtime_owners() -> None:
     manifest = json.loads((ROOT / "config" / "runtime-coherence.json").read_text())
     assert manifest["aliases"]["start-all.sh"] == "START_SERVER.sh"
     assert manifest["aliases"]["server.js"] == "Unified_Server.js"
-    assert manifest["aliases"]["sovereignty_full_server.py"] == "bridge.py"
+    assert manifest["aliases"]["sovereignty_full_server.py"] == "python3_bridge.py"
 
 
 def test_private_state_and_provider_choice_are_policy_bound() -> None:
