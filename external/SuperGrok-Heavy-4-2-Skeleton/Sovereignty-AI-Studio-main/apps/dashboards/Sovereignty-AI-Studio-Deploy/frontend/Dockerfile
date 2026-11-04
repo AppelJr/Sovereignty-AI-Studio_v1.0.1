@@ -1,18 +1,5 @@
-FROM node:18-alpine
-
-WORKDIR /app
-
-# Copy package files
-COPY package*.json ./
-
-# Install dependencies
-RUN npm install
-
-# Copy source code
-COPY . .
-
-# Expose port
-EXPOSE 98765
-
-# Start the application
-CMD ["npm", "start"]
+# Sovereignty AI Studio Deploy — Frontend
+# Static vanilla site. No Node, no npm, no React toolchain.
+FROM nginx:alpine
+COPY . /usr/share/nginx/html
+EXPOSE 80

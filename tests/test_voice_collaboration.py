@@ -32,7 +32,7 @@ class TestVoiceCollaborationService:
     def test_progress_rejects_out_of_scope_files(self):
         with pytest.raises(ValueError, match="approved task scope"):
             self.service.report_progress(
-                self.task["task_id"], ["SGHv119.html"], [], "Review changes"
+                self.task["task_id"], ["DevAssist420SGHv119.html"], [], "Review changes"
             )
 
     def test_execution_requires_matching_request(self):

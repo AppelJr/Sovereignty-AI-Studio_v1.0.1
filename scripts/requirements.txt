@@ -6,11 +6,11 @@ blake3>=0.4.0
 numpy>=1.26.0
 scipy>=1.17.1
 pandas>=2.2.0
-biopython>=1.83
+biopython>=1.88
 scikit-learn>=1.4.0
 pysam>=0.22.0
 pybedtools>=0.12.1
-pyBigWig>=0.3.22
+pyBigWig>=0.3.26
 
 # Optional (for full single-cell support)
 # archr (R package - run via rpy2 if needed)

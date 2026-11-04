@@ -12,7 +12,7 @@ membership must not be confused with visibility, authorization, assignment, or
 runtime availability. A client-controlled projection parameter must never grant
 privilege.
 
-The root `SGHv119.html` dashboard is the canonical frontend surface served by
+The root `DevAssist420SGHv119.html` dashboard is the canonical frontend surface served by
 `START_SERVER.sh`. The canonical Python application package is under
 `backend/`; `external/` and historical dashboard HTML files are not runtime
 sources for this contract.

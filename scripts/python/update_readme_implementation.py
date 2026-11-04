@@ -28,7 +28,7 @@ def build_section(repo_root: Path) -> str:
         repo_root / ".github/workflows/ci.yml",
         repo_root / ".github/workflows/oauth-api-generator.yml",
         repo_root / ".github/workflows/readme-implementation-sync.yml",
-        repo_root / "SGHv119.html",                    # Dashboard + Live Terminal + Package Installer
+        repo_root / "DevAssist420SGHv119.html",                    # Dashboard + Live Terminal + Package Installer
     ]
 
     existing = [f for f in tracked_files if f.exists()]
@@ -60,7 +60,7 @@ def build_section(repo_root: Path) -> str:
 ### Architecture Notes
 - Frontend served on **port 9898**
 - All backend / WebSocket traffic routes through **port 9899** (node-bridge gateway)
-- Dashboard + Live Terminal with package installer integrated in `SGHv119.html`
+- Dashboard + Live Terminal with package installer integrated in `DevAssist420SGHv119.html`
 - README implementation status is self-updating via GitHub Actions
 {END_MARKER}
 """

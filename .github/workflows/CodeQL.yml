@@ -1,25 +1,27 @@
 name: CodeQL Scan
 
 on:
-  workflow_dispatch:
-
+  branches:
+  - Collaboration
+  - main
+  pull:
+  branches:
+  - Collaboration
+  - main
 permissions:
   contents: read
 
 jobs:
   analyze:
-    name: Local Security Gate
+  - name: Local Security Gate
     runs-on: ubuntu-latest
     timeout-minutes: 60
-    steps:
-      - name: Checkout repository without external actions
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          git init .
-          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
-          auth="$(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 -w0)"
-          git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${GITHUB_SHA}"
-          git checkout --detach 
+  - name: Checkout repository without external actions
+   GH_TOKEN: ${{ github.token }}
+  shell: bash
+  run: |
+     set -Eeuo pipefail git init .
+     git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+     auth="$(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 -w0)"
+     git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${GITHUB_SHA} 
+     git checkout --detach

@@ -46,7 +46,7 @@ Or persist equivalent JSON in `localStorage.sg_config`.
     ┌──────────────┐              ┌──────────────┐
     │   PORT 9898  │              │   PORT 9899  │
     │ KODER frontend│              │  node-bridge │
-    │ (SGHv119.html)│              │  (server.js) │
+    │ (DevAssist420SGHv119.html)│              │  (server.js) │
     └──────────────┘              └──────┬───────┘
                                          │ proxy
                                          ▼
@@ -78,7 +78,7 @@ Or persist equivalent JSON in `localStorage.sg_config`.
 
 | Port | Service | Role | Access |
 |------|---------|------|--------|
-| **9898** | **KODER Frontend (SGHv119.html)** | **UI served here — iPhone/browser loads the page** | **PUBLIC** |
+| **9898** | **KODER Frontend (DevAssist420SGHv119.html)** | **UI served here — iPhone/browser loads the page** | **PUBLIC** |
 | **9899** | **Node.js node-bridge (server.js)** | **WebSocket + HTTP API gateway (browser connects here)** | **PUBLIC** |
 | **9897** | **Python bridge.py (WebSocket)** | **PRIMARY AI/TTS/STT backend** | Internal |
 
@@ -112,7 +112,7 @@ Or persist equivalent JSON in `localStorage.sg_config`.
 
 ### Port 9898 - KODER Frontend ⭐ (UI entry point)
 
-**Purpose**: KODER dashboard (SGHv119.html) — what iPhones and browsers load.
+**Purpose**: KODER dashboard (DevAssist420SGHv119.html) — what iPhones and browsers load.
 
 **Technology**: Static HTML dashboard (local `python3 -m http.server` or production reverse proxy/CDN)
 
@@ -133,7 +133,7 @@ Or persist equivalent JSON in `localStorage.sg_config`.
 - Request logging
 
 **Access URLs**:
-- Load UI: `http://localhost:9898/SGHv119.html`
+- Load UI: `http://localhost:9898/DevAssist420SGHv119.html`
 - WebSocket bridge: `ws://localhost:9899/`
 - Health Check: `http://localhost:9899/health`
 - API Gateway: `http://localhost:9899/api/v1/*`
@@ -226,7 +226,7 @@ REACT_APP_WS_URL=ws://localhost:9899
 ./START_SERVER.sh
 
 # Load KODER dashboard
-open http://localhost:9898/SGHv119.html
+open http://localhost:9898/DevAssist420SGHv119.html
 
 # API / WS traffic (browser → node-bridge)
 curl http://localhost:9899/health
@@ -239,7 +239,7 @@ docker-compose up
 
 # KODER frontend is served separately (non-Docker):
 python3 -m http.server 9898 --bind 127.0.0.1 --directory .
-open http://localhost:9898/SGHv119.html
+open http://localhost:9898/DevAssist420SGHv119.html
 
 # node-bridge WS/API:
 curl http://localhost:9899/health
@@ -264,7 +264,7 @@ curl http://localhost:9899/api/bridge/status
 wscat -c ws://localhost:9899/ws/alerts
 
 # Load KODER frontend
-curl http://localhost:9898/SGHv119.html
+curl http://localhost:9898/DevAssist420SGHv119.html
 ```
 
 ## Firewall Configuration
@@ -336,7 +336,7 @@ services:
 
 ```bash
 # ✅ Correct — load the HTML from the static file server
-open http://localhost:9898/SGHv119.html
+open http://localhost:9898/DevAssist420SGHv119.html
 
 # ❌ Wrong — node-bridge doesn't serve static assets
 open http://localhost:9899
@@ -396,7 +396,7 @@ const backendUrl = 'http://localhost:9898/api/v1';
 const wsUrl = 'ws://localhost:9898';
 
 // NEW - UI from 9898, API/WS from node-bridge on 9899
-const uiUrl   = 'http://localhost:9898/SGHv119.html';  // load KODER
+const uiUrl   = 'http://localhost:9898/DevAssist420SGHv119.html';  // load KODER
 const apiUrl  = 'http://localhost:9899/api/v1';         // API calls
 const wsUrl   = 'ws://localhost:9899';                  // WebSocket
 ```

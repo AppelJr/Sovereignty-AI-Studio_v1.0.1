@@ -9,7 +9,10 @@ ROOT = Path(__file__).resolve().parents[1]
 def test_runtime_manifest_has_one_canonical_entrypoint() -> None:
     manifest = json.loads((ROOT / "config" / "runtime-coherence.json").read_text())
     canonical = manifest["canonical_runtime"]
-    assert canonical["dashboard"] == "SGHv119.html"
+    assert canonical["dashboard"] == "DevAssist420SGHv119.html"
+    assert (ROOT / canonical["dashboard"]).is_file()
+    assert (ROOT / canonical["python_bridge"]).is_file()
+    assert (ROOT / canonical["node_bridge"]).is_file()
     assert canonical["launcher"] == "START_SERVER.sh"
     assert canonical["local_ci"] == "scripts/local-ci.sh"
     assert len(set(canonical.values())) == len(canonical.values())
@@ -27,7 +30,10 @@ def test_runtime_manifest_ports_are_symmetric() -> None:
 def test_aliases_do_not_become_new_runtime_owners() -> None:
     manifest = json.loads((ROOT / "config" / "runtime-coherence.json").read_text())
     assert manifest["aliases"]["start-all.sh"] == "START_SERVER.sh"
-    assert manifest["aliases"]["python3_bridge.py"] == "bridge.py"
+    assert manifest["aliases"]["node-bridge/server.js"] == "server.js"
+    assert manifest["canonical_runtime"]["python_bridge"] == "python3_bridge.py"
+    assert manifest["canonical_runtime"]["node_bridge"] == "server.js"
+    assert manifest["aliases"]["server.js"] == "node-bridge/server.js"
     assert manifest["aliases"]["sovereignty_full_server.py"] == "bridge.py"
 
 

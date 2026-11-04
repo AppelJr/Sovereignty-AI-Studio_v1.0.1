@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-TARGETS = (ROOT / "SGHv119.html", ROOT / "7-14-SGHV119.html")
+TARGETS = (ROOT / "DevAssist420SGHv119.html", ROOT / "7-14-SGHV119.html")
 PATTERNS = {
     "hawking_definition": r"SovereignHawkingChannel\s*=|SovereignHawkingChannel\s*\(",
     "bridge_singleton": r"_SG_BRIDGE_STATUS\s*=|BRIDGE STATUS SINGLETON",
@@ -34,10 +34,10 @@ def main() -> int:
                 "duplicate_ws_manager",
                 "legacy_local_block",
                 "truncated_placeholder",
-            } and path.name == "SGHv119.html":
+            } and path.name == "DevAssist420SGHv119.html":
                 failed = True
     if failed:
-        print("SGHv119 cleanup required: canonical dashboard still owns duplicate or truncated runtime code", file=sys.stderr)
+        print("DevAssist420SGHv119 cleanup required: canonical dashboard still owns duplicate or truncated runtime code", file=sys.stderr)
         return 1
     print("dashboard ownership report passed")
     return 0

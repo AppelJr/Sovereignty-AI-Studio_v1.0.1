@@ -13,7 +13,7 @@
 
   const ALLOWED_STATES = new Set([
     'DECLARED', 'CONFIGURED', 'AVAILABLE', 'VERIFIED', 'ACTIVE',
-    'UNAVAILABLE', 'DENY', 'REQUIRE_APPROVAL'
+    'UNAVAILABLE', 'DENY', 'REQUIRE_APPROVAL', 'AUTHORIZED'
   ]);
 
   function requireNonEmpty(value, field) {
@@ -50,7 +50,6 @@
       purpose: requireNonEmpty(request.purpose, 'purpose'),
       risk_notes: Object.freeze(risks),
       reward_notes: Object.freeze(rewards),
-      session_id: request.session_id ? String(request.session_id) : null,
       session_id: request.session_id ? String(request.session_id) : null,
     });
   }

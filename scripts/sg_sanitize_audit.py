@@ -30,7 +30,7 @@ IGNORE_DIRS = {
 }
 
 ACTIVE_ROOTS = {
-    "SGHV119.html",
+    "DevAssist420SGHv119.html",
     "agent-workspaces.json",
     "helpers",
     "crypto",

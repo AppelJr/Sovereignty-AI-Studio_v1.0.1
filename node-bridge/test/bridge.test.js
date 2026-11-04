@@ -96,16 +96,38 @@ describe('Node Bridge – Notify', () => {
   });
 });
 
+async function connectAlertsWithoutCompression() {
+  const addr = server.address();
+  const ws = new WebSocket(`ws://localhost:${addr.port}/ws/alerts`);
+  await new Promise((resolve, reject) => {
+    ws.once('open', () => {
+      if (ws.extensions !== '') {
+        ws.terminate();
+        reject(new Error(`unexpected WebSocket extensions: ${ws.extensions}`));
+        return;
+      }
+      resolve();
+    });
+    ws.once('error', reject);
+  });
+  return ws;
+}
+
 describe('Node Bridge – WebSocket', () => {
   it('responds to ping with pong', async () => {
-    const addr = server.address();
-    const ws = new WebSocket(`ws://localhost:${addr.port}/ws/alerts`);
+    const ws = await connectAlertsWithoutCompression();
 
     const pong = await new Promise((resolve, reject) => {
-      ws.on('open', () => ws.send(JSON.stringify({ type: 'ping' })));
-      ws.on('message', (raw) => { resolve(JSON.parse(raw)); ws.close(); });
-      ws.on('error', reject);
-      setTimeout(() => reject(new Error('timeout')), 3000);
+      const timer = setTimeout(() => reject(new Error('timeout waiting for pong')), 3000);
+      ws.on('message', (raw) => {
+        const message = JSON.parse(raw);
+        if (message.type !== 'pong') return; // Ignore the initial welcome frame.
+        clearTimeout(timer);
+        resolve(message);
+        ws.close();
+      });
+      ws.on('error', (error) => { clearTimeout(timer); reject(error); });
+      ws.send(JSON.stringify({ type: 'ping' }));
     });
 
     assert.equal(pong.type, 'pong');
@@ -113,13 +135,18 @@ describe('Node Bridge – WebSocket', () => {
   });
 
   it('broadcasts notifications to connected clients', async () => {
-    const addr = server.address();
-    const ws = new WebSocket(`ws://localhost:${addr.port}/ws/alerts`);
-    await new Promise((r) => ws.on('open', r));
+    const ws = await connectAlertsWithoutCompression();
 
     const msgPromise = new Promise((resolve, reject) => {
-      ws.on('message', (raw) => { resolve(JSON.parse(raw)); ws.close(); });
-      setTimeout(() => reject(new Error('timeout')), 3000);
+      const timer = setTimeout(() => reject(new Error('timeout waiting for notification')), 3000);
+      ws.on('message', (raw) => {
+        const message = JSON.parse(raw);
+        if (message.type !== 'alert') return; // Ignore the initial welcome frame.
+        clearTimeout(timer);
+        resolve(message);
+        ws.close();
+      });
+      ws.on('error', (error) => { clearTimeout(timer); reject(error); });
     });
 
     await request('/api/bridge/notify', {

@@ -328,7 +328,7 @@ class BridgeServer:
             await self.send(ws, {"type": "token_result", "action": action, "provider": provider, "valid": valid, "ts": int(time.time() * 1000)})
 
     async def _handle_memory_save(self, ws, message: dict) -> None:
-        """Handle legacy memory_save messages from PiperTTS.ws (SGHv119.html)."""
+        """Handle legacy memory_save messages from PiperTTS.ws (DevAssist420SGHv119.html)."""
         title = message.get("title", "")
         content = message.get("content", "")
         role = message.get("role", "")
@@ -344,7 +344,7 @@ class BridgeServer:
         await self.send(ws, {"type": "memory_saved", "id": card_id, "label": title, "ts": int(time.time() * 1000)})
 
     async def _handle_memory_get(self, ws, message: dict) -> None:
-        """Handle legacy memory_get messages from PiperTTS.ws (SGHv119.html)."""
+        """Handle legacy memory_get messages from PiperTTS.ws (DevAssist420SGHv119.html)."""
         cards: list = []
         if self.memory:
             try:
@@ -425,7 +425,7 @@ class BridgeServer:
                     asyncio.create_task(self._handle_memory_query(ws, message))
 
                 elif mtype == "memory_save":
-                    # Legacy API used by PiperTTS.ws in SGHv119.html
+                    # Legacy API used by PiperTTS.ws in DevAssist420SGHv119.html
                     asyncio.create_task(self._handle_memory_save(ws, message))
 
                 elif mtype == "memory_get":

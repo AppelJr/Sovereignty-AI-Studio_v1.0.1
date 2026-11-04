@@ -14,6 +14,7 @@ on:
 
 permissions:
   contents: read
+  actions: write
 
 concurrency:
   group: diamond-core-v0.1-${{ github.ref }}
@@ -23,7 +24,7 @@ jobs:
   contract:
     name: Diamond Core v0.1 Contract Gate
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - name: Checkout without third-party actions
         env:

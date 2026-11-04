@@ -52,8 +52,12 @@ def main() -> int:
         fail("provider selection must remain deployment-owner policy")
 
     launcher = (ROOT / canonical["launcher"]).read_text(encoding="utf-8", errors="ignore")
-    if launcher.count("SG_PORT=9897") == 0 or launcher.count("NODE_BRIDGE_PORT=9899") == 0:
-        fail("canonical launcher does not declare the expected bridge ports")
+    if "${SG_PORT:-9897}" not in launcher or "${NODE_BRIDGE_PORT:-9899}" not in launcher:
+        fail("canonical launcher does not default to the expected bridge ports")
+    if 'SG_RUNTIME_OWNER="DevAssist420SGHv119.html"' not in launcher:
+        fail("canonical launcher points at the wrong dashboard entrypoint")
+    if '"$ROOT_DIR/server.js"' not in launcher or '"$ROOT_DIR/python3_bridge.py"' not in launcher:
+        fail("canonical launcher does not start the canonical Node/Python bridge entrypoints")
     if "127.0.0.1" not in launcher:
         fail("canonical launcher is not loopback-bound")
 

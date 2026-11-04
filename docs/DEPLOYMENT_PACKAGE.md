@@ -7,10 +7,10 @@ This replaces the legacy `Deployv2.0.py` artifact with a markdown quick referenc
 - `start-all.sh` - local orchestrator that starts Redis (if installed), the weather dashboard (`hypercorn weather_dashboard:app`), the Python gateway (`gateway/main.py`), and the Node.js bridge on port 9898
 - `ecosystem.config.cjs` - PM2 profiles for backend, gateway, and node-bridge
 - `backend/` + `requirements.txt` - FastAPI services (auth, orgs, media, voice, telemetry) and tests under `tests/`
-- `node-bridge/` - WebSocket/HTTP bridge on port 9898 (proxies to gateway and backend)
+- `server.js / node-bridge/` - Node HTTP/API bridge on port 9899 (proxies to gateway and backend)
 - `gateway/` - Python multi-agent gateway (`gateway/main.py`) used by node-bridge
 - `scripts/` - deployment helpers (`deploy.sh`), database init (`init_db.py`), certificate tooling (`generate-certs.sh`, `tls_rotate.*`), and supporting utilities
-- `apps/dashboards/SGHv119.html` and other dashboard artifacts for monitoring agents
+- `DevAssist420SGHv119.html` and other dashboard artifacts for monitoring agents
 - `docs/REPOSITORY_ORGANIZATION.md`, `docs/QUICK_REFERENCE.md`, and related documents for structure and troubleshooting
 
 ## Quick start (local)
