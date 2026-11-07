@@ -130,7 +130,35 @@ function authorize(body, proof) {
 
 async function executeLocalTool(body, proof) {
   const canonical = loadCanonicalState(STATE_PATH);
-  const session = authenticate(proof, canonical, 'local.tool.execute');
+  let session;
+  try {
+    session = authenticate(proof, canonical, 'local.tool.execute');
+  } catch (error) {
+    // Record failed authentication/capability checks against the canonical owner
+    // without treating the caller as authenticated or dispatching the request.
+    try {
+      if (canonical.allowed && canonical.state && canonical.state.owner_id) {
+        const deniedPipeline = verifiedPipeline(canonical.state.owner_id);
+        const deniedEvidence = recordVerified(deniedPipeline, {
+          participant: 'unauthenticated-request',
+          action: 'local_tool_execute',
+          result: 'DENY',
+          details: {
+            reason: error.message, capability: 'local.tool.execute',
+            request_id: typeof body.request_id === 'string' ? body.request_id : null,
+            dispatcher_started: false
+          }
+        });
+        if (!deniedEvidence || deniedEvidence.ok !== true) {
+          return { state: 'DENY', reason: 'SCAR_PERSISTENCE_FAILED' };
+        }
+        return { state: 'DENY', reason: error.message, evidence: deniedEvidence };
+      }
+    } catch (auditError) {
+      return { state: 'DENY', reason: 'SCAR_DENIAL_RECORD_FAILED', detail: auditError.message };
+    }
+    return { state: 'DENY', reason: error.message };
+  }
   const p = verifiedPipeline(session.identity_id);
   const requestId = typeof body.request_id === 'string' && body.request_id.length <= 128
     ? body.request_id : crypto.randomUUID();
