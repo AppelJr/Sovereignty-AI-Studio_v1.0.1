@@ -3,7 +3,7 @@ import hashlib
 import json
 import subprocess
 import sys
-from pathlib import Path
+import os
 
 from backend.integration.offline_tool_dispatcher import execute_tool_call
 
@@ -44,3 +44,23 @@ def test_cli_returns_structured_json():
     result = json.loads(completed.stdout)
     assert completed.returncode == 0
     assert result["status"] == "success"
+
+
+def test_aggregate_output_cap_terminates_process(tmp_path, monkeypatch):
+    import backend.integration.offline_tool_dispatcher as dispatcher
+
+    producer = tmp_path / "producer"
+    producer.write_text(
+        f"#!{sys.executable}\nimport sys\nsys.stdout.write('x' * (2 * 1024 * 1024))\n",
+        encoding="utf-8",
+    )
+    producer.chmod(0o700)
+    monkeypatch.setattr(dispatcher, "EXECUTABLE", str(producer))
+    monkeypatch.setitem(dispatcher.TOOLS, "echo", str(producer))
+
+    result = dispatcher.execute_tool_call({"tool": "echo", "args": []})
+
+    assert result["status"] == "error"
+    assert result["truncated"] is True
+    assert result["output_byte_length"] == dispatcher.MAX_OUTPUT_BYTES
+    assert result["reason"].startswith("aggregate output limit exceeded")
