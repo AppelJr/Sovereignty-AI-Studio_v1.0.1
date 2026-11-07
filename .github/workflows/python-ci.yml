@@ -32,3 +32,18 @@ jobs:
           git -c http.extraHeader="Authorization: basic ${auth}" fetch --depth=1 origin "${GITHUB_SHA}"
           git checkout --detach FETCH_HEAD
           git rev-parse --short HEAD
+
+      - name: Run offline dispatcher Python unit tests
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m pip install pytest
+          python3 -m pytest -q tests/unit/test_offline_tool_dispatcher.py
+
+      - name: Run owner-gated Node dispatcher integration tests
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          node --version
+          npm ci --ignore-scripts
+          node tests/test_offline_tool_dispatcher_integration.js
