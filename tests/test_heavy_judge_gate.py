@@ -97,7 +97,7 @@ def test_invalid_risk_scores_rejected(score: float) -> None:
 
 
 def test_missing_audit_sink_fails_closed() -> None:
-    with pytest.raises(RuntimeError, match="REPMHL audit sink"):
+    with pytest.raises(RuntimeError, match="Audit logging failed"):
         HeavyJudge().review("safe text", "general", 0.10)
 
 
