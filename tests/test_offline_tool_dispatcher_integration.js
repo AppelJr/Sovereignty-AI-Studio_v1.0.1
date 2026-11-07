@@ -21,10 +21,10 @@ const {
 } = require('../backend/state/canonical_state');
 const { executeLocalTool } = require('../node-bridge/devassist420-handler');
 
-function ownerProof(capabilities) {
+function ownerProof(capabilities, identity = 'Appel420') {
   const payload = Buffer.from(JSON.stringify({
     session_id: 'test-session-1',
-    identity_id: 'Appel420',
+    identity_id: identity,
     capabilities,
     mode: 'offline',
     expires_at: Math.floor(Date.now() / 1000) + 300
@@ -56,6 +56,14 @@ async function main() {
   assert.equal(deniedEvents[0].result, 'DENY');
   assert.equal(deniedEvents[0].details.dispatcher_started, false);
 
+  const laneDenied = await executeLocalTool(
+    { tool: 'echo', args: ['provider-must-not-execute'], request_id: 'provider-lane-request' },
+    ownerProof(['local.tool.execute'], 'provider-lane:anthropic')
+  );
+  assert.equal(laneDenied.state, 'DENY');
+  assert.equal(laneDenied.reason, 'OWNER_IDENTITY_MISMATCH');
+  assert.equal(laneDenied.evidence.ok, true);
+
   const result = await executeLocalTool(
     { tool: 'echo', args: ['Sovereignty', 'dispatcher'], request_id: 'approved-request' },
     ownerProof(['local.tool.execute'])
@@ -67,11 +75,16 @@ async function main() {
   assert.equal(result.evidence.ok, true);
 
   const lines = fs.readFileSync(scarPath, 'utf8').trim().split('\n').map(JSON.parse);
-  assert.equal(lines.length, 2);
-  assert.equal(lines[1].result, 'ALLOW');
-  assert.equal(lines[1].details.capability, 'local.tool.execute');
-  assert.equal(lines[1].details.request_id, 'approved-request');
-  assert.match(lines[1].details.stdout_sha3_512, /^[a-f0-9]{128}$/);
+  assert.equal(lines.length, 3);
+  assert.equal(lines[1].result, 'DENY');
+  assert.equal(lines[1].details.reason, 'OWNER_IDENTITY_MISMATCH');
+  assert.equal(lines[2].result, 'ALLOW');
+  assert.equal(lines[2].details.capability, 'local.tool.execute');
+  assert.equal(lines[2].details.request_id, 'approved-request');
+  assert.equal(lines[2].details.memory_loaded, false);
+  assert.equal(lines[2].details.network_accessed, false);
+  assert.deepEqual(lines[2].details.files_changed, []);
+  assert.match(lines[2].details.stdout_sha3_512, /^[a-f0-9]{128}$/);
 
   const deniedTool = await executeLocalTool(
     { tool: 'python', args: ['-c', 'print(1)'], request_id: 'blocked-tool' },
@@ -79,11 +92,12 @@ async function main() {
   );
   assert.equal(deniedTool.state, 'DENY');
   const all = fs.readFileSync(scarPath, 'utf8').trim().split('\n').map(JSON.parse);
-  assert.equal(all.length, 3);
-  assert.equal(all[2].result, 'DENY');
-  assert.equal(all[2].details.dispatcher_status, 'denied');
+  assert.equal(all.length, 4);
+  assert.equal(all[3].result, 'DENY');
+  assert.equal(all[3].details.dispatcher_status, 'denied');
 
   console.log('PASS owner capability gates local dispatcher');
+  console.log('PASS provider lane cannot impersonate owner authority');
   console.log('PASS fixed allowlist executes echo only');
   console.log('PASS stdout SHA3-512 provenance bound to SCAR');
   console.log('PASS denied tool call is recorded in SCAR');
