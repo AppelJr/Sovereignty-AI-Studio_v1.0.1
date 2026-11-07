@@ -60,14 +60,14 @@ def test_rewrite_calls_configured_rewriter() -> None:
 
 
 def test_rewrite_without_rewriter_never_returns_original() -> None:
-    result = HeavyJudge().review("unsafe draft", "general", 0.80)
+    result = HeavyJudge(repmhl=MemoryAudit()).review("unsafe draft", "general", 0.80)
     assert result["verdict"]["action"] == "rewrite"
     assert result["final_output"] != "unsafe draft"
     assert result["outcome"] == "safe_replacement"
 
 
 def test_yank_uses_safe_replacement() -> None:
-    result = HeavyJudge().review("unsafe draft", "medical", 0.95)
+    result = HeavyJudge(repmhl=MemoryAudit()).review("unsafe draft", "medical", 0.95)
     assert result["verdict"]["action"] == "yank"
     assert result["final_output"] != "unsafe draft"
 
@@ -75,7 +75,7 @@ def test_yank_uses_safe_replacement() -> None:
 @pytest.mark.parametrize("score", [-0.01, 1.01, float("nan"), float("inf"), True])
 def test_invalid_risk_scores_rejected(score: float) -> None:
     with pytest.raises((TypeError, ValueError)):
-        HeavyJudge().review("text", "general", score)
+        HeavyJudge(repmhl=MemoryAudit()).review("text", "general", score)
 
 
 def test_audit_failure_withholds_result() -> None:
