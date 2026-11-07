@@ -1,212 +1,204 @@
 #!/usr/bin/env python3
+"""DevAssist420 Heavy Judge: deterministic policy gate for model proposals.
+
+This module does not itself infer risk or call a provider. The caller must supply
+a risk score from an explicitly selected evaluator. Provider/model output is
+untrusted input. Gate.One remains the independent authorization boundary.
 """
-HeavyJudge v2.0
-Final quality and safety guardian for the Sovereign AI stack.
-Background drift detector + Council arbitration for medical/education.
-"""
+from __future__ import annotations
 
 import hashlib
-import json
-import logging
-import time
-from dataclasses import dataclass, asdict
+import hmac
+import math
+from collections.abc import Callable, Mapping
 from datetime import datetime, timezone
-from typing import Optional, Dict, Any, Literal
-
-logger = logging.getLogger("HeavyJudge")
-
-Action = Literal["pass", "rewrite", "yank", "council_override", "refuse"]
-
-
-@dataclass
-class JudgeVerdict:
-    timestamp: str
-    risk_score: float
-    action: Action
-    hash: str
-    signature: Optional[str]
-    context: str
-    judge_model: str
-    reason: str
+from typing import Any
 
 
 class HeavyJudge:
-    """
-    Heavy Judge — Background safety + drift monitor.
-    - Mostly passive (low cost)
-    - Triggers Council on medical/education when risk is elevated
-    - Produces cryptographically verifiable verdicts
+    """Apply context-specific thresholds and emit a REPMHL-compatible event.
+
+    The audit sink contract is intentionally repmhl.log(dict). If a sink is
+    configured and fails, the response is withheld when fail-closed mode is on.
     """
 
-    def __init__(self, model_name: str = "grok-5.5-heavy", repmhl=None, token_manager=None):
-        self.model_name = model_name
+    DEFAULT_POLICIES: dict[str, dict[str, float]] = {
+        "medical": {"rewrite_at": 0.75, "yank_at": 0.90},
+        "education": {"rewrite_at": 0.75, "yank_at": 0.90},
+        "general": {"rewrite_at": 0.75, "yank_at": 0.90},
+        "legal": {"rewrite_at": 0.75, "yank_at": 0.90},
+        "financial": {"rewrite_at": 0.75, "yank_at": 0.90},
+        "coding": {"rewrite_at": 0.75, "yank_at": 0.90},
+    }
+
+    def __init__(
+        self,
+        model_name: str = "SuperGrok-5.7-Hybrid",
+        repmhl: Any | None = None,
+        *,
+        rewriter: Callable[[str, str], str] | None = None,
+        policies: Mapping[str, Mapping[str, float]] | None = None,
+        audit_hmac_key: bytes | None = None,
+        fail_closed_on_log_error: bool = True,
+    ) -> None:
+        if audit_hmac_key is not None and (
+            not isinstance(audit_hmac_key, bytes) or not audit_hmac_key
+        ):
+            raise ValueError("audit_hmac_key must be non-empty bytes")
+        self.model = model_name
         self.repmhl = repmhl
-        self.token_manager = token_manager   # For real council calls
+        self.rewriter = rewriter
+        self.audit_hmac_key = audit_hmac_key
+        self.fail_closed_on_log_error = fail_closed_on_log_error
+        self.policies = self._validate_policies(
+            policies if policies is not None else self.DEFAULT_POLICIES
+        )
 
-        self.thresholds = {
-            "medical": 0.60,
-            "education": 0.65,
-            "general": 0.80
-        }
-        self.council_providers = ["xai", "anthropic", "openai"]
-
-    def _calculate_risk(self, text: str, context: str) -> float:
-        """Drift + Safety risk scoring focused on education and medical."""
-        text_lower = text.lower()
-        risk = 0.0
-
-        # Drift / uncertainty signals
-        drift_signals = ["i think", "maybe", "possibly", "not sure", "could be", "i guess"]
-        drift_hits = sum(1 for phrase in drift_signals if phrase in text_lower)
-        risk += min(drift_hits * 0.12, 0.35)
-
-        # Overconfident language (bad for students)
-        overconfident = ["always", "never", "exactly", "100%", "definitely", "proven fact"]
-        if any(word in text_lower for word in overconfident):
-            risk += 0.25
-
-        # Medical safety
-        if context == "medical":
-            dangerous = ["diagnose", "you have", "take this", "cure for", "stop taking"]
-            if any(word in text_lower for word in dangerous):
-                risk += 0.55
-
-        # Education context boost
-        if context == "education":
-            if any(kw in text_lower for kw in ["child", "student", "learn", "puberty", "growth"]):
-                risk += 0.15
-
-        if context in ["medical", "education"]:
-            risk += 0.18
-
-        return min(risk, 1.0)
-
-    def _run_council(self, original_output: str, context: str, token_manager=None) -> Dict[str, Any]:
-        """Run council of xAI + Anthropic + OpenAI."""
-        votes = []
-
-        for provider in self.council_providers:
-            vote = {
-                "provider": provider,
-                "supports": True,
-                "confidence": 0.82,
-                "comment": f"{provider} reviewed for {context}"
+    @staticmethod
+    def _validate_policies(
+        policies: Mapping[str, Mapping[str, float]],
+    ) -> dict[str, dict[str, float]]:
+        if not policies:
+            raise ValueError("At least one context policy is required")
+        validated: dict[str, dict[str, float]] = {}
+        for context, policy in policies.items():
+            if not isinstance(context, str) or not context.strip():
+                raise ValueError("Policy context names must be non-empty strings")
+            if not isinstance(policy, Mapping):
+                raise ValueError(f"Policy for {context!r} must be a mapping")
+            try:
+                rewrite_at = float(policy["rewrite_at"])
+                yank_at = float(policy["yank_at"])
+            except (KeyError, TypeError, ValueError) as exc:
+                raise ValueError(
+                    f"Policy for {context!r} requires numeric rewrite_at and yank_at"
+                ) from exc
+            if not math.isfinite(rewrite_at) or not math.isfinite(yank_at):
+                raise ValueError(f"Thresholds for {context!r} must be finite")
+            if not 0.0 <= rewrite_at < yank_at <= 1.0:
+                raise ValueError(
+                    f"Policy for {context!r} must satisfy "
+                    "0 <= rewrite_at < yank_at <= 1"
+                )
+            validated[context] = {
+                "rewrite_at": rewrite_at,
+                "yank_at": yank_at,
             }
-
-            if token_manager is not None:
-                try:
-                    # In real usage this would call the actual model via token_manager
-                    if provider == "anthropic":
-                        vote["supports"] = True
-                        vote["confidence"] = 0.91
-                    elif provider == "xai":
-                        vote["supports"] = True
-                        vote["confidence"] = 0.85
-                    else:
-                        vote["supports"] = True
-                        vote["confidence"] = 0.80
-                except Exception as e:
-                    logger.warning(f"Council call to {provider} failed: {e}")
-
-            votes.append(vote)
-
-        support_count = sum(1 for v in votes if v.get("supports"))
-        consensus = "pass" if support_count >= 2 else "revise"
-
-        return {
-            "votes": votes,
-            "consensus": consensus,
-            "support_ratio": round(support_count / len(votes), 2),
-            "triggered_real_calls": token_manager is not None
-        }
-
-    def _sign(self, data: dict) -> str:
-        return hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest()[:32]
+        return validated
 
     def review(
         self,
         original_output: str,
-        context: str = "general",
-        force_judge: bool = False,
-        token_manager=None
-    ) -> Dict[str, Any]:
-        """
-        Main review method.
-        Triggers council automatically on medical/education when risk is high.
-        """
-        risk_score = self._calculate_risk(original_output, context)
-        triggered_council = False
-        council_result = None
+        context: str,
+        risk_score: float = 0.0,
+    ) -> dict[str, Any]:
+        self._validate_review_input(original_output, context, risk_score)
+        score = float(risk_score)
+        verdict = self._generate_verdict(original_output, context, score)
+        action = verdict["action"]
+        rewrite_error: str | None = None
 
-        # Trigger council for medical or high-stakes education
-        effective_token_manager = token_manager or self.token_manager
-        if context in ["medical", "education"] and (risk_score > self.thresholds[context] or force_judge):
-            council_result = self._run_council(original_output, context, effective_token_manager)
-            triggered_council = True
-
-        # Decide action
-        action: Action = "pass"
-        if risk_score > self.thresholds.get(context, 0.75):
-            if triggered_council and council_result and council_result["consensus"] == "revise":
-                action = "council_override"
-            elif risk_score > 0.88:
-                action = "refuse"
-            elif risk_score > 0.75:
-                action = "yank"
-            else:
-                action = "rewrite"
-
-        final_output = original_output
-        if action == "refuse":
-            final_output = "I need to be careful here. Please consult a qualified professional."
-        elif action in ["yank", "rewrite", "council_override"]:
-            final_output = "Let me rephrase that more carefully and accurately for clarity and safety."
-
-        verdict = JudgeVerdict(
-            timestamp=datetime.now(timezone.utc).isoformat(),
-            risk_score=round(risk_score, 3),
-            action=action,
-            hash=self._sign({"output": final_output, "risk": risk_score}),
-            signature=self._sign({"verdict": action, "time": time.time()}),
-            context=context,
-            judge_model=self.model_name,
-            reason=f"Risk {risk_score:.2f} in {context} context"
-        )
-
-        # Feed into REPMHL
-        if self.repmhl:
+        if action == "pass":
+            final_output = original_output
+            outcome = "passed"
+        elif action == "rewrite" and self.rewriter is not None:
             try:
-                self.repmhl.process_turn(
-                    tokens=0,
-                    text=f"[HeavyJudge] {action} | context={context}",
-                    role="system"
-                )
-            except Exception:
-                pass
+                candidate = self.rewriter(original_output, context)
+                if not isinstance(candidate, str) or not candidate.strip():
+                    raise ValueError("Rewriter returned empty or non-string output")
+                final_output = candidate
+                outcome = "rewritten"
+            except Exception as exc:
+                final_output = self._safe_replacement(context)
+                outcome = "safe_replacement"
+                rewrite_error = type(exc).__name__
+        else:
+            # YANK, or REWRITE without an approved rewriter: never leak original.
+            final_output = self._safe_replacement(context)
+            outcome = "safe_replacement"
 
-        logger.info(f"[HeavyJudge] {action.upper()} | context={context} | risk={risk_score:.2f}")
-
-        return {
+        result: dict[str, Any] = {
             "final_output": final_output,
-            "verdict": asdict(verdict),
-            "triggered_council": triggered_council,
-            "council_result": council_result
+            "verdict": verdict,
+            "outcome": outcome,
+            "judge_model": self.model,
         }
+        if rewrite_error is not None:
+            result["rewrite_error"] = rewrite_error
 
+        try:
+            self._log_to_repmhl(verdict, final_output)
+        except Exception as exc:
+            if self.fail_closed_on_log_error:
+                raise RuntimeError("Audit logging failed; response withheld") from exc
+            result["audit_log_error"] = type(exc).__name__
+        return result
 
-# ====================== TEST ======================
-if __name__ == "__main__":
-    judge = HeavyJudge(model_name="grok-5.5-heavy")
+    def _validate_review_input(
+        self, original_output: str, context: str, risk_score: float
+    ) -> None:
+        if not isinstance(original_output, str):
+            raise TypeError("original_output must be a string")
+        if not isinstance(context, str) or context not in self.policies:
+            raise ValueError(
+                f"Unsupported context {context!r}; expected one of {sorted(self.policies)}"
+            )
+        if isinstance(risk_score, bool):
+            raise TypeError("risk_score must be a number, not bool")
+        try:
+            score = float(risk_score)
+        except (TypeError, ValueError) as exc:
+            raise TypeError("risk_score must be a number") from exc
+        if not math.isfinite(score) or not 0.0 <= score <= 1.0:
+            raise ValueError("risk_score must be finite and between 0 and 1")
 
-    test_cases = [
-        ("The patient should take 500mg of medication daily.", "medical"),
-        ("Puberty usually starts between ages 10-14.", "education"),
-        ("The sky is blue because of Rayleigh scattering.", "general"),
-    ]
+    def _generate_verdict(
+        self, original_output: str, context: str, risk_score: float
+    ) -> dict[str, Any]:
+        policy = self.policies[context]
+        if risk_score >= policy["yank_at"]:
+            action = "yank"
+        elif risk_score >= policy["rewrite_at"]:
+            action = "rewrite"
+        else:
+            action = "pass"
+        verdict: dict[str, Any] = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "risk_score": round(risk_score, 3),
+            "action": action,
+            "context": context,
+        }
+        input_hmac = self._keyed_digest(original_output)
+        if input_hmac is not None:
+            verdict["input_hmac_sha3_512"] = input_hmac
+        return verdict
 
-    for output, ctx in test_cases:
-        result = judge.review(output, context=ctx, force_judge=True)
-        print(f"\nContext: {ctx}")
-        print(f"Action: {result['verdict']['action']}")
-        print(f"Final Output: {result['final_output'][:100]}...")
-        print(f"Triggered Council: {result['triggered_council']}")
+    @staticmethod
+    def _safe_replacement(context: str) -> str:
+        if context in {"medical", "legal", "financial"}:
+            return "I’m sorry, I cannot provide that information safely."
+        return "Let’s try a different approach."
+
+    def _keyed_digest(self, text: str) -> str | None:
+        if self.audit_hmac_key is None:
+            return None
+        return hmac.new(
+            self.audit_hmac_key,
+            text.encode("utf-8"),
+            hashlib.sha3_512,
+        ).hexdigest()
+
+    def _log_to_repmhl(
+        self, verdict: dict[str, Any], final_output: str
+    ) -> None:
+        if self.repmhl is None:
+            return
+        logger = getattr(self.repmhl, "log", None)
+        if not callable(logger):
+            raise TypeError("REPMHL sink must implement log(dict)")
+        event = {
+            "event": "HEAVY_JUDGE_VERDICT",
+            "verdict": verdict,
+            "output_hmac_sha3_512": self._keyed_digest(final_output),
+        }
+        logger(event)
