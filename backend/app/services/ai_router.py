@@ -1,39 +1,43 @@
 """
-Multi-provider AI router with cascading fallback logic.
-Priority order: xAI (Grok) → Anthropic (Claude) → OpenAI (GPT)
-Privacy mode forces local-only (no external calls — raises if no provider).
-Cost-optimized mode can be configured per-call.
+Multi-provider AI router with provider fallback and a mandatory Heavy Judge gate.
 
-Keep the router privacy-first and vendor-neutral.
+Provider fallback handles transport/provider failures only. Once a provider
+returns a candidate, the result is evaluated and audited exactly once; judge
+or audit failures are never treated as provider failures and never trigger
+another external call. Gate.One remains the separate authorization boundary.
 """
 import logging
 import os
-from typing import Optional
+from collections.abc import Callable
+from typing import Optional, Any
 
 from app.services.providers.openai_provider import OpenAIProvider
 from app.services.providers.anthropic_provider import AnthropicProvider
 from app.services.providers.xai_provider import XAIProvider
+from sovereign_core.heavy_judge import HeavyJudge
 
 logger = logging.getLogger(__name__)
-
-# Provider preference order (left = highest priority)
 PROVIDER_ORDER = ["xai", "anthropic", "openai"]
 
 
 class AIRouter:
-    """
-    Routes AI requests across sovereign cloud providers with automatic fallback.
+    """Route to configured providers, then enforce the mandatory Heavy Judge."""
 
-    Fallback chain: xAI → Anthropic → OpenAI
-    Privacy mode: raises immediately (no external calls permitted)
-    """
-
-    def __init__(self):
+    def __init__(
+        self,
+        *,
+        risk_evaluator: Callable[[str, str], float] | None = None,
+        repmhl: Any | None = None,
+        judge: HeavyJudge | None = None,
+    ) -> None:
         self._providers: dict = {}
+        self.risk_evaluator = risk_evaluator
+        self.repmhl = repmhl
+        self.judge = judge or HeavyJudge(repmhl=repmhl)
         self._init_providers()
 
     def _init_providers(self) -> None:
-        """Initialize all configured providers, skip unconfigured ones."""
+        """Initialize configured official provider adapters."""
         candidates = {
             "xai": (XAIProvider, "XAI_API_KEY"),
             "anthropic": (AnthropicProvider, "ANTHROPIC_API_KEY"),
@@ -45,7 +49,7 @@ class AIRouter:
                     self._providers[name] = cls()
                     logger.info("AI provider initialized: %s", name)
                 except Exception as exc:
-                    logger.warning("Failed to init provider %s: %s", name, exc)
+                    logger.warning("Failed to init provider %s: %s", name, type(exc).__name__)
 
     @property
     def available_providers(self) -> list:
@@ -60,37 +64,24 @@ class AIRouter:
         max_tokens: int = 1024,
         temperature: float = 0.7,
         privacy_mode: bool = False,
+        context: str = "general",
     ) -> dict:
-        """
-        Route a chat request with automatic provider fallback.
-
-        Args:
-            prompt: The user's message.
-            system: System prompt / instructions.
-            preferred_provider: Try this provider first if available.
-            model: Specific model name (provider-specific). Uses provider default if None.
-            max_tokens: Maximum tokens in the response.
-            temperature: Sampling temperature.
-            privacy_mode: If True, raises immediately (for future sovereign inference node).
-
-        Returns:
-            Normalized response dict with keys: provider, model, text, tokens, latency_ms.
-
-        Raises:
-            RuntimeError: All providers failed or privacy_mode with no local provider.
-        """
+        """Provider fallback followed by a mandatory, fail-closed judge gate."""
         if privacy_mode:
             raise RuntimeError(
                 "Privacy mode enabled: external AI calls are not permitted. "
-                "Configure a sovereign local inference node."
+                "Configure a permitted sovereign local inference node."
             )
+        if self.risk_evaluator is None:
+            raise RuntimeError("No trusted risk_evaluator configured; output withheld")
+        if self.repmhl is None:
+            raise RuntimeError("No required REPMHL audit sink configured; output withheld")
 
         order = self._build_order(preferred_provider)
         errors: list = []
-
         for provider_name in order:
             provider = self._providers.get(provider_name)
-            if not provider:
+            if provider is None:
                 continue
             kwargs: dict = {
                 "prompt": prompt,
@@ -102,35 +93,50 @@ class AIRouter:
                 kwargs["model"] = model
             try:
                 result = await provider.chat(**kwargs)
-                if len(errors) > 0:
-                    result["fallback_from"] = errors
-                return result
             except Exception as exc:
+                # Fail over only on provider/transport failure.
                 logger.warning(
-                    "Provider %s failed: %s — trying next", provider_name, exc
+                    "Provider %s failed (%s); trying next",
+                    provider_name,
+                    type(exc).__name__,
                 )
-                errors.append({"provider": provider_name, "error": str(exc)})
+                errors.append({"provider": provider_name, "error": type(exc).__name__})
+                continue
+
+            if not isinstance(result, dict) or not isinstance(result.get("text"), str):
+                raise RuntimeError(
+                    f"Provider {provider_name} returned malformed output; output withheld"
+                )
+
+            candidate = result["text"]
+            risk_score = self.risk_evaluator(candidate, context)
+            verdict = self.judge.review(candidate, context, risk_score)
+            result["text"] = verdict["final_output"]
+            result["heavy_judge_verdict"] = verdict["verdict"]
+            result["heavy_judge_outcome"] = verdict["outcome"]
+            result["judge_model"] = verdict["judge_model"]
+            if errors:
+                result["fallback_from"] = errors
+            return result
 
         raise RuntimeError(
-            f"All AI providers failed. Errors: {errors}. "
-            f"Available providers: {self.available_providers}"
+            "All configured AI providers failed. "
+            f"Provider errors: {errors}. Available: {self.available_providers}"
         )
 
     def _build_order(self, preferred: Optional[str]) -> list:
-        """Build provider priority list, putting preferred first."""
         order = PROVIDER_ORDER.copy()
         if preferred and preferred in self._providers:
-            order = [preferred] + [p for p in order if p != preferred]
+            order = [preferred] + [provider for provider in order if provider != preferred]
         return order
 
     async def health_check(self) -> dict:
-        """Return health status of all configured providers."""
         status = {}
         for name, provider in self._providers.items():
             try:
                 status[name] = {"healthy": await provider.health_check()}
             except Exception as exc:
-                status[name] = {"healthy": False, "error": str(exc)}
+                status[name] = {"healthy": False, "error": type(exc).__name__}
         return {
             "router": "sovereign",
             "providers": status,
@@ -138,5 +144,6 @@ class AIRouter:
         }
 
 
-# Module-level singleton
+# Deliberately unconfigured singleton fails closed until trusted evaluator and
+# persistent REPMHL sink are injected by validated device startup state.
 ai_router = AIRouter()
