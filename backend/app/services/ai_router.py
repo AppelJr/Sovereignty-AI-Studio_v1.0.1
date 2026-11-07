@@ -51,6 +51,31 @@ class AIRouter:
                 except Exception as exc:
                     logger.warning("Failed to init provider %s: %s", name, type(exc).__name__)
 
+    def configure_governance(
+        self,
+        *,
+        risk_evaluator: Callable[[str, str], float],
+        repmhl: Any,
+        judge: HeavyJudge | None = None,
+    ) -> None:
+        """Install startup-validated evaluator and persistent audit sink.
+
+        Call only after canonical device-owner startup state has been validated.
+        This method configures content governance; it does not grant Gate.One
+        authorization or establish provider credentials.
+        """
+        if not callable(risk_evaluator):
+            raise TypeError("risk_evaluator must be callable")
+        audit_log = getattr(repmhl, "log", None)
+        if not callable(audit_log):
+            raise TypeError("repmhl must implement log(dict)")
+        selected_judge = judge or HeavyJudge(repmhl=repmhl)
+        if getattr(selected_judge, "repmhl", None) is not repmhl:
+            raise ValueError("judge must use the configured REPMHL audit sink")
+        self.risk_evaluator = risk_evaluator
+        self.repmhl = repmhl
+        self.judge = selected_judge
+
     @property
     def available_providers(self) -> list:
         return list(self._providers.keys())
