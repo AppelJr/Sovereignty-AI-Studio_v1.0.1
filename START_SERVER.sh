@@ -8,11 +8,32 @@ NODE_BIN="${NODE_BIN:-node}"
 PY_PORT="${SG_PORT:-9897}"
 DASHBOARD_PORT="${PORT:-${STATIC_PORT:-9898}}"
 UNIFIED_PORT="${PORT_UNIFIED:-${NODE_BRIDGE_PORT:-9899}}"
-NETWORK_MODE="${SG_NETWORK_MODE:-offline}"
-if [[ "$NETWORK_MODE" != "local" && "$NETWORK_MODE" != "offline" ]]; then
-  echo "Refusing startup: SG_NETWORK_MODE must be local or offline (got $NETWORK_MODE)." >&2
-  exit 1
-fi
+NETWORK_MODE="${SG_NETWORK_MODE:-local}"
+REMOTE_NETWORK_ENABLED="${SG_ENABLE_REMOTE_NETWORK:-0}"
+LOCAL_ALLOWLIST="${SG_LOCAL_NETWORK_ALLOWLIST:-}"
+case "$NETWORK_MODE" in
+  local|offline)
+    NETWORK_MODE="local"
+    REMOTE_NETWORK_ENABLED="0"
+    ;;
+  hybrid)
+    if [[ -z "${LOCAL_ALLOWLIST//[[:space:]]/}" ]]; then
+      echo "Refusing HYBRID startup: SG_LOCAL_NETWORK_ALLOWLIST must contain at least one approved host." >&2
+      exit 1
+    fi
+    REMOTE_NETWORK_ENABLED="0"
+    ;;
+  online)
+    if [[ "$REMOTE_NETWORK_ENABLED" != "1" ]]; then
+      echo "Refusing ONLINE startup: set SG_ENABLE_REMOTE_NETWORK=1 through deployment-owner policy." >&2
+      exit 1
+    fi
+    ;;
+  *)
+    echo "Refusing startup: SG_NETWORK_MODE must be local, hybrid, or online (got $NETWORK_MODE)." >&2
+    exit 1
+    ;;
+esac
 for port in "$PY_PORT" "$DASHBOARD_PORT" "$UNIFIED_PORT"; do
   [[ "$port" =~ ^[0-9]+$ ]] && (( port >= 1 && port <= 65535 )) || { echo "Invalid service port: $port" >&2; exit 1; }
 done
@@ -44,13 +65,14 @@ for raw in sys.argv[1:]:
 PY
 export PIPER_MODEL="${PIPER_MODEL:-$ROOT_DIR/models/en_US-lessac-medium.onnx}"
 export PIPER_DIR="${PIPER_DIR:-$ROOT_DIR/piper-tts}"
-export SG_NETWORK_MODE="$NETWORK_MODE"
+export SG_NETWORK_MODE="$([[ "$NETWORK_MODE" == "local" ]] && echo offline || echo "$NETWORK_MODE")"
+export SG_LOCAL_NETWORK_ALLOWLIST="$LOCAL_ALLOWLIST"
 export SG_HOST="127.0.0.1"
 export DASHBOARD_HOST="127.0.0.1"
 export UNIFIED_HOST="127.0.0.1"
 export NODE_BRIDGE_HOST="127.0.0.1"
 export SG_DEVICE_MODE="${SG_DEVICE_MODE:-ghost}"
-export SG_ENABLE_REMOTE_NETWORK="0"
+export SG_ENABLE_REMOTE_NETWORK="$REMOTE_NETWORK_ENABLED"
 export SG_ALLOW_BACKGROUND_POLLING="0"
 export SG_ENABLE_WEBSOCKET="${SG_ENABLE_WEBSOCKET:-0}"
 export SG_ENABLE_SSE="${SG_ENABLE_SSE:-0}"
@@ -78,7 +100,9 @@ echo "  Dashboard: http://127.0.0.1:$DASHBOARD_PORT/"
 echo "  Unified:   http://127.0.0.1:$UNIFIED_PORT"
 echo "  UI WS:     ws://127.0.0.1:$DASHBOARD_PORT/ws/ui"
 echo "  DevAssist: http://127.0.0.1:$UNIFIED_PORT/api/devassist/status"
-echo "  mode:      $SG_DEVICE_MODE / $SG_NETWORK_MODE"
+echo "  mode:      $SG_DEVICE_MODE / $NETWORK_MODE"
+if [[ "$NETWORK_MODE" == "hybrid" ]]; then echo "  network:   allowlist-gated"; fi
+if [[ "$NETWORK_MODE" == "online" ]]; then echo "  network:   explicitly enabled"; fi
 echo "  diamond:   PASS (startup admitted)"
 echo "Press Ctrl+C to stop."
 wait -n "${pids[@]}"
