@@ -136,15 +136,18 @@ async function executeLocalTool(body, proof) {
     // Record failed authentication/capability checks against the canonical owner
     // without treating the caller as authenticated or dispatching the request.
     try {
-      if (canonical.allowed && canonical.state && canonical.state.owner_id) {
-        const deniedPipeline = verifiedPipeline(canonical.state.owner_id);
+      const auditIdentity = canonical.allowed && canonical.state && canonical.state.owner_id
+        ? canonical.state.owner_id : 'system';
+      {
+        const deniedPipeline = verifiedPipeline(auditIdentity);
         const deniedEvidence = recordVerified(deniedPipeline, {
           participant: 'unauthenticated-request',
           action: 'local_tool_execute',
           result: 'DENY',
           details: {
             reason: error.message, capability: 'local.tool.execute', authorization: 'DENY',
-            identity_id: canonical.state.owner_id, session_id: null,
+            identity_id: canonical.state && canonical.state.owner_id || null, session_id: null,
+            canonical_state_valid: canonical.allowed === true,
             request_id: typeof body.request_id === 'string' ? body.request_id : null,
             memory_loaded: false, network_accessed: false, files_changed: [],
             route_trace: ['owner-session-verifier', 'policy-capability-gate'],
@@ -172,6 +175,13 @@ async function executeLocalTool(body, proof) {
     const stderr = result.stderr_b64 ? Buffer.from(result.stderr_b64, 'base64') : Buffer.alloc(0);
     const stdoutDigest = crypto.createHash('sha3-512').update(stdout).digest('hex');
     const stderrDigest = crypto.createHash('sha3-512').update(stderr).digest('hex');
+    if (result.status === 'success' &&
+        (!/^[a-f0-9]{128}$/.test(result.stdout_sha3_512 || '') ||
+         !/^[a-f0-9]{128}$/.test(result.stderr_sha3_512 || '') ||
+         result.stdout_byte_length !== stdout.length ||
+         result.stderr_byte_length !== stderr.length)) {
+      throw new Error('DISPATCHER_OUTPUT_PROVENANCE_MISSING');
+    }
     if ((result.stdout_sha3_512 && result.stdout_sha3_512 !== stdoutDigest) ||
         (result.stderr_sha3_512 && result.stderr_sha3_512 !== stderrDigest)) {
       throw new Error('DISPATCHER_OUTPUT_DIGEST_MISMATCH');
