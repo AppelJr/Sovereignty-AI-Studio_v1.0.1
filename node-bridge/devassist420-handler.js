@@ -2,6 +2,7 @@
 
 const path = require('node:path');
 const crypto = require('node:crypto');
+const { spawn } = require('node:child_process');
 const WebSocket = require('ws');
 const { createSovereigntyPipeline } = require('../backend/integration/sovereignty_pipeline');
 const { loadCanonicalState } = require('../backend/state/canonical_state');
@@ -13,6 +14,10 @@ const SCAR_PATH = process.env.SCAR_PATH || path.resolve('AUDIT/devassist-device.
 const PYTHON_WS_URL = process.env.SOVEREIGN_PYTHON_WS_URL || 'ws://127.0.0.1:9897';
 const AUTH_TTL_MS = 60 * 1000;
 const MAX_TEXT = 10000;
+const DISPATCHER_PATH = path.resolve(__dirname, '../backend/integration/offline_tool_dispatcher.py');
+const PYTHON_EXECUTABLE = process.env.SOVEREIGN_PYTHON_EXECUTABLE || '/usr/bin/python3';
+const TOOL_EXECUTION_TIMEOUT_MS = 8000;
+const TOOL_RESPONSE_MAX_BYTES = 256 * 1024;
 const authorizations = new Map();
 
 const AGREEMENT = Object.freeze({
@@ -122,6 +127,166 @@ function authorize(body, proof) {
   return authorization;
 }
 
+async function executeLocalTool(body, proof) {
+  const canonical = loadCanonicalState(STATE_PATH);
+  let session;
+  try {
+    session = authenticate(proof, canonical, 'local.tool.execute');
+  } catch (error) {
+    // Record failed authentication/capability checks against the canonical owner
+    // without treating the caller as authenticated or dispatching the request.
+    try {
+      const auditIdentity = canonical.allowed && canonical.state && canonical.state.owner_id
+        ? canonical.state.owner_id : 'system';
+      {
+        const deniedPipeline = verifiedPipeline(auditIdentity);
+        const deniedEvidence = recordVerified(deniedPipeline, {
+          participant: 'unauthenticated-request',
+          action: 'local_tool_execute',
+          result: 'DENY',
+          details: {
+            reason: error.message, capability: 'local.tool.execute', authorization: 'DENY',
+            identity_id: canonical.state && canonical.state.owner_id || null, session_id: null,
+            canonical_state_valid: canonical.allowed === true,
+            request_id: typeof body.request_id === 'string' ? body.request_id : null,
+            memory_loaded: false, network_accessed: false, files_changed: [],
+            route_trace: ['owner-session-verifier', 'policy-capability-gate'],
+            dispatcher_started: false
+          }
+        });
+        if (!deniedEvidence || deniedEvidence.ok !== true) {
+          return { state: 'DENY', reason: 'SCAR_PERSISTENCE_FAILED' };
+        }
+        return { state: 'DENY', reason: error.message, evidence: deniedEvidence };
+      }
+    } catch (auditError) {
+      return { state: 'DENY', reason: 'SCAR_DENIAL_RECORD_FAILED', detail: auditError.message };
+    }
+    return { state: 'DENY', reason: error.message };
+  }
+  const p = verifiedPipeline(session.identity_id);
+  const requestId = typeof body.request_id === 'string' && body.request_id.length <= 128
+    ? body.request_id : crypto.randomUUID();
+  const executionId = crypto.randomUUID();
+  const request = { tool: body.tool, args: body.args, request_id: requestId };
+
+  const recordOutcome = (result, extra = {}) => {
+    const stdout = result.stdout_b64 ? Buffer.from(result.stdout_b64, 'base64') : Buffer.alloc(0);
+    const stderr = result.stderr_b64 ? Buffer.from(result.stderr_b64, 'base64') : Buffer.alloc(0);
+    const stdoutDigest = crypto.createHash('sha3-512').update(stdout).digest('hex');
+    const stderrDigest = crypto.createHash('sha3-512').update(stderr).digest('hex');
+    if (result.status === 'success' &&
+        (!/^[a-f0-9]{128}$/.test(result.stdout_sha3_512 || '') ||
+         !/^[a-f0-9]{128}$/.test(result.stderr_sha3_512 || '') ||
+         result.stdout_byte_length !== stdout.length ||
+         result.stderr_byte_length !== stderr.length)) {
+      throw new Error('DISPATCHER_OUTPUT_PROVENANCE_MISSING');
+    }
+    if ((result.stdout_sha3_512 && result.stdout_sha3_512 !== stdoutDigest) ||
+        (result.stderr_sha3_512 && result.stderr_sha3_512 !== stderrDigest)) {
+      throw new Error('DISPATCHER_OUTPUT_DIGEST_MISMATCH');
+    }
+    const decision = result.status === 'success' ? 'ALLOW' :
+      result.status === 'denied' ? 'DENY' : 'FAIL';
+    const evidence = recordVerified(p, {
+      participant: session.identity_id,
+      action: 'local_tool_execute',
+      result: decision,
+      details: {
+        execution_id: executionId, request_id: requestId,
+        identity_id: session.identity_id, session_id: session.session_id,
+        capability: 'local.tool.execute', authorization: decision,
+        memory_loaded: false, network_accessed: false, files_changed: [],
+        route_trace: ['owner-session-verifier', 'DevAssist420', 'offline-tool-dispatcher'], tool: typeof body.tool === 'string' ? body.tool : null,
+        dispatcher_status: result.status || 'error',
+        reason: result.reason || (result.status === 'success' ? 'ALLOWLISTED_TOOL_EXECUTION' : 'DISPATCHER_REJECTED_OR_FAILED'),
+        execution_method: 'subprocess.Popen(shell=false)', executable: 'pinned:/bin/echo',
+        runtime: 'device-local', where: 'DevAssist420/offline-dispatcher',
+        returncode: Number.isInteger(result.returncode) ? result.returncode : null,
+        stdout_sha3_512: stdoutDigest, stdout_byte_length: stdout.length,
+        stderr_sha3_512: stderrDigest, stderr_byte_length: stderr.length,
+        output_byte_length: stdout.length + stderr.length,
+        truncated: result.truncated === true, ...extra
+      }
+    });
+    if (!evidence || evidence.ok !== true) throw new Error('SCAR_PERSISTENCE_FAILED');
+    return { evidence, stdout, stderr, decision };
+  };
+
+  return new Promise((resolve) => {
+    let child;
+    let settled = false;
+    let response = '';
+    let responseBytes = 0;
+    let timer;
+    const finish = async (value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(value);
+    };
+    try {
+      if (!path.isAbsolute(PYTHON_EXECUTABLE)) throw new Error('PYTHON_EXECUTABLE_MUST_BE_ABSOLUTE');
+      child = spawn(PYTHON_EXECUTABLE, [DISPATCHER_PATH], {
+        shell: false, windowsHide: true,
+        env: { PATH: '/usr/bin:/bin', LANG: 'C', LC_ALL: 'C', PYTHONNOUSERSITE: '1' },
+        stdio: ['pipe', 'pipe', 'ignore']
+      });
+    } catch (error) {
+      try {
+        const audit = recordOutcome({ status: 'error', reason: error.message });
+        return finish({ state: 'FAIL', reason: error.message, evidence: audit.evidence });
+      } catch (auditError) {
+        return finish({ state: 'DENY', reason: auditError.message });
+      }
+    }
+    timer = setTimeout(() => {
+      child.kill('SIGKILL');
+      try {
+        const audit = recordOutcome({ status: 'error', reason: 'dispatcher process timed out' });
+        finish({ state: 'FAIL', reason: 'DISPATCHER_TIMEOUT', evidence: audit.evidence });
+      } catch (error) { finish({ state: 'DENY', reason: error.message }); }
+    }, TOOL_EXECUTION_TIMEOUT_MS);
+    child.stdout.on('data', chunk => {
+      responseBytes += chunk.length;
+      if (responseBytes > TOOL_RESPONSE_MAX_BYTES) {
+        child.kill('SIGKILL');
+        finish({ state: 'DENY', reason: 'DISPATCHER_RESPONSE_LIMIT_EXCEEDED' });
+      } else response += chunk.toString('utf8');
+    });
+    child.on('error', error => {
+      try {
+        const audit = recordOutcome({ status: 'error', reason: error.message });
+        finish({ state: 'FAIL', reason: 'DISPATCHER_START_FAILED', evidence: audit.evidence });
+      } catch (auditError) { finish({ state: 'DENY', reason: auditError.message }); }
+    });
+    child.on('close', () => {
+      if (settled) return;
+      try {
+        const result = JSON.parse(response);
+        const audit = recordOutcome(result);
+        finish({
+          state: audit.decision === 'ALLOW' ? 'EXECUTED' :
+            audit.decision === 'DENY' ? 'DENY' : 'FAIL',
+          result: {
+            tool: result.tool, status: result.status, returncode: result.returncode,
+            stdout: audit.stdout.toString('utf8'), stderr: audit.stderr.toString('utf8'),
+            stdout_sha3_512: crypto.createHash('sha3-512').update(audit.stdout).digest('hex'),
+            stdout_byte_length: audit.stdout.length, truncated: result.truncated === true
+          },
+          evidence: audit.evidence
+        });
+      } catch (error) {
+        try {
+          const audit = recordOutcome({ status: 'error', reason: error.message });
+          finish({ state: 'FAIL', reason: 'DISPATCHER_RESPONSE_INVALID', evidence: audit.evidence });
+        } catch (auditError) { finish({ state: 'DENY', reason: auditError.message }); }
+      }
+    });
+    child.stdin.end(JSON.stringify(request));
+  });
+}
+
 function infer(request) {
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(PYTHON_WS_URL);
@@ -224,6 +389,7 @@ function route(req, res) {
   const allowedPaths = [
     '/api/devassist420/authorize','/api/devassist/authorize',
     '/api/devassist420/execute','/api/devassist/execute',
+    '/api/devassist420/tools/execute',
     '/api/devassist/message','/api/devassist420/provider-policy'
   ];
   if (req.method !== 'POST' || !allowedPaths.includes(url.pathname)) return false;
@@ -237,6 +403,7 @@ function route(req, res) {
       let result;
       if (url.pathname === '/api/devassist420/provider-policy') result = updateProviderPolicy(body, proof);
       else if (url.pathname.endsWith('/authorize')) result = authorize(body, proof);
+      else if (url.pathname === '/api/devassist420/tools/execute') result = await executeLocalTool(body, proof);
       else if (url.pathname.endsWith('/execute')) result = await execute(body, proof);
       else result = await handle(body, proof);
       json(res, result.state === 'EXECUTED' ? 200 : 200, result);
@@ -247,4 +414,4 @@ function route(req, res) {
   return true;
 }
 
-module.exports = { route, authorize, execute, handle, status, AGREEMENT };
+module.exports = { route, authorize, execute, executeLocalTool, handle, status, AGREEMENT };
