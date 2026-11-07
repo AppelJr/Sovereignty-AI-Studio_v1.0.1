@@ -50,7 +50,11 @@ async function main() {
   );
   assert.equal(denied.state, 'DENY');
   assert.equal(denied.reason, 'OWNER_CAPABILITY_MISSING');
-  assert.equal(fs.existsSync(scarPath), false, 'unauthorized calls do not reach dispatcher or fabricate execution evidence');
+  assert.equal(denied.evidence.ok, true, 'denied request must have durable SCAR evidence');
+  const deniedEvents = fs.readFileSync(scarPath, 'utf8').trim().split('\\n').map(JSON.parse);
+  assert.equal(deniedEvents.length, 1);
+  assert.equal(deniedEvents[0].result, 'DENY');
+  assert.equal(deniedEvents[0].details.dispatcher_started, false);
 
   const result = await executeLocalTool(
     { tool: 'echo', args: ['Sovereignty', 'dispatcher'], request_id: 'approved-request' },
@@ -75,9 +79,9 @@ async function main() {
   );
   assert.equal(deniedTool.state, 'DENY');
   const all = fs.readFileSync(scarPath, 'utf8').trim().split('\n').map(JSON.parse);
-  assert.equal(all.length, 2);
-  assert.equal(all[1].result, 'DENY');
-  assert.equal(all[1].details.dispatcher_status, 'denied');
+  assert.equal(all.length, 3);
+  assert.equal(all[2].result, 'DENY');
+  assert.equal(all[2].details.dispatcher_status, 'denied');
 
   console.log('PASS owner capability gates local dispatcher');
   console.log('PASS fixed allowlist executes echo only');
