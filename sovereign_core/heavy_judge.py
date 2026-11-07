@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """DevAssist420 Heavy Judge: deterministic policy gate for model proposals.
 
-This module does not itself infer risk or call a provider. The caller must supply
-a risk score from an explicitly selected evaluator. Provider/model output is
-untrusted input. Gate.One remains the independent authorization boundary.
+Risk scores are supplied by an explicitly configured evaluator; this class
+does not pretend keyword heuristics are a calibrated safety model. Rewriter
+output is untrusted and is accepted only after a separate rewrite evaluator
+scores it below the context rewrite threshold. Gate.One remains the independent
+authorization boundary.
 """
 from __future__ import annotations
 
@@ -16,11 +18,7 @@ from typing import Any
 
 
 class HeavyJudge:
-    """Apply context-specific thresholds and emit a REPMHL-compatible event.
-
-    The audit sink contract is intentionally repmhl.log(dict). If a sink is
-    configured and fails, the response is withheld when fail-closed mode is on.
-    """
+    """Apply context thresholds and emit a REPMHL-compatible audit event."""
 
     DEFAULT_POLICIES: dict[str, dict[str, float]] = {
         "medical": {"rewrite_at": 0.75, "yank_at": 0.90},
@@ -37,6 +35,7 @@ class HeavyJudge:
         repmhl: Any | None = None,
         *,
         rewriter: Callable[[str, str], str] | None = None,
+        rewrite_risk_evaluator: Callable[[str, str], float] | None = None,
         policies: Mapping[str, Mapping[str, float]] | None = None,
         audit_hmac_key: bytes | None = None,
         fail_closed_on_log_error: bool = True,
@@ -48,6 +47,7 @@ class HeavyJudge:
         self.model = model_name
         self.repmhl = repmhl
         self.rewriter = rewriter
+        self.rewrite_risk_evaluator = rewrite_risk_evaluator
         self.audit_hmac_key = audit_hmac_key
         self.fail_closed_on_log_error = fail_closed_on_log_error
         self.policies = self._validate_policies(
@@ -80,11 +80,20 @@ class HeavyJudge:
                     f"Policy for {context!r} must satisfy "
                     "0 <= rewrite_at < yank_at <= 1"
                 )
-            validated[context] = {
-                "rewrite_at": rewrite_at,
-                "yank_at": yank_at,
-            }
+            validated[context] = {"rewrite_at": rewrite_at, "yank_at": yank_at}
         return validated
+
+    @staticmethod
+    def _score(value: Any, label: str) -> float:
+        if isinstance(value, bool):
+            raise TypeError(f"{label} must be a number, not bool")
+        try:
+            score = float(value)
+        except (TypeError, ValueError) as exc:
+            raise TypeError(f"{label} must be a number") from exc
+        if not math.isfinite(score) or not 0.0 <= score <= 1.0:
+            raise ValueError(f"{label} must be finite and between 0 and 1")
+        return score
 
     def review(
         self,
@@ -92,30 +101,62 @@ class HeavyJudge:
         context: str,
         risk_score: float = 0.0,
     ) -> dict[str, Any]:
-        self._validate_review_input(original_output, context, risk_score)
-        score = float(risk_score)
-        verdict = self._generate_verdict(original_output, context, score)
-        action = verdict["action"]
+        if not isinstance(original_output, str):
+            raise TypeError("original_output must be a string")
+        if not isinstance(context, str) or context not in self.policies:
+            raise ValueError(
+                f"Unsupported context {context!r}; expected one of {sorted(self.policies)}"
+            )
+        score = self._score(risk_score, "risk_score")
+        policy = self.policies[context]
+
+        if score >= policy["yank_at"]:
+            action = "yank"
+        elif score >= policy["rewrite_at"]:
+            action = "rewrite"
+        else:
+            action = "pass"
+
+        final_output = original_output
+        outcome = "passed"
         rewrite_error: str | None = None
 
-        if action == "pass":
-            final_output = original_output
-            outcome = "passed"
-        elif action == "rewrite" and self.rewriter is not None:
-            try:
-                candidate = self.rewriter(original_output, context)
-                if not isinstance(candidate, str) or not candidate.strip():
-                    raise ValueError("Rewriter returned empty or non-string output")
-                final_output = candidate
-                outcome = "rewritten"
-            except Exception as exc:
-                final_output = self._safe_replacement(context)
-                outcome = "safe_replacement"
-                rewrite_error = type(exc).__name__
-        else:
-            # YANK, or REWRITE without an approved rewriter: never leak original.
-            final_output = self._safe_replacement(context)
+        if action == "rewrite":
             outcome = "safe_replacement"
+            if self.rewriter is not None and self.rewrite_risk_evaluator is not None:
+                try:
+                    candidate = self.rewriter(original_output, context)
+                    if not isinstance(candidate, str) or not candidate.strip():
+                        raise ValueError("Rewriter returned empty or non-string output")
+                    candidate_score = self._score(
+                        self.rewrite_risk_evaluator(candidate, context),
+                        "rewrite_risk_score",
+                    )
+                    if candidate_score < policy["rewrite_at"]:
+                        final_output = candidate
+                        outcome = "rewritten"
+                except Exception as exc:
+                    rewrite_error = type(exc).__name__
+            # Without independent evaluation, do not release rewrite output.
+            if outcome != "rewritten":
+                final_output = self._safe_replacement(context)
+
+        elif action == "yank":
+            final_output = self._safe_replacement(context)
+            outcome = "withheld"
+
+        verdict: dict[str, Any] = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "risk_score": round(score, 6),
+            "action": action,
+            "context": context,
+            "judge_model": self.model,
+            "input_sha3_512": self._sha3(original_output),
+            "output_sha3_512": self._sha3(final_output),
+        }
+        input_hmac = self._keyed_digest(original_output)
+        if input_hmac is not None:
+            verdict["input_hmac_sha3_512"] = input_hmac
 
         result: dict[str, Any] = {
             "final_output": final_output,
@@ -134,44 +175,9 @@ class HeavyJudge:
             result["audit_log_error"] = type(exc).__name__
         return result
 
-    def _validate_review_input(
-        self, original_output: str, context: str, risk_score: float
-    ) -> None:
-        if not isinstance(original_output, str):
-            raise TypeError("original_output must be a string")
-        if not isinstance(context, str) or context not in self.policies:
-            raise ValueError(
-                f"Unsupported context {context!r}; expected one of {sorted(self.policies)}"
-            )
-        if isinstance(risk_score, bool):
-            raise TypeError("risk_score must be a number, not bool")
-        try:
-            score = float(risk_score)
-        except (TypeError, ValueError) as exc:
-            raise TypeError("risk_score must be a number") from exc
-        if not math.isfinite(score) or not 0.0 <= score <= 1.0:
-            raise ValueError("risk_score must be finite and between 0 and 1")
-
-    def _generate_verdict(
-        self, original_output: str, context: str, risk_score: float
-    ) -> dict[str, Any]:
-        policy = self.policies[context]
-        if risk_score >= policy["yank_at"]:
-            action = "yank"
-        elif risk_score >= policy["rewrite_at"]:
-            action = "rewrite"
-        else:
-            action = "pass"
-        verdict: dict[str, Any] = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "risk_score": round(risk_score, 3),
-            "action": action,
-            "context": context,
-        }
-        input_hmac = self._keyed_digest(original_output)
-        if input_hmac is not None:
-            verdict["input_hmac_sha3_512"] = input_hmac
-        return verdict
+    @staticmethod
+    def _sha3(text: str) -> str:
+        return hashlib.sha3_512(text.encode("utf-8")).hexdigest()
 
     @staticmethod
     def _safe_replacement(context: str) -> str:
@@ -183,9 +189,7 @@ class HeavyJudge:
         if self.audit_hmac_key is None:
             return None
         return hmac.new(
-            self.audit_hmac_key,
-            text.encode("utf-8"),
-            hashlib.sha3_512,
+            self.audit_hmac_key, text.encode("utf-8"), hashlib.sha3_512
         ).hexdigest()
 
     def _log_to_repmhl(
@@ -196,9 +200,12 @@ class HeavyJudge:
         logger = getattr(self.repmhl, "log", None)
         if not callable(logger):
             raise TypeError("REPMHL sink must implement log(dict)")
-        event = {
+        event: dict[str, Any] = {
             "event": "HEAVY_JUDGE_VERDICT",
             "verdict": verdict,
-            "output_hmac_sha3_512": self._keyed_digest(final_output),
+            "output_sha3_512": self._sha3(final_output),
         }
+        output_hmac = self._keyed_digest(final_output)
+        if output_hmac is not None:
+            event["output_hmac_sha3_512"] = output_hmac
         logger(event)
