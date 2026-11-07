@@ -6,7 +6,7 @@
 # Sovereignty AI Studio 
 # @claude @codex @copilot @grok @duckai @xAI
 ## 👉👉👉
-## This is the dedicated base branch. All changes by Claude Grok/Ara xAI/Grok DuckAI GPT/Codex Copilot must be made in their dedicated branch. Do not push directly to main. Create a Pull Request for review.
+## This is the dedicated base branch. All changes by Claude Grok/Ara xAI/Grok DuckAI GPT/Codex Copilot must be made in their dedicated branch. Do not push directly to base branch. Create a Pull Request for review.
 ## 👈👈👈
 # @claude @codex @copilot @grok @duckai @xAI   
 (the @ doubles are on purpose) to understand lanes 
