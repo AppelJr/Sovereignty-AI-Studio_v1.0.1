@@ -196,7 +196,7 @@ class HeavyJudge:
         self, verdict: dict[str, Any], final_output: str
     ) -> None:
         if self.repmhl is None:
-            return
+            raise RuntimeError("Required REPMHL audit sink is not configured")
         logger = getattr(self.repmhl, "log", None)
         if not callable(logger):
             raise TypeError("REPMHL sink must implement log(dict)")
