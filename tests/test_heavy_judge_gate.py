@@ -53,7 +53,7 @@ def test_pass_records_repmhl_event() -> None:
 
 
 def test_rewrite_calls_configured_rewriter() -> None:
-    judge = HeavyJudge(rewriter=lambda text, context: f"reviewed:{context}:{text}")
+    judge = HeavyJudge(\n        rewriter=lambda text, context: f"reviewed:{context}:{text}",\n        rewrite_risk_evaluator=lambda candidate, context: 0.10,\n    )
     result = judge.review("draft", "general", 0.80)
     assert result["final_output"] == "reviewed:general:draft"
     assert result["outcome"] == "rewritten"
