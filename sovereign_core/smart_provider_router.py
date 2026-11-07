@@ -1,22 +1,24 @@
 #!/usr/bin/env python3
+"""DevAssist420 provider selection and mandatory Heavy Judge gate.
+
+This module coordinates provider selection but does not authorize actions.
+Gate.One remains the independent authorization boundary. Risk evaluation is
+an injected dependency; missing or invalid evaluation fails closed.
 """
-SmartProviderRouter v2.0
-Context-aware + Cost-aware routing with HeavyJudge as final safety gate.
-"""
+from __future__ import annotations
 
 import logging
-from typing import Optional, Dict, Any
+from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Any
 
-from heavy_judge import HeavyJudge
+try:
+    from .heavy_judge import HeavyJudge
+except ImportError:
+    from heavy_judge import HeavyJudge
 
 logger = logging.getLogger("SmartProviderRouter")
-
-COST_TIERS = {
-    "xai": 1.0,
-    "anthropic": 1.8,
-    "openai": 2.2
-}
+COST_TIERS = {"xai": 1.0, "anthropic": 1.8, "openai": 2.2}
 
 
 @dataclass
@@ -29,105 +31,107 @@ class RoutingDecision:
 
 
 class SmartProviderRouter:
-    """
-    Smart router that:
-    - Chooses best provider based on context + cost
-    - Integrates HeavyJudge as the FINAL gate before returning output
-    """
+    """Select a provider, obtain its output, and always apply HeavyJudge."""
 
-    def __init__(self, token_manager, repmhl=None):
+    def __init__(
+        self,
+        token_manager: Any,
+        repmhl: Any | None = None,
+        *,
+        risk_evaluator: Callable[[str, str], float] | None = None,
+        judge: HeavyJudge | None = None,
+    ) -> None:
+        if token_manager is None:
+            raise ValueError("token_manager is required")
         self.token_manager = token_manager
         self.repmhl = repmhl
-        self.config = token_manager.config
-        self.judge = HeavyJudge(repmhl=repmhl, token_manager=token_manager)
-
+        self.config = getattr(token_manager, "config", {})
+        self.risk_evaluator = risk_evaluator
+        self.judge = judge or HeavyJudge(repmhl=repmhl, token_manager=token_manager)
         self.priority_rules = {
             "medical": ["anthropic", "xai", "openai"],
             "education": ["anthropic", "xai", "openai"],
             "general": ["xai", "anthropic", "openai"],
-            "coding": ["openai", "anthropic", "xai"],
+            "legal": ["anthropic", "openai", "xai"],
+            "financial": ["openai", "anthropic", "xai"],
+            "coding": ["openai", "xai", "anthropic"],
         }
 
     def _get_provider_capacity(self, provider: str) -> int:
-        state = self.token_manager.states.get(provider)
-        if not state:
-            cfg = self.config["providers"][provider]
-            return cfg["base_max_tokens"]
-        return max(0, state.max_tokens - state.token_count)
+        states = getattr(self.token_manager, "states", {})
+        state = states.get(provider)
+        if state is not None:
+            return max(0, int(state.max_tokens) - int(state.token_count))
+        providers = self.config.get("providers", {})
+        cfg = providers.get(provider)
+        if cfg is None:
+            return 0
+        return max(0, int(cfg.get("base_max_tokens", 0)))
 
-    def route_request(self, text: str, context: str = "general", prefer_cheap: bool = True) -> RoutingDecision:
-        priorities = self.priority_rules.get(context, self.priority_rules["general"])
-
+    def route_request(
+        self, text: str, context: str = "general", prefer_cheap: bool = True
+    ) -> RoutingDecision:
+        if not isinstance(text, str):
+            raise TypeError("text must be a string")
+        if context not in self.priority_rules:
+            raise ValueError(f"Unsupported routing context: {context!r}")
+        priorities = list(self.priority_rules[context])
+        if prefer_cheap:
+            priorities.sort(key=lambda name: COST_TIERS.get(name, float("inf")))
         for provider in priorities:
-            if self._get_provider_capacity(provider) > 512:
+            capacity = self._get_provider_capacity(provider)
+            if capacity > 0:
                 return RoutingDecision(
                     provider=provider,
-                    reason=f"Best available for context={context}",
-                    remaining_capacity=self._get_provider_capacity(provider),
-                    estimated_cost=COST_TIERS.get(provider, 2.0)
+                    reason=f"Available provider for context={context}",
+                    remaining_capacity=capacity,
+                    estimated_cost=COST_TIERS[provider],
                 )
-
-        # Fallback
-        return RoutingDecision(
-            provider="xai",
-            reason="Fallback to xAI",
-            remaining_capacity=1024,
-            estimated_cost=1.0
-        )
+        raise RuntimeError("No configured provider has available capacity")
 
     def consume_with_routing(
         self,
         tokens: int,
         text: str = "",
         context: str = "general",
-        use_judge: bool = False,
-        prefer_cheap: bool = True
-    ) -> Dict[str, Any]:
+        use_judge: bool = True,
+        prefer_cheap: bool = True,
+    ) -> dict[str, Any]:
+        """Route, obtain provider output, evaluate risk, and gate the output.
+
+        use_judge remains for call-site compatibility but cannot disable the
+        mandatory final gate.
         """
-        Main entry point.
-        Routes → Calls model → Runs HeavyJudge as final gate if needed.
-        """
+        del use_judge
+        if isinstance(tokens, bool) or not isinstance(tokens, int) or tokens <= 0:
+            raise ValueError("tokens must be a positive integer")
+        if self.risk_evaluator is None:
+            raise RuntimeError("No trusted risk_evaluator configured; output withheld")
         decision = self.route_request(text, context, prefer_cheap)
-
-        if decision.provider not in self.token_manager.states:
+        states = getattr(self.token_manager, "states", {})
+        if decision.provider not in states:
             self.token_manager.start_session(decision.provider)
-
-        # Get model output (simplified here — in real use this would call the actual model)
         model_result = self.token_manager.consume_tokens(decision.provider, tokens)
-        original_output = model_result.get("output", text)  # placeholder
-
-        used_judge = False
-        judge_result = None
-
-        # === HEAVY JUDGE AS FINAL GATE ===
-        should_judge = (
-            use_judge or
-            context in ["medical", "education"] or
-            (context == "general" and self._should_sample_judge())
+        if not isinstance(model_result, dict):
+            raise TypeError("Provider token manager must return a result dictionary")
+        original_output = model_result.get("output")
+        if not isinstance(original_output, str):
+            raise RuntimeError("Provider returned no textual output; output withheld")
+        risk_score = self.risk_evaluator(original_output, context)
+        judge_result = self.judge.review(
+            original_output=original_output,
+            context=context,
+            risk_score=risk_score,
         )
-
-        if should_judge:
-            judge_result = self.judge.review(
-                original_output=original_output,
-                context=context,
-                force_judge=use_judge,
-                token_manager=self.token_manager
-            )
-            used_judge = True
-            model_result["output"] = judge_result["final_output"]
-            model_result["heavy_judge_verdict"] = judge_result["verdict"]
-            model_result["triggered_council"] = judge_result.get("triggered_council", False)
-
-        model_result.update({
-            "routed_to": decision.provider,
-            "routing_reason": decision.reason,
-            "used_judge": used_judge,
-            "estimated_cost_tier": decision.estimated_cost
-        })
-
+        model_result["output"] = judge_result["final_output"]
+        model_result["heavy_judge_verdict"] = judge_result["verdict"]
+        model_result["heavy_judge_outcome"] = judge_result["outcome"]
+        model_result.update(
+            {
+                "routed_to": decision.provider,
+                "routing_reason": decision.reason,
+                "used_judge": True,
+                "estimated_cost_tier": decision.estimated_cost,
+            }
+        )
         return model_result
-
-    def _should_sample_judge(self) -> bool:
-        """Simple 8% sampling for general queries"""
-        import random
-        return random.random() < 0.08
