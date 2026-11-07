@@ -66,9 +66,14 @@ const TLS_CA = process.env.TLS_CA || '';
 const TLS_REQUEST_CERT = process.env.TLS_REQUEST_CERT === '1';
 const TLS_REJECT_UNAUTHORIZED = process.env.TLS_REJECT_UNAUTHORIZED !== '0';
 const UPSTREAM_DEFAULT_PORT = parseInt(process.env.UPSTREAM_DEFAULT_PORT || '9898', 10);
-const NETWORK_MODE = ['offline', 'hybrid', 'online'].includes(process.env.SG_NETWORK_MODE)
-  ? process.env.SG_NETWORK_MODE
-  : (process.env.SG_OFFLINE_MODE === '0' ? 'hybrid' : 'offline');
+const REQUESTED_NETWORK_MODE = String(
+  process.env.SG_NETWORK_MODE || (process.env.SG_OFFLINE_MODE === '0' ? 'hybrid' : 'local')
+).trim().toLowerCase();
+const NETWORK_MODE = REQUESTED_NETWORK_MODE === 'local'
+  ? 'offline'
+  : (['offline', 'hybrid', 'online'].includes(REQUESTED_NETWORK_MODE)
+    ? REQUESTED_NETWORK_MODE
+    : 'offline');
 const OFFLINE_MODE = NETWORK_MODE === 'offline';
 const REMOTE_NETWORK_ENABLED = process.env.SG_ENABLE_REMOTE_NETWORK === '1';
 const TLS_MODE = process.env.SG_TLS_MODE || 'local-ca';
