@@ -47,7 +47,7 @@ class SmartProviderRouter:
         self.repmhl = repmhl
         self.config = getattr(token_manager, "config", {})
         self.risk_evaluator = risk_evaluator
-        self.judge = judge or HeavyJudge(repmhl=repmhl, token_manager=token_manager)
+        self.judge = judge or HeavyJudge(repmhl=repmhl)
         self.priority_rules = {
             "medical": ["anthropic", "xai", "openai"],
             "education": ["anthropic", "xai", "openai"],
