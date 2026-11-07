@@ -2,7 +2,6 @@
 
 const path = require('node:path');
 const crypto = require('node:crypto');
-const path = require('node:path');
 const { spawn } = require('node:child_process');
 const WebSocket = require('ws');
 const { createSovereigntyPipeline } = require('../backend/integration/sovereignty_pipeline');
