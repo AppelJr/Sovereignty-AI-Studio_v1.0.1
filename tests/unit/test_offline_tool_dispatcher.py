@@ -3,7 +3,7 @@ import hashlib
 import json
 import subprocess
 import sys
-import os
+from pathlib import Path
 
 from backend.integration.offline_tool_dispatcher import execute_tool_call
 
