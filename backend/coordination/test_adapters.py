@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import pytest
 
+from backend.coordination.authorization_proof import issue_gate_authorization_proof
 from backend.coordination.devassist_adapter import DevAssistExecutionAdapter
 from backend.coordination.evidence_adapter import (
     EvidenceAdapter,
@@ -12,6 +13,8 @@ from backend.coordination.evidence_adapter import (
 from backend.coordination.genesis_adapter import GenesisRouterAdapter
 from backend.coordination.task_envelope import TaskEnvelope
 from sovereign.scar.ledger import EventClass, SCARActor, SCARLedger
+
+SECRET = b"test-only-gate-authorization-proof"
 
 
 class TestRoot:
@@ -23,24 +26,68 @@ def task(mode: str = "offline") -> TaskEnvelope:
     return TaskEnvelope("task-1", "owner", "owner", scope=("repo/",), mode=mode)
 
 
-def approved(mode: str = "offline") -> dict[str, str]:
-    return {"decision": "OWNER_AUTHORIZED", "policy_hash": "sha256:policy"}
+def approved_proof(
+    *,
+    task_id: str = "task-1",
+    owner_id: str = "owner",
+    scope: tuple[str, ...] = ("repo/",),
+    decision: str = "OWNER_AUTHORIZED",
+) -> str:
+    return issue_gate_authorization_proof(
+        proof_id="proof-test",
+        owner_id=owner_id,
+        task_id=task_id,
+        scope=scope,
+        decision=decision,
+        policy_hash="sha256:policy",
+        evidence_sequence=1,
+        issued_at=1_000_000_000,
+        expires_at=1_000_000_300,
+        secret=SECRET,
+    )
+
+
+def genesis() -> GenesisRouterAdapter:
+    return GenesisRouterAdapter(proof_secret=SECRET, now=1_000_000_100)
 
 
 def test_genesis_does_not_route_denied_work() -> None:
     with pytest.raises(PermissionError):
-        GenesisRouterAdapter().decide(task(), {"decision": "DENY", "policy_hash": "sha256:p"})
+        genesis().decide(task(), {"decision": "DENY", "policy_hash": "sha256:p"})
+
+
+def test_genesis_rejects_forgeable_owner_authorized_dict() -> None:
+    with pytest.raises(PermissionError, match="verified Gate authorization proof"):
+        genesis().decide(
+            task(),
+            {"decision": "OWNER_AUTHORIZED", "policy_hash": "sha256:policy"},
+        )
 
 
 def test_genesis_routes_by_mode_without_executing() -> None:
-    route = GenesisRouterAdapter().decide(task(), approved())
+    route = genesis().decide(task(), approved_proof())
     assert route.route == "devassist"
     assert route.decision == "ALLOW"
+    assert route.policy_hash == "sha256:policy"
+
+
+def test_genesis_rejects_task_id_mismatch() -> None:
+    with pytest.raises(PermissionError):
+        genesis().decide(task(), approved_proof(task_id="other-task"))
+
+
+def test_genesis_rejects_scope_escalation() -> None:
+    narrow = approved_proof(scope=("repo/",))
+    wide = TaskEnvelope(
+        "task-1", "owner", "owner", scope=("repo/", "admin"), mode="offline"
+    )
+    with pytest.raises(PermissionError):
+        genesis().decide(wide, narrow)
 
 
 def test_devassist_requires_authorized_local_route() -> None:
     adapter = DevAssistExecutionAdapter(lambda _task, _route: {"status": "COMPLETED"})
-    route = GenesisRouterAdapter().decide(task(), approved())
+    route = genesis().decide(task(), approved_proof())
     receipt = adapter.execute(task(), route)
     assert receipt.status == "COMPLETED"
     assert receipt.network_accessed is False
@@ -48,7 +95,7 @@ def test_devassist_requires_authorized_local_route() -> None:
 
 def test_devassist_rejects_scope_or_route_mismatch() -> None:
     adapter = DevAssistExecutionAdapter(lambda _task, _route: {"status": "COMPLETED"})
-    route = GenesisRouterAdapter().decide(task(), approved())
+    route = genesis().decide(task(), approved_proof())
     other = TaskEnvelope("task-2", "owner", "owner", mode="offline")
     with pytest.raises(ValueError, match="task_id"):
         adapter.execute(other, route)
@@ -58,7 +105,7 @@ def test_evidence_adapter_delegates_to_existing_stores() -> None:
     scar_events: list[dict] = []
     repmhl_records: list[dict] = []
     adapter = DevAssistExecutionAdapter(lambda _task, _route: {"status": "COMPLETED"})
-    route = GenesisRouterAdapter().decide(task(), approved())
+    route = genesis().decide(task(), approved_proof())
     receipt = adapter.execute(task(), route)
     event = EvidenceAdapter(
         append_scar=scar_events.append,
@@ -76,7 +123,7 @@ def test_evidence_sink_is_required() -> None:
 def test_scar_sink_writes_to_canonical_ledger() -> None:
     ledger = SCARLedger("device:test", TestRoot())
     adapter = DevAssistExecutionAdapter(lambda _task, _route: {"status": "COMPLETED"})
-    route = GenesisRouterAdapter().decide(task(), approved())
+    route = genesis().decide(task(), approved_proof())
     receipt = adapter.execute(task(), route)
     event = EvidenceAdapter(append_scar=SCARLedgerSink(ledger)).record(receipt, route)
     assert len(ledger.events) == 1
@@ -91,7 +138,7 @@ def test_scar_sink_writes_to_canonical_ledger() -> None:
 
 def test_scar_append_failure_fails_closed() -> None:
     adapter = DevAssistExecutionAdapter(lambda _task, _route: {"status": "COMPLETED"})
-    route = GenesisRouterAdapter().decide(task(), approved())
+    route = genesis().decide(task(), approved_proof())
     receipt = adapter.execute(task(), route)
 
     def fail(_event: dict) -> None:
@@ -104,12 +151,14 @@ def test_scar_append_failure_fails_closed() -> None:
 def test_repmhl_failure_fails_closed_after_scar_write() -> None:
     scar_events: list[dict] = []
     adapter = DevAssistExecutionAdapter(lambda _task, _route: {"status": "COMPLETED"})
-    route = GenesisRouterAdapter().decide(task(), approved())
+    route = genesis().decide(task(), approved_proof())
     receipt = adapter.execute(task(), route)
 
     def fail(_event: dict) -> None:
         raise OSError("repmhl unavailable")
 
     with pytest.raises(EvidenceWriteError, match="REPMHL binding failed"):
-        EvidenceAdapter(append_scar=scar_events.append, record_repmhl=fail).record(receipt, route)
+        EvidenceAdapter(append_scar=scar_events.append, record_repmhl=fail).record(
+            receipt, route
+        )
     assert len(scar_events) == 1

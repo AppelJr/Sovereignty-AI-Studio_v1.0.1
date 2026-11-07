@@ -1,7 +1,11 @@
 """Genesis route adapter.
 
-Genesis selects a route after an authority decision. It never grants authority
-and never executes a tool.
+Genesis selects a route after a **verified Gate authorization proof**.
+It never grants authority and never executes a tool.
+
+Plain mappings such as ``{\"decision\": \"OWNER_AUTHORIZED\", \"policy_hash\": \"...\"}``
+are rejected. Only a Gate-signed proof that binds task, owner, scope, policy,
+and expiry is accepted.
 """
 from __future__ import annotations
 
@@ -9,6 +13,11 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
+from .authorization_proof import (
+    AuthorizationProofError,
+    GateAuthorizationProof,
+    verify_gate_authorization_proof,
+)
 from .execution_contracts import RouteDecision
 from .task_envelope import TaskEnvelope
 
@@ -18,17 +27,13 @@ _APPROVED_DECISIONS = frozenset(
 )
 
 
-def _field(value: object, name: str, default: Any = None) -> Any:
-    if isinstance(value, Mapping):
-        return value.get(name, default)
-    return getattr(value, name, default)
-
-
 @dataclass(frozen=True, slots=True)
 class GenesisRouterAdapter:
-    """Choose an execution route from an already-authorized task."""
+    """Choose an execution route from a Gate-verified authorization proof."""
 
     routes_by_mode: Mapping[str, str] | None = None
+    proof_secret: bytes | None = None
+    now: int | None = None
 
     def __post_init__(self) -> None:
         routes = self.routes_by_mode or {
@@ -39,14 +44,27 @@ class GenesisRouterAdapter:
         object.__setattr__(self, "routes_by_mode", dict(routes))
 
     def decide(self, task: TaskEnvelope, authorization: object) -> RouteDecision:
-        """Return a route only when the supplied authority decision approves."""
-        decision = str(_field(authorization, "decision", "")).upper()
-        if decision not in _APPROVED_DECISIONS:
-            raise PermissionError("route selection requires an approved authority decision")
+        """Return a route only when a Gate proof verifies and matches the task."""
+        try:
+            verified = verify_gate_authorization_proof(
+                authorization,
+                secret=self.proof_secret,
+                now=self.now,
+                expected_task_id=task.task_id,
+                required_scope=task.scope,
+            )
+        except AuthorizationProofError as exc:
+            raise PermissionError(
+                f"route selection requires a verified Gate authorization proof: {exc}"
+            ) from exc
 
-        policy_hash = _field(authorization, "policy_hash", "")
-        if not isinstance(policy_hash, str) or not policy_hash:
-            raise PermissionError("approved authority decision must include policy_hash")
+        if verified.decision not in _APPROVED_DECISIONS:
+            raise PermissionError(
+                f"route selection denied by Gate decision: {verified.decision}"
+            )
+
+        if verified.owner_id and task.owner and verified.owner_id != task.owner:
+            raise PermissionError("gate proof owner_id does not match task owner")
 
         route = self.routes_by_mode.get(task.mode) if self.routes_by_mode else None
         if not route:
@@ -58,8 +76,21 @@ class GenesisRouterAdapter:
             route=route,
             mode=task.mode,
             reason_code="ROUTE_AUTHORIZED",
-            policy_hash=policy_hash,
+            policy_hash=verified.policy_hash,
             requires_owner_approval=bool(
-                _field(authorization, "requires_owner_approval", False)
+                verified.decision == "OWNER_OVERRIDE"
+                or task.requires_owner_approval
             ),
+        )
+
+    def verify_only(
+        self, task: TaskEnvelope, authorization: object
+    ) -> GateAuthorizationProof:
+        """Expose verified claims without selecting a route (inspection / SCAR)."""
+        return verify_gate_authorization_proof(
+            authorization,
+            secret=self.proof_secret,
+            now=self.now,
+            expected_task_id=task.task_id,
+            required_scope=task.scope,
         )

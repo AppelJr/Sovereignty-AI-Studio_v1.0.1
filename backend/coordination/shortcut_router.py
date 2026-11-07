@@ -3,6 +3,9 @@
 This module parses and classifies input, asks an injected authority function for
 permission, and delegates route selection to Genesis. It does not call models,
 execute tools, or write SCAR/REPMHL evidence.
+
+ALLOW paths require a Gate-issued ``gate_proof``. A bare
+``{\"decision\": \"OWNER_AUTHORIZED\", \"policy_hash\": \"...\"}`` mapping is not authority.
 """
 from __future__ import annotations
 
@@ -16,6 +19,10 @@ from .task_envelope import TaskEnvelope
 
 
 GateAuthorize = Callable[[TaskEnvelope, Mapping[str, Any]], Mapping[str, Any]]
+
+_APPROVED = frozenset(
+    {"ALLOW", "APPROVED", "OWNER_AUTHORIZED", "DELEGATED_AUTHORIZED", "OWNER_OVERRIDE"}
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -70,10 +77,21 @@ class ShortcutRouter:
             raise TypeError("Gate authorization must return a mapping")
 
         decision = str(authorization.get("decision", "")).upper()
-        if decision not in {"ALLOW", "APPROVED", "OWNER_AUTHORIZED", "DELEGATED_AUTHORIZED", "OWNER_OVERRIDE"}:
+        if decision not in _APPROVED:
             escalation = HumanEscalationEvent(
                 task_id=task.task_id,
                 reason_code=str(authorization.get("reason_code", "AUTHORIZATION_REQUIRED")),
+                requested_scope=task.scope,
+                policy_hash=str(authorization.get("policy_hash", "")),
+            )
+            return ShortcutRoutingResult(task, task_type, authorization, None, escalation)
+
+        # ALLOW path: require Gate-signed proof. Bare decision maps are rejected.
+        gate_proof = authorization.get("gate_proof")
+        if not isinstance(gate_proof, str) or not gate_proof.strip():
+            escalation = HumanEscalationEvent(
+                task_id=task.task_id,
+                reason_code="GATE_PROOF_REQUIRED",
                 requested_scope=task.scope,
                 policy_hash=str(authorization.get("policy_hash", "")),
             )
