@@ -7,7 +7,7 @@
 - Input and final-output SHA3-512 digests are included in the verdict. An optional HMAC-SHA3-512 correlation value is added only when a key is explicitly supplied. HMAC is not described as a public-key signature.
 - The audit interface is `repmhl.log(dict)`. Missing or failing audit sinks fail closed by default.
 - `sovereign_core/smart_provider_router.py` requires an injected risk evaluator and applies HeavyJudge regardless of the legacy `use_judge=False` argument.
-- The active async provider path in `backend/app/services/ai_router.py` now invokes HeavyJudge after a provider returns a candidate. Provider fallback occurs only for provider-call failures; judge or audit failures propagate and do not cause another provider request.
+- The active async provider path in `backend/app/services/ai_router.py` now invokes HeavyJudge after a provider returns a candidate. Provider fallback occurs only for provider-call failures; judge or audit failures propagate and do not cause another provider request. `configure_governance()` provides an explicit injection point for the validated startup risk evaluator and REPMHL sink.
 - `docs/architecture/DEVASSIST420_HEAVY_JUDGE_FLOW.mmd` records the target end-to-end control flow and preserves Gate.One as the independent authorization boundary.
 
 ## Deliberately not fabricated / still blocked
