@@ -143,8 +143,11 @@ async function executeLocalTool(body, proof) {
           action: 'local_tool_execute',
           result: 'DENY',
           details: {
-            reason: error.message, capability: 'local.tool.execute',
+            reason: error.message, capability: 'local.tool.execute', authorization: 'DENY',
+            identity_id: canonical.state.owner_id, session_id: null,
             request_id: typeof body.request_id === 'string' ? body.request_id : null,
+            memory_loaded: false, network_accessed: false, files_changed: [],
+            route_trace: ['owner-session-verifier', 'policy-capability-gate'],
             dispatcher_started: false
           }
         });
@@ -181,7 +184,10 @@ async function executeLocalTool(body, proof) {
       result: decision,
       details: {
         execution_id: executionId, request_id: requestId,
-        capability: 'local.tool.execute', tool: typeof body.tool === 'string' ? body.tool : null,
+        identity_id: session.identity_id, session_id: session.session_id,
+        capability: 'local.tool.execute', authorization: decision,
+        memory_loaded: false, network_accessed: false, files_changed: [],
+        route_trace: ['owner-session-verifier', 'DevAssist420', 'offline-tool-dispatcher'], tool: typeof body.tool === 'string' ? body.tool : null,
         dispatcher_status: result.status || 'error', reason: result.reason || null,
         returncode: Number.isInteger(result.returncode) ? result.returncode : null,
         stdout_sha3_512: stdoutDigest, stdout_byte_length: stdout.length,
