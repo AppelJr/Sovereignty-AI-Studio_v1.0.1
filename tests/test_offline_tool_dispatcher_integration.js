@@ -67,11 +67,11 @@ async function main() {
   assert.equal(result.evidence.ok, true);
 
   const lines = fs.readFileSync(scarPath, 'utf8').trim().split('\n').map(JSON.parse);
-  assert.equal(lines.length, 1);
-  assert.equal(lines[0].result, 'ALLOW');
-  assert.equal(lines[0].details.capability, 'local.tool.execute');
-  assert.equal(lines[0].details.request_id, 'approved-request');
-  assert.match(lines[0].details.stdout_sha3_512, /^[a-f0-9]{128}$/);
+  assert.equal(lines.length, 2);
+  assert.equal(lines[1].result, 'ALLOW');
+  assert.equal(lines[1].details.capability, 'local.tool.execute');
+  assert.equal(lines[1].details.request_id, 'approved-request');
+  assert.match(lines[1].details.stdout_sha3_512, /^[a-f0-9]{128}$/);
 
   const deniedTool = await executeLocalTool(
     { tool: 'python', args: ['-c', 'print(1)'], request_id: 'blocked-tool' },
