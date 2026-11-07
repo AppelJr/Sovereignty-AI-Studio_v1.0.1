@@ -49,14 +49,31 @@ def test_pass_records_repmhl_event() -> None:
     result = HeavyJudge(repmhl=audit).review("safe text", "general", 0.10)
     assert result["final_output"] == "safe text"
     assert result["verdict"]["action"] == "pass"
+    assert result["verdict"]["output_sha3_512"]
     assert audit.events[0]["event"] == "HEAVY_JUDGE_VERDICT"
 
 
-def test_rewrite_calls_configured_rewriter() -> None:
-    judge = HeavyJudge(\n        rewriter=lambda text, context: f"reviewed:{context}:{text}",\n        rewrite_risk_evaluator=lambda candidate, context: 0.10,\n    )
+def test_rewrite_calls_configured_rewriter_and_rechecks_candidate() -> None:
+    audit = MemoryAudit()
+    judge = HeavyJudge(
+        repmhl=audit,
+        rewriter=lambda text, context: f"reviewed:{context}:{text}",
+        rewrite_risk_evaluator=lambda candidate, context: 0.10,
+    )
     result = judge.review("draft", "general", 0.80)
     assert result["final_output"] == "reviewed:general:draft"
     assert result["outcome"] == "rewritten"
+
+
+def test_rewrite_without_independent_evaluator_uses_safe_replacement() -> None:
+    judge = HeavyJudge(
+        repmhl=MemoryAudit(),
+        rewriter=lambda text, context: f"unverified:{text}",
+    )
+    result = judge.review("unsafe draft", "general", 0.80)
+    assert result["final_output"] != "unsafe draft"
+    assert result["final_output"] != "unverified:unsafe draft"
+    assert result["outcome"] == "safe_replacement"
 
 
 def test_rewrite_without_rewriter_never_returns_original() -> None:
@@ -70,12 +87,18 @@ def test_yank_uses_safe_replacement() -> None:
     result = HeavyJudge(repmhl=MemoryAudit()).review("unsafe draft", "medical", 0.95)
     assert result["verdict"]["action"] == "yank"
     assert result["final_output"] != "unsafe draft"
+    assert result["outcome"] == "withheld"
 
 
 @pytest.mark.parametrize("score", [-0.01, 1.01, float("nan"), float("inf"), True])
 def test_invalid_risk_scores_rejected(score: float) -> None:
     with pytest.raises((TypeError, ValueError)):
         HeavyJudge(repmhl=MemoryAudit()).review("text", "general", score)
+
+
+def test_missing_audit_sink_fails_closed() -> None:
+    with pytest.raises(RuntimeError, match="REPMHL audit sink"):
+        HeavyJudge().review("safe text", "general", 0.10)
 
 
 def test_audit_failure_withholds_result() -> None:
