@@ -7,9 +7,12 @@ composed judge returns PASS and the dual-gate release evidence append succeeds.
 """
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 import os
 from collections.abc import Mapping
+from datetime import datetime, timezone
 from typing import Any, Optional
 
 from app.services.providers.openai_provider import OpenAIProvider
@@ -96,10 +99,27 @@ class AIRouter:
         return list(self._providers.keys())
 
     def _append_evidence(self, event: dict[str, Any]) -> None:
+        """Normalize dual-gate 5W1H events for the existing SCARLedgerSink contract."""
         if not callable(self._evidence_sink):
             raise RuntimeError("No SCAR evidence sink configured; output withheld")
+        payload = dict(event)
+        task_id = payload.get("task_id")
+        if not isinstance(task_id, str) or not task_id:
+            raise RuntimeError("SCAR event requires task_id; output withheld")
+        timestamp = payload.get("when")
+        if not isinstance(timestamp, str) or not timestamp:
+            timestamp = datetime.now(timezone.utc).isoformat()
+        canonical = json.dumps(
+            payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+        ).encode("utf-8")
+        normalized = {
+            **payload,
+            "event": str(payload.get("what", "ASYNC_ROUTER_EVENT")),
+            "timestamp": timestamp,
+            "event_hash": "sha256:" + hashlib.sha256(canonical).hexdigest(),
+        }
         try:
-            self._evidence_sink(event)
+            self._evidence_sink(normalized)
         except Exception as exc:
             raise RuntimeError("Mandatory SCAR evidence append failed; output withheld") from exc
 
@@ -172,7 +192,7 @@ class AIRouter:
                 "how": "provider chat request; prompt and credentials excluded from evidence",
                 "authorization": claims.proof_id,
                 "memory_loaded": "UNKNOWN",
-                "network_accessed": True,
+                "network_accessed": "UNKNOWN",
                 "files_changed": [],
                 "result": "ATTEMPT",
                 "task_id": task_id,
@@ -199,7 +219,7 @@ class AIRouter:
                     "how": "exception type recorded; exception text and credentials excluded",
                     "authorization": claims.proof_id,
                     "memory_loaded": "UNKNOWN",
-                    "network_accessed": True,
+                    "network_accessed": "UNKNOWN",
                     "files_changed": [],
                     "result": "RETRY_NEXT_PROVIDER",
                     "task_id": task_id,
@@ -242,7 +262,7 @@ class AIRouter:
                     "how": "non-PASS or changed output withheld; no provider fallback",
                     "authorization": claims.proof_id,
                     "memory_loaded": review.get("memory_loaded", "UNKNOWN"),
-                    "network_accessed": True,
+                    "network_accessed": review.get("network_accessed", "UNKNOWN"),
                     "files_changed": [],
                     "result": action or "YANK",
                     "task_id": task_id,
@@ -264,7 +284,7 @@ class AIRouter:
                 },
                 expected_task_id=task_id,
                 evidence_sink=self._append_evidence,
-                memory_loaded=review.get("memory_loaded") is True,
+                memory_loaded=review.get("memory_loaded") if isinstance(review.get("memory_loaded"), bool) else False,
                 # This router's configured providers are remote APIs; the call used the network.
                 network_accessed=True,
             )
