@@ -59,7 +59,7 @@ jobs:
           test ! -e diamond-core/Cargo.lock
           cargo test --manifest-path diamond-core/Cargo.toml --all-targets
           rm -f diamond-core/Cargo.lock
-          CARGO_NET_OFFLINE=true ./scripts/diamond-core-runtime-gate.sh
+          CARGO_NET_OFFLINE=true bash ./scripts/diamond-core-runtime-gate.sh
 
       - name: Install exact root lockfile without lifecycle scripts
         run: npm ci --ignore-scripts --no-audit --no-fund
