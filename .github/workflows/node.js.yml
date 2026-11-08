@@ -26,23 +26,54 @@ jobs:
           auth="$(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 | tr -d '\n')"
           git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${GITHUB_SHA}"
           git checkout --detach FETCH_HEAD
+          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
           git config --unset-all http.extraheader 2>/dev/null || true
           git rev-parse --short HEAD
 
-      - name: Use system Node.js and run tests
+      - name: Select preinstalled Node.js 24
         shell: bash
         run: |
           set -Eeuo pipefail
+          shopt -s nullglob
+          candidates=(/opt/hostedtoolcache/node/24*/x64/bin)
+          node24_bin=""
+          for candidate in "${candidates[@]}"; do
+            if [[ -x "$candidate/node" && -x "$candidate/npm" ]]; then
+              node24_bin="$candidate"
+            fi
+          done
+          if [[ -z "$node24_bin" ]]; then
+            echo "FAIL: hosted runner does not provide preinstalled Node.js 24" >&2
+            exit 1
+          fi
+          echo "$node24_bin" >> "$GITHUB_PATH"
+          export PATH="$node24_bin:$PATH"
           node --version
           npm --version
-          if [[ -f package-lock.json || -f npm-shrinkwrap.json ]]; then
-            npm ci
-          elif [[ -f package.json ]]; then
-            npm install
-          else
-            echo "No package.json — Node job skipped"
-            exit 0
-          fi
+          node -e 'if (Number(process.versions.node.split(".")[0]) !== 24) { console.error("FAIL: Node.js 24 required"); process.exit(1); }'
+
+      - name: Verify Diamond Core contract tests and offline runtime gate
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test ! -e diamond-core/Cargo.lock
+          cargo test --manifest-path diamond-core/Cargo.toml --all-targets
+          rm -f diamond-core/Cargo.lock
+          CARGO_NET_OFFLINE=true bash ./scripts/diamond-core-runtime-gate.sh
+
+      - name: Install exact root lockfile without lifecycle scripts
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Install exact Node bridge lockfile without lifecycle scripts
+        run: npm ci --prefix node-bridge --ignore-scripts --no-audit --no-fund
+
+      - name: Validate runtime coherence and execute both Node test suites
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 scripts/validate-runtime-coherence.py
+          bash -n scripts/diamond-core-runtime-gate.sh
           npm run check
           npm run build --if-present
           npm test --if-present
+          npm test --prefix node-bridge

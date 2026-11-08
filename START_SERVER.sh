@@ -5,6 +5,12 @@ ROOT_DIR="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT_DIR"
 PYTHON_BIN="${PYTHON_BIN:-$ROOT_DIR/.venv/bin/python}"
 NODE_BIN="${NODE_BIN:-node}"
+NODE_VERSION="$("$NODE_BIN" -p 'process.versions.node')" || { echo "ERROR: Node.js runtime is unavailable: $NODE_BIN" >&2; exit 1; }
+NODE_MAJOR="${NODE_VERSION%%.*}"
+[[ "$NODE_MAJOR" =~ ^[0-9]+$ ]] && (( NODE_MAJOR >= 24 )) || {
+  echo "ERROR: Sovereignty AI Studio requires Node.js 24 or newer; found $NODE_VERSION." >&2
+  exit 1
+}
 PY_PORT="${SG_PORT:-9897}"
 DASHBOARD_PORT="${PORT:-${STATIC_PORT:-9898}}"
 UNIFIED_PORT="${PORT_UNIFIED:-${NODE_BRIDGE_PORT:-9899}}"
@@ -27,7 +33,7 @@ fi
 [[ -f "$ROOT_DIR/node-bridge/devassist420-preload.js" ]] || { echo "Missing DevAssist420 preload." >&2; exit 1; }
 [[ -d "$ROOT_DIR/node_modules/ws" ]] || { echo "Missing root ws dependency. Run npm ci." >&2; exit 1; }
 [[ -d "$ROOT_DIR/node-bridge/node_modules/express" || -d "$ROOT_DIR/node_modules/express" ]] || { echo "Missing Node bridge dependencies. Run npm ci --prefix node-bridge." >&2; exit 1; }
-"$ROOT_DIR/scripts/diamond-core-runtime-gate.sh"
+bash "$ROOT_DIR/scripts/diamond-core-runtime-gate.sh"
 "$PYTHON_BIN" - "$PY_PORT" "$DASHBOARD_PORT" "$UNIFIED_PORT" <<'PY'
 import socket
 import sys
