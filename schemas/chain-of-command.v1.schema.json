@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "sovereignty.chain-of-command.result.v1",
+  "title": "Sovereignty Chain of Command Result",
+  "type": "object",
+  "required": ["request_id", "status", "action", "output", "output_hash", "signature", "attempts", "council", "judge_verdict"],
+  "properties": {
+    "request_id": {"type": "string", "minLength": 1},
+    "status": {"enum": ["PASS", "ESCROW_PENDING_REVIEW"]},
+    "action": {"enum": ["PASS", "YANK"]},
+    "output": {"type": ["string", "null"]},
+    "output_hash": {"type": ["string", "null"], "pattern": "^(sha3-512:[a-f0-9]{128})?$"},
+    "signature": {"type": ["string", "null"]},
+    "attempts": {"type": "integer", "minimum": 1, "maximum": 4},
+    "council": {
+      "type": "object",
+      "required": ["action", "votes", "vote_count", "consensus"],
+      "properties": {
+        "action": {"enum": ["PASS", "REWRITE", "YANK"]},
+        "votes": {
+          "type": "object",
+          "required": ["grok", "gpt_codex", "claude"],
+          "properties": {
+            "grok": {"enum": ["PASS", "REWRITE", "YANK"]},
+            "gpt_codex": {"enum": ["PASS", "REWRITE", "YANK"]},
+            "claude": {"enum": ["PASS", "REWRITE", "YANK"]}
+          },
+          "additionalProperties": false
+        },
+        "vote_count": {"const": 3},
+        "consensus": {"type": "boolean"}
+      },
+      "additionalProperties": false
+    },
+    "judge_verdict": {"type": "object"},
+    "escrow_reason": {"type": ["string", "null"]}
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "PASS"}}},
+      "then": {
+        "properties": {
+          "action": {"const": "PASS"},
+          "output": {"type": "string", "minLength": 1},
+          "output_hash": {"type": "string", "pattern": "^sha3-512:[a-f0-9]{128}$"}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"status": {"const": "ESCROW_PENDING_REVIEW"}}},
+      "then": {
+        "properties": {
+          "action": {"const": "YANK"},
+          "output": {"type": "null"},
+          "output_hash": {"type": "null"}
+        }
+      }
+    }
+  ]
+}

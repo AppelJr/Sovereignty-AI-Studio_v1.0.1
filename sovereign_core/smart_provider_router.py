@@ -1,27 +1,28 @@
 #!/usr/bin/env python3
-"""DevAssist420 provider selection and mandatory Heavy Judge gate.
+"""Gate-bound smart provider router.
 
-This module coordinates provider selection but does not authorize actions.
-Gate.One remains the independent authorization boundary. Risk evaluation is
-an injected dependency; missing or invalid evaluation fails closed.
+This router is a routing adapter, not an authority. Protected execution requires
+a verified Gate proof, an injected three-lane Council adapter, Heavy Judge PASS,
+and the post-judge release evidence gate.
 """
 from __future__ import annotations
 
+from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
+import hashlib
 import logging
-from collections.abc import Callable
-from dataclasses import dataclass
-from typing import Any
+from typing import Any, Callable, Mapping
 
-try:
-    from .heavy_judge import HeavyJudge
-except ImportError:
-    from heavy_judge import HeavyJudge
+from backend.coordination.dual_gate_path import run_dual_gated
+from sovereign_core.heavy_judge import HeavyJudge
 
 logger = logging.getLogger("SmartProviderRouter")
+
 COST_TIERS = {"xai": 1.0, "anthropic": 1.8, "openai": 2.2}
+REQUIRED_COUNCIL_LANES = frozenset({"grok", "gpt_codex", "claude"})
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class RoutingDecision:
     provider: str
     reason: str
@@ -30,108 +31,196 @@ class RoutingDecision:
     used_judge: bool = False
 
 
+class EscrowPending(RuntimeError):
+    """Candidate was withheld for second review or approved repair."""
+
+
+class EvidenceWriteError(RuntimeError):
+    """Mandatory evidence could not be persisted."""
+
+
 class SmartProviderRouter:
-    """Select a provider, obtain its output, and always apply HeavyJudge."""
+    """Context-aware provider selection with mandatory dual-gate release."""
 
     def __init__(
         self,
         token_manager: Any,
-        repmhl: Any | None = None,
         *,
-        risk_evaluator: Callable[[str, str], float] | None = None,
+        council_adapter: Callable[[dict[str, Any]], Mapping[str, Any]],
+        repmhl: Any = None,
         judge: HeavyJudge | None = None,
     ) -> None:
-        if token_manager is None:
-            raise ValueError("token_manager is required")
+        if not callable(council_adapter):
+            raise TypeError("a real three-lane council_adapter is mandatory")
         self.token_manager = token_manager
         self.repmhl = repmhl
-        self.config = getattr(token_manager, "config", {})
-        self.risk_evaluator = risk_evaluator
-        self.judge = judge or HeavyJudge(repmhl=repmhl)
+        self.config = token_manager.config
+        self.judge = judge or HeavyJudge(evidence_sink=self._record_judge_evidence)
+        self.council_adapter = council_adapter
         self.priority_rules = {
             "medical": ["anthropic", "xai", "openai"],
             "education": ["anthropic", "xai", "openai"],
             "general": ["xai", "anthropic", "openai"],
+            "coding": ["openai", "anthropic", "xai"],
             "legal": ["anthropic", "openai", "xai"],
             "financial": ["openai", "anthropic", "xai"],
-            "coding": ["openai", "xai", "anthropic"],
+            "security": ["openai", "xai", "anthropic"],
         }
 
+    def _record_judge_evidence(self, event: dict[str, Any]) -> None:
+        if self.repmhl is None:
+            return
+        writer = getattr(self.repmhl, "append_event", None)
+        if not callable(writer):
+            raise EvidenceWriteError("REPMHL append_event adapter unavailable")
+        writer(event)
+
     def _get_provider_capacity(self, provider: str) -> int:
-        states = getattr(self.token_manager, "states", {})
-        state = states.get(provider)
-        if state is not None:
-            return max(0, int(state.max_tokens) - int(state.token_count))
-        providers = self.config.get("providers", {})
-        cfg = providers.get(provider)
-        if cfg is None:
-            return 0
-        return max(0, int(cfg.get("base_max_tokens", 0)))
+        state = self.token_manager.states.get(provider)
+        if not state:
+            cfg = self.config["providers"].get(provider)
+            if not isinstance(cfg, Mapping):
+                return 0
+            return int(cfg.get("base_max_tokens", 0))
+        return max(0, int(state.max_tokens) - int(state.token_count))
 
     def route_request(
         self, text: str, context: str = "general", prefer_cheap: bool = True
     ) -> RoutingDecision:
-        if not isinstance(text, str):
-            raise TypeError("text must be a string")
-        if context not in self.priority_rules:
-            raise ValueError(f"Unsupported routing context: {context!r}")
-        priorities = list(self.priority_rules[context])
-        if prefer_cheap:
-            priorities.sort(key=lambda name: COST_TIERS.get(name, float("inf")))
+        priorities = self.priority_rules.get(context, self.priority_rules["general"])
         for provider in priorities:
             capacity = self._get_provider_capacity(provider)
-            if capacity > 0:
+            if capacity > 512:
                 return RoutingDecision(
                     provider=provider,
-                    reason=f"Available provider for context={context}",
+                    reason=f"Best available for context={context}",
                     remaining_capacity=capacity,
-                    estimated_cost=COST_TIERS[provider],
+                    estimated_cost=COST_TIERS.get(provider, 2.0),
                 )
-        raise RuntimeError("No configured provider has available capacity")
+        raise RuntimeError("no provider has sufficient configured capacity; refusing fallback")
 
     def consume_with_routing(
         self,
         tokens: int,
-        text: str = "",
-        context: str = "general",
-        use_judge: bool = True,
+        text: str,
+        *,
+        context: str,
+        authorization_proof: str,
+        verification_key: bytes,
+        task_id: str,
+        owner_id: str,
+        required_scope: tuple[str, ...],
+        evidence_sink: Callable[[dict[str, Any]], Any],
         prefer_cheap: bool = True,
+        now: int | None = None,
     ) -> dict[str, Any]:
-        """Route, obtain provider output, evaluate risk, and gate the output.
+        """Route, collect Council evidence, judge, then release under two Gates.
 
-        use_judge remains for call-site compatibility but cannot disable the
-        mandatory final gate.
+        The Council adapter must return real, attributable votes for all three
+        lanes. A missing lane, REWRITE, YANK, malformed output, or audit failure
+        withholds the candidate. This method intentionally has no legacy bypass.
         """
-        del use_judge
-        if isinstance(tokens, bool) or not isinstance(tokens, int) or tokens <= 0:
-            raise ValueError("tokens must be a positive integer")
-        if self.risk_evaluator is None:
-            raise RuntimeError("No trusted risk_evaluator configured; output withheld")
-        decision = self.route_request(text, context, prefer_cheap)
-        states = getattr(self.token_manager, "states", {})
-        if decision.provider not in states:
-            self.token_manager.start_session(decision.provider)
-        model_result = self.token_manager.consume_tokens(decision.provider, tokens)
-        if not isinstance(model_result, dict):
-            raise TypeError("Provider token manager must return a result dictionary")
-        original_output = model_result.get("output")
-        if not isinstance(original_output, str):
-            raise RuntimeError("Provider returned no textual output; output withheld")
-        risk_score = self.risk_evaluator(original_output, context)
-        judge_result = self.judge.review(
-            original_output=original_output,
-            context=context,
-            risk_score=risk_score,
-        )
-        model_result["output"] = judge_result["final_output"]
-        model_result["heavy_judge_verdict"] = judge_result["verdict"]
-        model_result["heavy_judge_outcome"] = judge_result["outcome"]
-        model_result.update(
-            {
+        if not callable(evidence_sink):
+            raise TypeError("evidence_sink is mandatory")
+        execution: dict[str, Any] = {}
+
+        def route_and_judge(_verified_claims: Any) -> Mapping[str, Any]:
+            decision = self.route_request(text, context, prefer_cheap)
+            if decision.provider not in self.token_manager.states:
+                self.token_manager.start_session(decision.provider)
+            model_result = self.token_manager.consume_tokens(decision.provider, tokens)
+            if not isinstance(model_result, Mapping):
+                raise RuntimeError("provider returned invalid result")
+            candidate = model_result.get("output")
+            if not isinstance(candidate, str) or not candidate.strip():
+                raise RuntimeError("provider returned no candidate output; refusing placeholder")
+
+            council = self.council_adapter({
+                "task_id": task_id,
+                "owner_id": owner_id,
+                "request": text,
+                "candidate": candidate,
+                "context": context,
+                "route": asdict(decision),
+            })
+            if not isinstance(council, Mapping):
+                raise RuntimeError("Council returned invalid result")
+            votes = council.get("votes")
+            if not isinstance(votes, Mapping) or not REQUIRED_COUNCIL_LANES.issubset(votes):
+                raise RuntimeError("Council must provide Grok, GPT/Codex and Claude votes")
+            if any(str(votes[lane]).upper() not in {"PASS", "REWRITE", "YANK"}
+                   for lane in REQUIRED_COUNCIL_LANES):
+                raise RuntimeError("Council contains unsupported lane action")
+
+            judged = self.judge.review(
+                original_output=candidate,
+                context=context,
+                force_judge=True,
+                council_result=council,
+            )
+            verdict = judged.get("verdict") if isinstance(judged, Mapping) else None
+            action = str(verdict.get("action", "")).upper() if isinstance(verdict, Mapping) else ""
+            if action != "PASS":
+                event = {
+                    "who": "SmartProviderRouter",
+                    "what": "ESCROW_PENDING_REVIEW",
+                    "when": datetime.now(timezone.utc).isoformat(),
+                    "where": "Sovereignty-AI-Studio_v1.0.1",
+                    "why": "Council or Heavy Judge did not return PASS",
+                    "how": "provider -> three-lane Council -> Heavy Judge",
+                    "authorization": "pre-route-gate-verified",
+                    "memory_loaded": False,
+                    "network_accessed": True,
+                    "files_changed": [],
+                    "result": "YANK",
+                    "task_id": task_id,
+                    "judge_verdict": dict(verdict) if isinstance(verdict, Mapping) else {},
+                    "council": dict(council),
+                }
+                try:
+                    evidence_sink(event)
+                except Exception as exc:
+                    raise EvidenceWriteError("escrow evidence append failed") from exc
+                execution.update({"status": "ESCROW_PENDING_REVIEW", "action": action,
+                                  "council": dict(council), "judge_verdict": dict(verdict or {})})
+                raise EscrowPending(f"{action or 'INVALID'} requires second review")
+
+            output = judged.get("final_output")
+            if not isinstance(output, str) or not output.strip():
+                raise RuntimeError("Heavy Judge PASS did not include final output")
+            output_hash = "sha3-512:" + hashlib.sha3_512(output.encode("utf-8")).hexdigest()
+            execution.update({
+                "status": "PASS",
+                "output": output,
+                "output_hash": output_hash,
                 "routed_to": decision.provider,
                 "routing_reason": decision.reason,
-                "used_judge": True,
-                "estimated_cost_tier": decision.estimated_cost,
-            }
-        )
-        return model_result
+                "council": dict(council),
+                "judge_verdict": dict(verdict),
+            })
+            return {"status": "PASS", "output": output, "output_hash": output_hash}
+
+        try:
+            receipt = run_dual_gated(
+                proof=authorization_proof,
+                verification_key=verification_key,
+                task_id=task_id,
+                owner_id=owner_id,
+                required_scope=required_scope,
+                route_and_judge=route_and_judge,
+                evidence_sink=evidence_sink,
+                now=now,
+                memory_loaded=False,
+                network_accessed=True,
+            )
+        except EscrowPending:
+            return execution
+        return {
+            **execution,
+            "status": receipt.release_status,
+            "output": receipt.output,
+            "output_hash": receipt.output_hash,
+            "authorization_proof_id": receipt.authorization_proof_id,
+            "policy_hash": receipt.authorization_policy_hash,
+            "used_judge": True,
+        }
