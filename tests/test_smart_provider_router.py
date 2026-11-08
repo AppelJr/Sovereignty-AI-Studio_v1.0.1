@@ -20,7 +20,7 @@ class Backend:
         self.action = action
 
     def evaluate(self, candidate: str, context: str):
-        return {"action": self.action, "reason": "test fixture", "model_id": self.model_id}
+        return {"action": self.action, "reason": "test fixture", "model_id": self.model_id, "memory_loaded": False, "network_accessed": False}
 
 
 class State:
