@@ -210,6 +210,8 @@ class SmartProviderRouter:
                 route_and_judge=route_and_judge,
                 evidence_sink=evidence_sink,
                 now=now,
+                memory_loaded=False,
+                network_accessed=True,
             )
         except EscrowPending:
             return execution
