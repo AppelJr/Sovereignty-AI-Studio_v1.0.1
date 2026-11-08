@@ -153,6 +153,12 @@ class ComposedHeavyJudge:
             model_action = self._action(raw_model_review.get("action"))
             model_reason = str(raw_model_review.get("reason", "model review"))
             model_id = str(raw_model_review.get("model_id", model_id))
+            memory_loaded = raw_model_review.get("memory_loaded")
+            network_accessed = raw_model_review.get("network_accessed")
+            if not isinstance(memory_loaded, bool) or not isinstance(network_accessed, bool):
+                raise BackendUnavailable(
+                    "backend must report boolean memory_loaded and network_accessed"
+                )
         except Exception as exc:
             self._record({
                 "who": "ComposedHeavyJudge",
@@ -162,8 +168,8 @@ class ComposedHeavyJudge:
                 "why": "model review unavailable or malformed",
                 "how": "model backend failure defaults to YANK",
                 "authorization": "not_authorized_by_judge",
-                "memory_loaded": False,
-                "network_accessed": False,
+                "memory_loaded": "UNKNOWN",
+                "network_accessed": "UNKNOWN",
                 "files_changed": [],
                 "result": "YANK",
                 "output_hash": digest,
@@ -240,8 +246,8 @@ class ComposedHeavyJudge:
             "why": verdict["reason"],
             "how": "model advisory + deterministic behavioral gate; restrictive action wins",
             "authorization": "Gate authorization remains external",
-            "memory_loaded": False,
-            "network_accessed": False,
+            "memory_loaded": memory_loaded,
+            "network_accessed": network_accessed,
             "files_changed": [],
             "result": action,
             "model_id": model_id,
