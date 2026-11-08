@@ -47,7 +47,8 @@ jobs:
           python3 -m pytest -q \
             tests/test_heavy_judge_gate.py \
             tests/test_judge_composition.py \
-            tests/test_smart_provider_router.py
+            tests/test_smart_provider_router.py \
+            tests/test_ai_router_dual_gate.py
 
       - name: Run owner-gated Node dispatcher integration tests
         shell: bash
