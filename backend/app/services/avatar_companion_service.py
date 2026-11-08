@@ -120,7 +120,10 @@ class AvatarCompanionService:
                              f"Your personality is {avatar.personality}. Your current mood is {avatar.mood.value}. "
                              "Help the user with media creation, project building, voice interaction, and creative workflows. Be concise and in character.")
             async def call():
-                return await ai_router.chat(prompt=message, system=system_prompt, max_tokens=512, temperature=0.7)
+                return await ai_router.chat(
+                    prompt=message, system=system_prompt, max_tokens=512, temperature=0.7,
+                    authorization_proof=authorization_proof, task_id=task_id,
+                )
             try:
                 loop = asyncio.get_running_loop()
             except RuntimeError:
@@ -131,7 +134,10 @@ class AvatarCompanionService:
                     result = pool.submit(asyncio.run, call()).result(timeout=30)
             else:
                 result = asyncio.run(call())
-            return result.get("text", f"[{avatar.name}] Received: '{message}'")
+            response_text = result.get("text")
+            if not isinstance(response_text, str) or not response_text.strip():
+                raise RuntimeError("Router returned no releasable text")
+            return response_text
         except Exception as exc:
             logger.error("Avatar AI response failed: %s", type(exc).__name__)
             raise RuntimeError("Avatar AI response unavailable; output withheld") from exc
