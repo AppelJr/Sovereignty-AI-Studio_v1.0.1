@@ -61,7 +61,7 @@
       "description": "Heavy Judge, dual gate, Council, OUTENV, SCAR/REPMHL adapters",
       "visibility": "public",
       "branch": "agent/chain-of-command-heavy-judge-20261107",
-      "integration_status": "IMPLEMENTATION_IN_PROGRESS",
+      "integration_status": "IMPLEMENTATION_COMMITTED_NOT_VALIDATED",
       "test_status": "NOT_RUN",
       "contract_path": "docs/architecture/EIGHTEEN_REPOSITORY_CHAIN_OF_COMMAND.md"
     },
