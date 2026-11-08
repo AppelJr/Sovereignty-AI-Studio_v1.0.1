@@ -41,7 +41,7 @@ def main() -> int:
 
     package = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))
     node_requirement = package.get("engines", {}).get("node", "")
-    if not re.fullmatch(r">=\\s*24(?:\\.0(?:\\.0)?)?", node_requirement):
+    if not re.fullmatch(r">=\s*24(?:\.0(?:\.0)?)?", node_requirement):
         fail(f"root package must declare Node.js >=24; got {node_requirement!r}")
 
     installer = (ROOT / "INSTALL.sh").read_text(encoding="utf-8")
