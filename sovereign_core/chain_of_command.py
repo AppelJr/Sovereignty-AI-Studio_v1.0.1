@@ -18,6 +18,7 @@ ACTIONS = frozenset({"PASS", "REWRITE", "YANK"})
 EvidenceSink = Callable[[dict[str, Any]], Any]
 OwnerAuthorizer = Callable[["ChainRequest"], Mapping[str, Any]]
 AuthorizationVerifier = Callable[[str, "ChainRequest"], Mapping[str, Any]]
+ReleaseVerifier = Callable[[Mapping[str, Any], "ChainRequest", str, str], Any]
 RouteSelector = Callable[["ChainRequest"], Mapping[str, Any]]
 LaneAdapter = Callable[[dict[str, Any]], Mapping[str, Any]]
 RewriteHandler = Callable[[dict[str, Any]], str]
@@ -79,6 +80,7 @@ class ChainOfCommand:
         *,
         owner_authorizer: OwnerAuthorizer,
         authorization_verifier: AuthorizationVerifier,
+        release_verifier: ReleaseVerifier,
         route_selector: RouteSelector,
         lane_adapters: Mapping[str, LaneAdapter],
         judge: Any,
@@ -90,8 +92,8 @@ class ChainOfCommand:
         missing = [lane for lane in LANES if not callable(lane_adapters.get(lane))]
         if missing:
             raise ValueError(f"all provider lanes are required; missing: {', '.join(missing)}")
-        if not callable(owner_authorizer) or not callable(authorization_verifier) or not callable(route_selector):
-            raise TypeError("owner_authorizer, authorization_verifier and route_selector must be callable")
+        if not callable(owner_authorizer) or not callable(authorization_verifier) or not callable(release_verifier) or not callable(route_selector):
+            raise TypeError("owner_authorizer, authorization_verifier, release_verifier and route_selector must be callable")
         if not callable(evidence_sink):
             raise TypeError("evidence_sink is mandatory")
         if not callable(getattr(judge, "review", None)):
@@ -100,6 +102,7 @@ class ChainOfCommand:
             raise ValueError("max_rewrites must be between 0 and 3")
         self._authorize = owner_authorizer
         self._verify_proof = authorization_verifier
+        self._verify_release = release_verifier
         self._route = route_selector
         self._lanes = dict(lane_adapters)
         self._judge = judge
@@ -177,7 +180,7 @@ class ChainOfCommand:
 
             if judge_action == "PASS" and council_action == "PASS":
                 return self._deliver(
-                    request, candidate, attempt + 1, last_council, last_verdict
+                    request, candidate, attempt + 1, last_council, last_verdict, verified
                 )
 
             if attempt >= self._max_rewrites or self._rewrite is None:
@@ -266,15 +269,21 @@ class ChainOfCommand:
         attempts: int,
         council: Mapping[str, Any],
         verdict: Mapping[str, Any],
+        verified_claims: Mapping[str, Any],
     ) -> ChainResult:
         digest = hashlib.sha3_512(output.encode("utf-8")).hexdigest()
+        output_hash = f"sha3-512:{digest}"
+        try:
+            self._verify_release(verified_claims, request, output, output_hash)
+        except Exception as exc:
+            raise EvidenceWriteError("post-judge release gate failed; output withheld") from exc
         signature = self._signer(bytes.fromhex(digest)) if self._signer else None
         result = ChainResult(
             request_id=request.request_id,
             status="PASS",
             action="PASS",
             output=output,
-            output_hash=f"sha3-512:{digest}",
+            output_hash=output_hash,
             signature=signature,
             attempts=attempts,
             council=dict(council),
