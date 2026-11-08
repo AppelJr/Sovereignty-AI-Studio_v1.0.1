@@ -12,7 +12,7 @@
 
 1. **Model backend:** the composed judge requires an owner-startup-injected backend implementing \`evaluate(candidate, context)\`. \`HEAVYJUDGE_MODEL\` must be configured. This patch does not create provider credentials, select a production model, or perform a model request.
 2. **Behavioral evaluator:** the deterministic signal evaluator is a conservative guardrail, not calibrated risk scoring. It must not be represented as a trained or production-validated risk model.
-3. **Evidence persistence:** the router accepts an evidence sink and fails closed when required appends fail. The durability, signature provenance, retention, and tamper resistance of the injected sink must be verified against the canonical SCAR/REPMHL implementation separately.
+3. **Evidence persistence:** the router accepts an evidence sink and fails closed when required appends fail. The durability, signature provenance, retention, and tamper resistance of the injected sink must be verified against the canonical SCAR/REPMHL implementation separately. Backend access telemetry is required on successful reviews; failed backend calls are recorded with UNKNOWN access state rather than invented booleans.
 4. **Authorization:** Gate proof verification remains separate from Heavy Judge. A judge PASS is never an authorization grant.
 5. **Other provider path:** \`backend/app/services/ai_router.py\` is a separate asynchronous provider path and is not changed by this router-seam patch. It must not be claimed to inherit this dual-gate path.
 6. **Retry / escrow:** non-PASS output is withheld and an escrow event is appended. This patch does not implement owner-mediated second review or a bounded rewrite/retry controller.
