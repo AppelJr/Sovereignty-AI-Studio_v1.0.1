@@ -153,7 +153,7 @@ class VoiceInteractionService:
         """Generate an AI response via the sovereign AI router.
 
         Routes through xAI → Anthropic → OpenAI with automatic fallback.
-        Falls back to echo acknowledgement only if no providers are configured.
+        Provider output is withheld on any missing authorization or governance failure.
         """
         if offline_first:
             logger.info("Offline-first voice response requested; skipping external AI providers")
@@ -200,7 +200,10 @@ class VoiceInteractionService:
                     )
                 )
 
-            return result.get("text", f"Received: '{user_text}'")
+            response_text = result.get("text")
+            if not isinstance(response_text, str) or not response_text.strip():
+                raise RuntimeError("Router returned no releasable text")
+            return response_text
         except Exception as exc:
             logger.error("AI response generation failed: %s", type(exc).__name__)
             raise RuntimeError("AI response unavailable; output withheld") from exc
