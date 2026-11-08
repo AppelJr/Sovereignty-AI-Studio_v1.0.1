@@ -262,6 +262,9 @@ class ComposedHeavyJudge:
                 model_id=model_id, action=model_action, reason=model_reason
             )),
             "behavioral_verdict": dict(behavioral_verdict),
+            # Propagate backend-reported telemetry to the outer release boundary.
+            "memory_loaded": memory_loaded,
+            "network_accessed": network_accessed,
         }
 
 
