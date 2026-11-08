@@ -17,6 +17,7 @@ LANES = ("grok", "gpt_codex", "claude")
 ACTIONS = frozenset({"PASS", "REWRITE", "YANK"})
 EvidenceSink = Callable[[dict[str, Any]], Any]
 OwnerAuthorizer = Callable[["ChainRequest"], Mapping[str, Any]]
+AuthorizationVerifier = Callable[[str, "ChainRequest"], Mapping[str, Any]]
 RouteSelector = Callable[["ChainRequest"], Mapping[str, Any]]
 LaneAdapter = Callable[[dict[str, Any]], Mapping[str, Any]]
 RewriteHandler = Callable[[dict[str, Any]], str]
@@ -77,6 +78,7 @@ class ChainOfCommand:
         self,
         *,
         owner_authorizer: OwnerAuthorizer,
+        authorization_verifier: AuthorizationVerifier,
         route_selector: RouteSelector,
         lane_adapters: Mapping[str, LaneAdapter],
         judge: Any,
@@ -88,8 +90,8 @@ class ChainOfCommand:
         missing = [lane for lane in LANES if not callable(lane_adapters.get(lane))]
         if missing:
             raise ValueError(f"all provider lanes are required; missing: {', '.join(missing)}")
-        if not callable(owner_authorizer) or not callable(route_selector):
-            raise TypeError("owner_authorizer and route_selector must be callable")
+        if not callable(owner_authorizer) or not callable(authorization_verifier) or not callable(route_selector):
+            raise TypeError("owner_authorizer, authorization_verifier and route_selector must be callable")
         if not callable(evidence_sink):
             raise TypeError("evidence_sink is mandatory")
         if not callable(getattr(judge, "review", None)):
@@ -97,6 +99,7 @@ class ChainOfCommand:
         if max_rewrites < 0 or max_rewrites > 3:
             raise ValueError("max_rewrites must be between 0 and 3")
         self._authorize = owner_authorizer
+        self._verify_proof = authorization_verifier
         self._route = route_selector
         self._lanes = dict(lane_adapters)
         self._judge = judge
@@ -117,6 +120,19 @@ class ChainOfCommand:
         if not isinstance(proof, str) or not proof.strip():
             self._record(request, "AUTHORIZATION_DENIED", "DENY", "Gate proof missing")
             raise AuthorizationRequired("verified Gate proof is required")
+        try:
+            verified = self._verify_proof(proof, request)
+        except Exception as exc:
+            self._record(request, "AUTHORIZATION_DENIED", "DENY", "Gate proof verification failed")
+            raise AuthorizationRequired("Gate proof verification failed") from exc
+        if not isinstance(verified, Mapping):
+            raise AuthorizationRequired("Gate proof verifier returned invalid claims")
+        if str(verified.get("owner_id", "")) != request.owner_id:
+            raise AuthorizationRequired("Gate proof owner mismatch")
+        if str(verified.get("task_id", "")) != request.request_id:
+            raise AuthorizationRequired("Gate proof task mismatch")
+        if str(verified.get("decision", "")).upper() not in {"ALLOW", "APPROVED", "OWNER_AUTHORIZED", "DELEGATED_AUTHORIZED", "OWNER_OVERRIDE"}:
+            raise AuthorizationRequired("Gate proof decision is not an allow")
 
         route = self._route(request)
         if not isinstance(route, Mapping):
