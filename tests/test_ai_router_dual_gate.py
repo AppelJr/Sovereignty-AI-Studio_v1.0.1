@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 
+import httpx
 import pytest
 
 from app.services.ai_router import AIRouter, OutputWithheldError
@@ -178,7 +179,7 @@ def test_release_evidence_failure_withholds_candidate():
 
 
 def test_provider_fallback_only_after_transport_failure():
-    first = Provider(error=TimeoutError("network timeout"))
+    first = Provider(error=httpx.ConnectTimeout("network timeout"))
     second = Provider()
     events = []
     router, _ = make_router({"xai": first, "anthropic": second}, evidence=events.append)
@@ -186,7 +187,19 @@ def test_provider_fallback_only_after_transport_failure():
     assert result["text"] == second.result["text"]
     assert first.calls == 1
     assert second.calls == 1
-    assert result["fallback_from"] == [{"provider": "xai", "error": "TimeoutError"}]
+    assert result["fallback_from"] == [{"provider": "xai", "error": "ConnectTimeout"}]
+
+
+def test_provider_auth_failure_is_terminal_not_fallback():
+    request = httpx.Request("POST", "https://provider.invalid/chat")
+    response = httpx.Response(401, request=request)
+    first = Provider(error=httpx.HTTPStatusError("unauthorized", request=request, response=response))
+    second = Provider()
+    router, _ = make_router({"xai": first, "anthropic": second})
+    with pytest.raises(RuntimeError, match="non-retryably"):
+        run_chat(router)
+    assert first.calls == 1
+    assert second.calls == 0
 
 
 def test_malformed_provider_response_is_terminal_not_fallback():
