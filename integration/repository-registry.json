@@ -1,22 +1,189 @@
 {
-  "schema_version": "1.0",
-  "status": "declarative-only",
+  "schema_version": "2.0",
+  "status": "declarative-integration-map",
+  "canonical_runtime": "AppelJr/Sovereignty-AI-Studio_v1.0.1",
+  "canonical_branch": "agent/chain-of-command-heavy-judge-20261107",
+  "integration_policy": "role-specific-contracts-no-blind-runtime-copies",
   "repositories": [
-    {"id":"sovereignty-ai-gate","repository":"Appel420/Sovereignty-AI-Gate","role":"authority-policy-evidence","required":true,"capabilities":["identity","authorization","memory-governance","evidence"],"trust_level":"root-boundary","network":"policy-gated"},
-    {"id":"devassist420","repository":"Appel420/DevAssist420","role":"device-client","required":false,"capabilities":["conversation","voice-ui","developer-ui"],"trust_level":"client","network":"policy-gated"},
-    {"id":"sovereignty-ai-studio","repository":"Appel420/Sovereignty-AI-Studio","role":"integration-host","required":true,"capabilities":["dashboard","adapters","local-ci"],"trust_level":"integration","network":"loopback-only"},
-    {"id":"risk-engine-runtime-assurance","repository":"Appel420/Sovereignty-Risk-Engine-Runtime-Assurance","role":"runtime-assurance","required":true,"capabilities":["risk-evaluation","runtime-assurance"],"trust_level":"assurance","network":"policy-gated"},
-    {"id":"tutamcp-public","repository":"peix2/tutamcp-public","role":"external-email-mcp-adapter","required":false,"capabilities":["mail","calendar","contacts","drive"],"trust_level":"external","network":"policy-gated"},
-    {"id":"supergrok-heavy-4-2-skeleton","repository":"Sovereignty-One/SuperGrok-Heavy-4-2-Skeleton","role":"reference-skeleton","required":false,"capabilities":["reference-ui","reference-runtime"],"trust_level":"reference","network":"disabled"},
-    {"id":"x-ai-fortress","repository":"Appel420/X.AI-Fortress","role":"security-protocol","required":false,"capabilities":["security-controls","audit"],"trust_level":"security","network":"policy-gated"},
-    {"id":"xai-fortress","repository":"Appel420/xai-fortress","role":"post-quantum-fortress","required":false,"capabilities":["ml-dsa","ml-kem","enclave","audit-chain"],"trust_level":"security","network":"policy-gated"},
-    {"id":"sovereign-self-fixer","repository":"Appel420/sovereign-self-fixer","role":"self-healing-assurance","required":false,"capabilities":["tpm-attestation","repair-assistance"],"trust_level":"assurance","network":"policy-gated"},
-    {"id":"every-cloud-for-everyone","repository":"Appel420/every-cloud-for-everyone","role":"privacy-policy-enforcement","required":false,"capabilities":["customer-key-policy","privacy-enforcement"],"trust_level":"policy","network":"policy-gated"},
-    {"id":"familyguard","repository":"Appel420/FamilyGuard","role":"device-privacy","required":false,"capabilities":["e2ee","family-protection"],"trust_level":"client","network":"policy-gated"},
-    {"id":"sovereign-mldsa-native","repository":"Appel420/sovereign-mldsa-native","role":"native-cryptography","required":false,"capabilities":["ml-dsa","fips-204"],"trust_level":"crypto","network":"disabled"},
-    {"id":"sovereign-a-shell","repository":"Appel420/Sovereign-a-shell","role":"device-terminal","required":false,"capabilities":["terminal","local-shell"],"trust_level":"client","network":"policy-gated"},
-    {"id":"sovereignty-one-core","repository":"Appel420/sovereignty-one-core","role":"local-core","required":false,"capabilities":["quad-ratchet","rag","core-services"],"trust_level":"core","network":"policy-gated"},
-    {"id":"sovereignty-quantumeegnet","repository":"Appel420/Sovereignty-QuantumEEGNet","role":"research-module","required":false,"capabilities":["qeeg","quantum-ml"],"trust_level":"research","network":"policy-gated"},
-    {"id":"sovereignty-medicalai","repository":"Appel420/Sovereignty_medicalAI","role":"medical-research-module","required":false,"capabilities":["medical-ai"],"trust_level":"research","network":"policy-gated"}
+    {
+      "repository": "AppelJr/Sovereignty-AI-Gate",
+      "role": "authority",
+      "description": "Gate proof issuer/verifier",
+      "visibility": "private",
+      "branch": "agent/chain-of-command-consumer-20261107",
+      "integration_status": "DECLARED",
+      "test_status": "NOT_RUN",
+      "contract_path": "SOVEREIGNTY_CHAIN_OF_COMMAND_CONSUMER.json"
+    },
+    {
+      "repository": "AppelJr/keycloak",
+      "role": "identity_federation",
+      "description": "Identity federation only; not authorization",
+      "visibility": "public",
+      "branch": "agent/chain-of-command-consumer-20261107",
+      "integration_status": "DECLARED",
+      "test_status": "NOT_RUN",
+      "contract_path": "SOVEREIGNTY_CHAIN_OF_COMMAND_CONSUMER.json"
+    },
+    {
+      "repository": "AppelJr/grok-build",
+      "role": "human_acceptance",
+      "description": "Eight-state human acceptance gate",
+      "visibility": "private",
+      "branch": "agent/chain-of-command-consumer-20261107",
+      "integration_status": "DECLARED",
+      "test_status": "NOT_RUN",
+      "contract_path": "SOVEREIGNTY_CHAIN_OF_COMMAND_CONSUMER.json"
+    },
+    {
+      "repository": "AppelJr/Genesis",
+      "role": "routing",
+      "description": "RouteDecision producer; advisory only",
+      "visibility": "private",
+      "branch": "agent/chain-of-command-consumer-20261107",
+      "integration_status": "DECLARED",
+      "test_status": "NOT_RUN",
+      "contract_path": "SOVEREIGNTY_CHAIN_OF_COMMAND_CONSUMER.json"
+    },
+    {
+      "repository": "AppelJr/Sovereignty-Risk-Engine-Runtime-Assurance",
+      "role": "risk_assurance",
+      "description": "Risk and policy evidence",
+      "visibility": "private",
+      "branch": "agent/chain-of-command-consumer-20261107",
+      "integration_status": "DECLARED",
+      "test_status": "NOT_RUN",
+      "contract_path": "SOVEREIGNTY_CHAIN_OF_COMMAND_CONSUMER.json"
+    },
+    {
+      "repository": "AppelJr/Sovereignty-AI-Studio_v1.0.1",
+      "role": "canonical_orchestration",
+      "description": "Heavy Judge, dual gate, Council, OUTENV, SCAR/REPMHL adapters",
+      "visibility": "public",
+      "branch": "agent/chain-of-command-heavy-judge-20261107",
+      "integration_status": "IMPLEMENTATION_COMMITTED_NOT_VALIDATED",
+      "test_status": "NOT_RUN",
+      "contract_path": "docs/architecture/EIGHTEEN_REPOSITORY_CHAIN_OF_COMMAND.md"
+    },
+    {
+      "repository": "AppelJr/Grok-4.7-ChatGPT-6.1-Claude-5.5-Skeleton",
+      "role": "runtime_host",
+      "description": "Provider lanes, bus and runtime adapters",
+      "visibility": "public",
+      "branch": "agent/chain-of-command-consumer-20261107",
+      "integration_status": "DECLARED",
+      "test_status": "NOT_RUN",
+      "contract_path": "SOVEREIGNTY_CHAIN_OF_COMMAND_CONSUMER.json"
+    },
+    {
+      "repository": "AppelJr/mldsa-native",
+      "role": "pqc_signature_provider",
+      "description": "ML-DSA primitive; signer adapter required",
+      "visibility": "public",
+      "branch": "agent/chain-of-command-consumer-20261107",
+      "integration_status": "DECLARED",
+      "test_status": "NOT_RUN",
+      "contract_path": "SOVEREIGNTY_CHAIN_OF_COMMAND_CONSUMER.json"
+    },
+    {
+      "repository": "AppelJr/FamilyGuard",
+      "role": "device_family_consumer",
+      "description": "Verified device/family output consumer",
+      "visibility": "private",
+      "branch": "agent/chain-of-command-consumer-20261107",
+      "integration_status": "DECLARED",
+      "test_status": "NOT_RUN",
+      "contract_path": "SOVEREIGNTY_CHAIN_OF_COMMAND_CONSUMER.json"
+    },
+    {
+      "repository": "AppelJr/Sovereignty-AI-Gate_Q-Resist",
+      "role": "integrity_quarantine",
+      "description": "Integrity signal and YANK/escrow consumer",
+      "visibility": "private",
+      "branch": "agent/chain-of-command-consumer-20261107",
+      "integration_status": "DECLARED",
+      "test_status": "NOT_RUN",
+      "contract_path": "SOVEREIGNTY_CHAIN_OF_COMMAND_CONSUMER.json"
+    },
+    {
+      "repository": "AppelJr/Sovereign-piper1-gpl-Voice",
+      "role": "voice_output",
+      "description": "Speak only verified OUTENV",
+      "visibility": "public",
+      "branch": "agent/chain-of-command-consumer-20261107",
+      "integration_status": "DECLARED",
+      "test_status": "NOT_RUN",
+      "contract_path": "SOVEREIGNTY_CHAIN_OF_COMMAND_CONSUMER.json"
+    },
+    {
+      "repository": "AppelJr/NeuralScene-iOS",
+      "role": "ios_verified_display",
+      "description": "Verified output and provenance display",
+      "visibility": "private",
+      "branch": "agent/chain-of-command-consumer-20261107",
+      "integration_status": "DECLARED",
+      "test_status": "NOT_RUN",
+      "contract_path": "SOVEREIGNTY_CHAIN_OF_COMMAND_CONSUMER.json"
+    },
+    {
+      "repository": "AppelJr/every-cloud-for-everyone",
+      "role": "privacy_transport_policy",
+      "description": "Destination and transport policy",
+      "visibility": "public",
+      "branch": "agent/chain-of-command-consumer-20261107",
+      "integration_status": "DECLARED",
+      "test_status": "NOT_RUN",
+      "contract_path": "SOVEREIGNTY_CHAIN_OF_COMMAND_CONSUMER.json"
+    },
+    {
+      "repository": "AppelJr/ISO-UNC-AI",
+      "role": "compliance_validation",
+      "description": "Compliance control validation",
+      "visibility": "public",
+      "branch": "agent/chain-of-command-consumer-20261107",
+      "integration_status": "DECLARED",
+      "test_status": "NOT_RUN",
+      "contract_path": "SOVEREIGNTY_CHAIN_OF_COMMAND_CONSUMER.json"
+    },
+    {
+      "repository": "AppelJr/ciso-assistant-community",
+      "role": "grc_evidence_consumer",
+      "description": "Sanitized GRC evidence consumer",
+      "visibility": "public",
+      "branch": "agent/chain-of-command-consumer-20261107",
+      "integration_status": "DECLARED",
+      "test_status": "NOT_RUN",
+      "contract_path": "SOVEREIGNTY_CHAIN_OF_COMMAND_CONSUMER.json"
+    },
+    {
+      "repository": "AppelJr/marketplace-fedramp-gov-data",
+      "role": "compliance_reference_data",
+      "description": "Compliance reference data only",
+      "visibility": "public",
+      "branch": "agent/chain-of-command-consumer-20261107",
+      "integration_status": "DECLARED",
+      "test_status": "NOT_RUN",
+      "contract_path": "SOVEREIGNTY_CHAIN_OF_COMMAND_CONSUMER.json"
+    },
+    {
+      "repository": "AppelJr/Sovereignty_airplane-mode",
+      "role": "offline_mode_enforcement",
+      "description": "Offline/network mode enforcement",
+      "visibility": "private",
+      "branch": "agent/chain-of-command-consumer-20261107",
+      "integration_status": "DECLARED",
+      "test_status": "NOT_RUN",
+      "contract_path": "SOVEREIGNTY_CHAIN_OF_COMMAND_CONSUMER.json"
+    },
+    {
+      "repository": "AppelJr/Sovereignty-QuantumEEGNet",
+      "role": "research_consumer",
+      "description": "Scoped research workload consumer",
+      "visibility": "private",
+      "branch": "agent/chain-of-command-consumer-20261107",
+      "integration_status": "DECLARED",
+      "test_status": "NOT_RUN",
+      "contract_path": "SOVEREIGNTY_CHAIN_OF_COMMAND_CONSUMER.json"
+    }
   ]
 }

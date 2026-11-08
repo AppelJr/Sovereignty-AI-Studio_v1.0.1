@@ -1,212 +1,132 @@
-#!/usr/bin/env python3
-"""
-HeavyJudge v2.0
-Final quality and safety guardian for the Sovereign AI stack.
-Background drift detector + Council arbitration for medical/education.
-"""
+"""Heavy Judge: deterministic quality/risk gate; no simulated provider votes.
 
-import hashlib
-import json
-import logging
-import time
-from dataclasses import dataclass, asdict
+Provider calls and Council aggregation are separate injected boundaries. This
+module never fabricates votes, signatures, model output, or audit success.
+"""
+from __future__ import annotations
+
+from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
-from typing import Optional, Dict, Any, Literal
+import hashlib
+from typing import Any, Callable, Literal, Mapping
 
-logger = logging.getLogger("HeavyJudge")
+Action = Literal["PASS", "REWRITE", "YANK"]
+Signer = Callable[[bytes], str]
 
-Action = Literal["pass", "rewrite", "yank", "council_override", "refuse"]
 
-
-@dataclass
+@dataclass(frozen=True, slots=True)
 class JudgeVerdict:
     timestamp: str
     risk_score: float
     action: Action
-    hash: str
-    signature: Optional[str]
+    output_hash: str
+    signature: str | None
     context: str
     judge_model: str
     reason: str
 
 
 class HeavyJudge:
-    """
-    Heavy Judge — Background safety + drift monitor.
-    - Mostly passive (low cost)
-    - Triggers Council on medical/education when risk is elevated
-    - Produces cryptographically verifiable verdicts
-    """
+    """Final risk gate over a candidate already produced by provider lanes."""
 
-    def __init__(self, model_name: str = "grok-5.5-heavy", repmhl=None, token_manager=None):
+    DEFAULT_THRESHOLDS = {"medical": 0.35, "education": 0.40, "general": 0.65,
+                          "legal": 0.35, "financial": 0.40, "security": 0.30}
+
+    def __init__(
+        self,
+        model_name: str = "Sovereignty-HeavyJudge",
+        *,
+        thresholds: Mapping[str, float] | None = None,
+        signer: Signer | None = None,
+        evidence_sink: Callable[[dict[str, Any]], Any] | None = None,
+    ) -> None:
         self.model_name = model_name
-        self.repmhl = repmhl
-        self.token_manager = token_manager   # For real council calls
+        self.thresholds = dict(self.DEFAULT_THRESHOLDS)
+        if thresholds:
+            for key, value in thresholds.items():
+                if not isinstance(value, (int, float)) or not 0 <= float(value) <= 1:
+                    raise ValueError(f"invalid threshold for {key}")
+                self.thresholds[str(key).lower()] = float(value)
+        self.signer = signer
+        self.evidence_sink = evidence_sink
 
-        self.thresholds = {
-            "medical": 0.60,
-            "education": 0.65,
-            "general": 0.80
+    @staticmethod
+    def _risk(text: str, context: str) -> tuple[float, list[str]]:
+        value = 0.0
+        reasons: list[str] = []
+        lower = text.lower()
+        signals = {
+            "unsupported certainty": (("guaranteed", "100% certain", "proven beyond doubt"), 0.12),
+            "uncertainty disclosure": (("i guess", "not sure", "possibly", "might be"), 0.04),
+            "medical action language": (("diagnose", "take this dose", "stop medication", "cure"), 0.32),
+            "credential or secret exposure": (("private key", "api key", "password=", "bearer "), 0.45),
+            "destructive operation": (("rm -rf", "drop database", "delete all"), 0.40),
         }
-        self.council_providers = ["xai", "anthropic", "openai"]
-
-    def _calculate_risk(self, text: str, context: str) -> float:
-        """Drift + Safety risk scoring focused on education and medical."""
-        text_lower = text.lower()
-        risk = 0.0
-
-        # Drift / uncertainty signals
-        drift_signals = ["i think", "maybe", "possibly", "not sure", "could be", "i guess"]
-        drift_hits = sum(1 for phrase in drift_signals if phrase in text_lower)
-        risk += min(drift_hits * 0.12, 0.35)
-
-        # Overconfident language (bad for students)
-        overconfident = ["always", "never", "exactly", "100%", "definitely", "proven fact"]
-        if any(word in text_lower for word in overconfident):
-            risk += 0.25
-
-        # Medical safety
-        if context == "medical":
-            dangerous = ["diagnose", "you have", "take this", "cure for", "stop taking"]
-            if any(word in text_lower for word in dangerous):
-                risk += 0.55
-
-        # Education context boost
-        if context == "education":
-            if any(kw in text_lower for kw in ["child", "student", "learn", "puberty", "growth"]):
-                risk += 0.15
-
-        if context in ["medical", "education"]:
-            risk += 0.18
-
-        return min(risk, 1.0)
-
-    def _run_council(self, original_output: str, context: str, token_manager=None) -> Dict[str, Any]:
-        """Run council of xAI + Anthropic + OpenAI."""
-        votes = []
-
-        for provider in self.council_providers:
-            vote = {
-                "provider": provider,
-                "supports": True,
-                "confidence": 0.82,
-                "comment": f"{provider} reviewed for {context}"
-            }
-
-            if token_manager is not None:
-                try:
-                    # In real usage this would call the actual model via token_manager
-                    if provider == "anthropic":
-                        vote["supports"] = True
-                        vote["confidence"] = 0.91
-                    elif provider == "xai":
-                        vote["supports"] = True
-                        vote["confidence"] = 0.85
-                    else:
-                        vote["supports"] = True
-                        vote["confidence"] = 0.80
-                except Exception as e:
-                    logger.warning(f"Council call to {provider} failed: {e}")
-
-            votes.append(vote)
-
-        support_count = sum(1 for v in votes if v.get("supports"))
-        consensus = "pass" if support_count >= 2 else "revise"
-
-        return {
-            "votes": votes,
-            "consensus": consensus,
-            "support_ratio": round(support_count / len(votes), 2),
-            "triggered_real_calls": token_manager is not None
-        }
-
-    def _sign(self, data: dict) -> str:
-        return hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest()[:32]
+        for label, (phrases, weight) in signals.items():
+            if any(term in lower for term in phrases):
+                value += weight
+                reasons.append(label)
+        if context in {"medical", "legal", "financial", "security"}:
+            value += 0.12
+            reasons.append(f"high-impact context: {context}")
+        return min(value, 1.0), reasons
 
     def review(
         self,
         original_output: str,
         context: str = "general",
         force_judge: bool = False,
-        token_manager=None
-    ) -> Dict[str, Any]:
-        """
-        Main review method.
-        Triggers council automatically on medical/education when risk is high.
-        """
-        risk_score = self._calculate_risk(original_output, context)
-        triggered_council = False
-        council_result = None
+        token_manager: Any = None,
+        *,
+        council_result: Mapping[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        if not isinstance(original_output, str) or not original_output.strip():
+            raise ValueError("candidate output must be a non-empty string")
+        context_key = str(context).lower()
+        score, reasons = self._risk(original_output, context_key)
+        threshold = self.thresholds.get(context_key, self.thresholds["general"])
 
-        # Trigger council for medical or high-stakes education
-        effective_token_manager = token_manager or self.token_manager
-        if context in ["medical", "education"] and (risk_score > self.thresholds[context] or force_judge):
-            council_result = self._run_council(original_output, context, effective_token_manager)
-            triggered_council = True
+        council_action = None
+        if council_result is not None:
+            council_action = str(council_result.get("action", "")).upper()
+            if council_action not in {"PASS", "REWRITE", "YANK"}:
+                raise ValueError("Council action must be PASS, REWRITE, or YANK")
 
-        # Decide action
-        action: Action = "pass"
-        if risk_score > self.thresholds.get(context, 0.75):
-            if triggered_council and council_result and council_result["consensus"] == "revise":
-                action = "council_override"
-            elif risk_score > 0.88:
-                action = "refuse"
-            elif risk_score > 0.75:
-                action = "yank"
-            else:
-                action = "rewrite"
+        critical_signal = any(item in reasons for item in ("credential or secret exposure", "destructive operation"))
+        if council_action == "YANK" or critical_signal or score >= min(0.90, threshold + 0.40):
+            action: Action = "YANK"
+        elif council_action == "REWRITE" or score > threshold:
+            action = "REWRITE"
+        else:
+            action = "PASS"
 
-        final_output = original_output
-        if action == "refuse":
-            final_output = "I need to be careful here. Please consult a qualified professional."
-        elif action in ["yank", "rewrite", "council_override"]:
-            final_output = "Let me rephrase that more carefully and accurately for clarity and safety."
-
+        digest = hashlib.sha3_512(original_output.encode("utf-8")).digest()
+        signature = self.signer(digest) if self.signer else None
         verdict = JudgeVerdict(
             timestamp=datetime.now(timezone.utc).isoformat(),
-            risk_score=round(risk_score, 3),
+            risk_score=round(score, 4),
             action=action,
-            hash=self._sign({"output": final_output, "risk": risk_score}),
-            signature=self._sign({"verdict": action, "time": time.time()}),
-            context=context,
+            output_hash="sha3-512:" + digest.hex(),
+            signature=signature,
+            context=context_key,
             judge_model=self.model_name,
-            reason=f"Risk {risk_score:.2f} in {context} context"
+            reason="; ".join(reasons) if reasons else "no configured risk signal detected",
         )
-
-        # Feed into REPMHL
-        if self.repmhl:
-            try:
-                self.repmhl.process_turn(
-                    tokens=0,
-                    text=f"[HeavyJudge] {action} | context={context}",
-                    role="system"
-                )
-            except Exception:
-                pass
-
-        logger.info(f"[HeavyJudge] {action.upper()} | context={context} | risk={risk_score:.2f}")
-
-        return {
-            "final_output": final_output,
+        result = {
+            "final_output": original_output if action == "PASS" else None,
             "verdict": asdict(verdict),
-            "triggered_council": triggered_council,
-            "council_result": council_result
+            "triggered_council": council_result is not None,
+            "council_result": dict(council_result) if council_result is not None else None,
         }
-
-
-# ====================== TEST ======================
-if __name__ == "__main__":
-    judge = HeavyJudge(model_name="grok-5.5-heavy")
-
-    test_cases = [
-        ("The patient should take 500mg of medication daily.", "medical"),
-        ("Puberty usually starts between ages 10-14.", "education"),
-        ("The sky is blue because of Rayleigh scattering.", "general"),
-    ]
-
-    for output, ctx in test_cases:
-        result = judge.review(output, context=ctx, force_judge=True)
-        print(f"\nContext: {ctx}")
-        print(f"Action: {result['verdict']['action']}")
-        print(f"Final Output: {result['final_output'][:100]}...")
-        print(f"Triggered Council: {result['triggered_council']}")
+        if self.evidence_sink is not None:
+            self.evidence_sink({
+                "event": "HEAVY_JUDGE_VERDICT",
+                "action": action,
+                "context": context_key,
+                "risk_score": verdict.risk_score,
+                "output_hash": verdict.output_hash,
+                "signature_present": signature is not None,
+                "reason": verdict.reason,
+                "timestamp": verdict.timestamp,
+            })
+        return result
