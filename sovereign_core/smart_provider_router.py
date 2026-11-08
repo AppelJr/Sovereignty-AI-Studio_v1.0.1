@@ -138,7 +138,7 @@ class SmartProviderRouter:
                 raise RuntimeError("Council returned invalid result")
             votes = council.get("votes")
             if not isinstance(votes, Mapping) or not REQUIRED_COUNCIL_LANES.issubset(votes):
-                raise RuntimeError("Council must provide Grok, GPT/Codex and Claude votes")
+                raise RuntimeError("Council must provide all three lanes: Grok, GPT/Codex and Claude votes")
             if any(str(votes[lane]).upper() not in VALID_COUNCIL_ACTIONS
                    for lane in REQUIRED_COUNCIL_LANES):
                 raise RuntimeError("Council contains unsupported lane action")
