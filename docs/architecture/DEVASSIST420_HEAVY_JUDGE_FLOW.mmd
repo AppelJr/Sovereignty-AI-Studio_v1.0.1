@@ -1,0 +1,86 @@
+---
+title: DevAssist420 Provider Council and Heavy Judge Flow
+---
+flowchart TB
+    USER([Human / Owner])
+    DA["DevAssist420<br/>Language bridge · Orchestrator · Smart Router · Heavy Judge"]
+    USER <-->|Natural language| DA
+
+    ENV["Request Envelope<br/>Structured input + context"]
+    ORCH["Orchestrator"]
+    ROUTER["Smart Provider Router<br/>Context · capacity · risk evaluator"]
+    BUS["Provider Bus<br/>Bounded message transport"]
+
+    DA --> ENV --> ORCH --> ROUTER --> BUS
+
+    subgraph LANES["Independent Provider Lanes"]
+        direction LR
+        GROK["Grok<br/>Adversarial review"]
+        GPT["GPT / Codex<br/>Reasoning · code"]
+        CLAUDE["Claude<br/>Medical · safety review"]
+    end
+
+    BUS --> GROK
+    BUS --> GPT
+    BUS --> CLAUDE
+
+    GROK --> COUNCIL["Council Layer<br/>Structured comparison · independent votes"]
+    GPT --> COUNCIL
+    CLAUDE --> COUNCIL
+
+    COUNCIL --> JUDGE["DevAssist420 Heavy Judge<br/>Policy thresholds · output validation · SHA3-512"]
+    JUDGE -->|PASS| OUTENV["Output Envelope"]
+    JUDGE -->|REWRITE| RETRY{"Retry budget remaining?"}
+    RETRY -->|Yes · rework| ORCH
+    RETRY -->|No| ESCROW["Escrow · hold for review"]
+    JUDGE -->|YANK| ESCROW
+
+    ESCROW --> SECOND["Second Review · Owner Escalation"]
+    SECOND -->|Approved rework| ORCH
+    SECOND -->|Withhold · escalate| HOLD["Output withheld<br/>Escalation status only"]
+
+    OUTENV --> DA
+    HOLD --> DA
+    DA --> OUTPUT["Speak · Show · Save · Copy · Files"]
+    OUTPUT --> USER
+
+    subgraph AUTH["Independent Authorization Boundary"]
+        GATE["Gate.One<br/>Owner identity · policy · authorization"]
+    end
+    ORCH -.->|Authorization proof required| GATE
+    GATE -.->|ALLOW · scoped proof| ORCH
+
+    subgraph AUDIT["Evidence Path · append-only interface"]
+        COLLECTOR["Audit Event Collector"]
+        SCAR["SCAR Ledger<br/>5W1H · actor · decision · provenance"]
+        REPMHL["REPMHL Binding<br/>hydration · continuity evidence"]
+        DIGEST["SHA3-512 digest<br/>optional keyed signature"]
+        COLLECTOR --> SCAR --> DIGEST
+        COLLECTOR --> REPMHL
+    end
+
+    ENV -.-> COLLECTOR
+    ORCH -.-> COLLECTOR
+    ROUTER -.-> COLLECTOR
+    COUNCIL -.-> COLLECTOR
+    JUDGE -.-> COLLECTOR
+    ESCROW -.-> COLLECTOR
+    OUTENV -.-> COLLECTOR
+
+    classDef human fill:#164e63,color:#fff,stroke:#67e8f9
+    classDef blue fill:#1d4ed8,color:#fff,stroke:#93c5fd
+    classDef green fill:#15803d,color:#fff,stroke:#86efac
+    classDef purple fill:#7e22ce,color:#fff,stroke:#d8b4fe
+    classDef red fill:#b91c1c,color:#fff,stroke:#fca5a5
+    classDef amber fill:#a16207,color:#fff,stroke:#fde68a
+    classDef infra fill:#374151,color:#fff,stroke:#9ca3af
+    classDef audit fill:#334155,color:#fff,stroke:#cbd5e1
+
+    class USER,DA,OUTPUT human
+    class GROK blue
+    class GPT green
+    class CLAUDE purple
+    class JUDGE red
+    class ESCROW,SECOND,RETRY,HOLD amber
+    class ENV,ORCH,ROUTER,BUS,COUNCIL,OUTENV infra
+    class COLLECTOR,SCAR,REPMHL,DIGEST,GATE audit
