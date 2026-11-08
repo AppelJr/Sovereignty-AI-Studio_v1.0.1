@@ -1,25 +1,23 @@
 #!/usr/bin/env python3
-"""Gate-bound smart provider router.
+"""Gate-bound smart provider router with mandatory composed Heavy Judge.
 
-This router is a routing adapter, not an authority. Protected execution requires
-a verified Gate proof, an injected three-lane Council adapter, Heavy Judge PASS,
-and the post-judge release evidence gate.
+The router is not an authority. A verified Gate proof is required before any
+provider route; a composed judge PASS and durable release evidence are required
+before output is returned. The judge is injected by validated owner startup.
 """
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 import hashlib
-import logging
 from typing import Any, Callable, Mapping
 
 from backend.coordination.dual_gate_path import run_dual_gated
-from sovereign_core.heavy_judge import HeavyJudge
-
-logger = logging.getLogger("SmartProviderRouter")
+from sovereign_core.judge_composition import ComposedHeavyJudge
 
 COST_TIERS = {"xai": 1.0, "anthropic": 1.8, "openai": 2.2}
 REQUIRED_COUNCIL_LANES = frozenset({"grok", "gpt_codex", "claude"})
+VALID_COUNCIL_ACTIONS = frozenset({"PASS", "REWRITE", "YANK"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,15 +45,15 @@ class SmartProviderRouter:
         token_manager: Any,
         *,
         council_adapter: Callable[[dict[str, Any]], Mapping[str, Any]],
-        repmhl: Any = None,
-        judge: HeavyJudge | None = None,
+        judge: ComposedHeavyJudge,
     ) -> None:
         if not callable(council_adapter):
             raise TypeError("a real three-lane council_adapter is mandatory")
+        if not isinstance(judge, ComposedHeavyJudge):
+            raise TypeError("a configured ComposedHeavyJudge is mandatory; no legacy bypass")
         self.token_manager = token_manager
-        self.repmhl = repmhl
         self.config = token_manager.config
-        self.judge = judge or HeavyJudge(evidence_sink=self._record_judge_evidence)
+        self.judge = judge
         self.council_adapter = council_adapter
         self.priority_rules = {
             "medical": ["anthropic", "xai", "openai"],
@@ -66,14 +64,6 @@ class SmartProviderRouter:
             "financial": ["openai", "anthropic", "xai"],
             "security": ["openai", "xai", "anthropic"],
         }
-
-    def _record_judge_evidence(self, event: dict[str, Any]) -> None:
-        if self.repmhl is None:
-            return
-        writer = getattr(self.repmhl, "append_event", None)
-        if not callable(writer):
-            raise EvidenceWriteError("REPMHL append_event adapter unavailable")
-        writer(event)
 
     def _get_provider_capacity(self, provider: str) -> int:
         state = self.token_manager.states.get(provider)
@@ -87,6 +77,7 @@ class SmartProviderRouter:
     def route_request(
         self, text: str, context: str = "general", prefer_cheap: bool = True
     ) -> RoutingDecision:
+        del text, prefer_cheap
         priorities = self.priority_rules.get(context, self.priority_rules["general"])
         for provider in priorities:
             capacity = self._get_provider_capacity(provider)
@@ -114,11 +105,11 @@ class SmartProviderRouter:
         prefer_cheap: bool = True,
         now: int | None = None,
     ) -> dict[str, Any]:
-        """Route, collect Council evidence, judge, then release under two Gates.
+        """Route only after Gate 1; release only after judge PASS and Gate 2.
 
-        The Council adapter must return real, attributable votes for all three
-        lanes. A missing lane, REWRITE, YANK, malformed output, or audit failure
-        withholds the candidate. This method intentionally has no legacy bypass.
+        Council votes must be attributable and complete. Every non-PASS judge
+        result is escrowed and withheld. Judge, provider, and evidence errors
+        propagate; they never trigger an unapproved provider fallback.
         """
         if not callable(evidence_sink):
             raise TypeError("evidence_sink is mandatory")
@@ -147,10 +138,12 @@ class SmartProviderRouter:
                 raise RuntimeError("Council returned invalid result")
             votes = council.get("votes")
             if not isinstance(votes, Mapping) or not REQUIRED_COUNCIL_LANES.issubset(votes):
-                raise RuntimeError("Council must provide Grok, GPT/Codex and Claude votes")
-            if any(str(votes[lane]).upper() not in {"PASS", "REWRITE", "YANK"}
+                raise RuntimeError("Council must provide all three lanes: Grok, GPT/Codex and Claude votes")
+            if any(str(votes[lane]).upper() not in VALID_COUNCIL_ACTIONS
                    for lane in REQUIRED_COUNCIL_LANES):
                 raise RuntimeError("Council contains unsupported lane action")
+            if str(council.get("action", "")).upper() not in VALID_COUNCIL_ACTIONS:
+                raise RuntimeError("Council aggregate action is missing or unsupported")
 
             judged = self.judge.review(
                 original_output=candidate,
@@ -158,7 +151,9 @@ class SmartProviderRouter:
                 force_judge=True,
                 council_result=council,
             )
-            verdict = judged.get("verdict") if isinstance(judged, Mapping) else None
+            if not isinstance(judged, Mapping):
+                raise RuntimeError("ComposedHeavyJudge returned invalid result")
+            verdict = judged.get("verdict")
             action = str(verdict.get("action", "")).upper() if isinstance(verdict, Mapping) else ""
             if action != "PASS":
                 event = {
@@ -166,8 +161,8 @@ class SmartProviderRouter:
                     "what": "ESCROW_PENDING_REVIEW",
                     "when": datetime.now(timezone.utc).isoformat(),
                     "where": "Sovereignty-AI-Studio_v1.0.1",
-                    "why": "Council or Heavy Judge did not return PASS",
-                    "how": "provider -> three-lane Council -> Heavy Judge",
+                    "why": "Council or composed Heavy Judge did not return PASS",
+                    "how": "provider -> three-lane Council -> composed Heavy Judge",
                     "authorization": "pre-route-gate-verified",
                     "memory_loaded": False,
                     "network_accessed": True,
@@ -181,13 +176,17 @@ class SmartProviderRouter:
                     evidence_sink(event)
                 except Exception as exc:
                     raise EvidenceWriteError("escrow evidence append failed") from exc
-                execution.update({"status": "ESCROW_PENDING_REVIEW", "action": action,
-                                  "council": dict(council), "judge_verdict": dict(verdict or {})})
+                execution.update({
+                    "status": "ESCROW_PENDING_REVIEW",
+                    "action": action,
+                    "council": dict(council),
+                    "judge_verdict": dict(verdict) if isinstance(verdict, Mapping) else {},
+                })
                 raise EscrowPending(f"{action or 'INVALID'} requires second review")
 
             output = judged.get("final_output")
-            if not isinstance(output, str) or not output.strip():
-                raise RuntimeError("Heavy Judge PASS did not include final output")
+            if not isinstance(output, str) or not output.strip() or output != candidate:
+                raise RuntimeError("Heavy Judge PASS did not preserve the validated candidate")
             output_hash = "sha3-512:" + hashlib.sha3_512(output.encode("utf-8")).hexdigest()
             execution.update({
                 "status": "PASS",
