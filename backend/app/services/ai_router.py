@@ -15,6 +15,8 @@ from collections.abc import Mapping
 from datetime import datetime, timezone
 from typing import Any, Optional
 
+import httpx
+
 from app.services.providers.openai_provider import OpenAIProvider
 from app.services.providers.anthropic_provider import AnthropicProvider
 from app.services.providers.xai_provider import XAIProvider
@@ -210,24 +212,37 @@ class AIRouter:
             try:
                 provider_result = await provider.chat(**kwargs)
             except Exception as exc:
+                status_code = (
+                    exc.response.status_code
+                    if isinstance(exc, httpx.HTTPStatusError)
+                    else None
+                )
+                retryable = isinstance(exc, httpx.TransportError) or (
+                    status_code == 429 or (status_code is not None and 500 <= status_code <= 599)
+                )
                 self._append_evidence({
                     "who": "AIRouter",
-                    "what": "PROVIDER_TRANSPORT_FAILURE",
+                    "what": "PROVIDER_TRANSPORT_FAILURE" if retryable else "PROVIDER_TERMINAL_FAILURE",
                     "when": None,
                     "where": "backend.app.services.ai_router",
-                    "why": "Provider transport failed; fallback is limited to this failure class",
-                    "how": "exception type recorded; exception text and credentials excluded",
+                    "why": "Retryable transport/server failure" if retryable else "Non-retryable provider failure; fallback prohibited",
+                    "how": "exception class and HTTP status only; exception text and credentials excluded",
                     "authorization": claims.proof_id,
                     "memory_loaded": "UNKNOWN",
                     "network_accessed": "UNKNOWN",
                     "files_changed": [],
-                    "result": "RETRY_NEXT_PROVIDER",
+                    "result": "RETRY_NEXT_PROVIDER" if retryable else "STOP",
                     "task_id": task_id,
                     "provider": provider_name,
                     "error_type": type(exc).__name__,
+                    "http_status": status_code,
                 })
+                if not retryable:
+                    raise RuntimeError(
+                        f"Provider {provider_name} failed non-retryably; output withheld"
+                    ) from exc
                 logger.warning(
-                    "Provider %s failed (%s); trying next",
+                    "Provider %s transport failed (%s); trying next",
                     provider_name,
                     type(exc).__name__,
                 )
