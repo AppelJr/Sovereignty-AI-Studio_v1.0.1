@@ -61,6 +61,12 @@ def main() -> int:
     if "(( NODE_MAJOR >= 24 ))" not in launcher:
         fail("canonical launcher must refuse Node.js versions below 24")
 
+    diamond_gate = (ROOT / "scripts" / "diamond-core-runtime-gate.sh").read_text(encoding="utf-8")
+    if "CARGO_NET_OFFLINE=true" not in diamond_gate or 'mktemp -d' not in diamond_gate:
+        fail("Diamond Core runtime gate must be offline and isolated from the working tree")
+    if "--locked" in diamond_gate:
+        fail("Diamond Core runtime gate must not require a missing repository Cargo.lock")
+
     if manifest["ports"] != PORTS:
         fail(f"port manifest mismatch: expected {PORTS}, got {manifest['ports']}")
     if len({PORTS["python_bridge"], PORTS["dashboard"], PORTS["unified_server"]}) != 3:
