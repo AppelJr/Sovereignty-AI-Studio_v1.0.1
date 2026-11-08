@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 import hashlib
 from typing import Any, Callable, Mapping
 
@@ -86,9 +87,7 @@ def verify_before_release(
     event = {
         "who": "DualGatePath",
         "what": "OUTENV_RELEASE_AUTHORIZED",
-        "when": __import__("datetime").datetime.now(
-            __import__("datetime").timezone.utc
-        ).isoformat(),
+        "when": datetime.now(timezone.utc).isoformat(),
         "where": "Sovereignty-AI-Studio_v1.0.1",
         "why": "Gate proof and Heavy Judge output integrity verified",
         "how": "pre-route Gate proof + post-judge SHA3-512 verification",
