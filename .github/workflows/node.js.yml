@@ -52,8 +52,14 @@ jobs:
           npm --version
           node -e 'if (Number(process.versions.node.split(".")[0]) !== 24) { console.error("FAIL: Node.js 24 required"); process.exit(1); }'
 
-      - name: Verify Diamond Core contract tests
-        run: cargo test --manifest-path diamond-core/Cargo.toml --all-targets
+      - name: Verify Diamond Core contract tests and offline runtime gate
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test ! -e diamond-core/Cargo.lock
+          cargo test --manifest-path diamond-core/Cargo.toml --all-targets
+          rm -f diamond-core/Cargo.lock
+          CARGO_NET_OFFLINE=true ./scripts/diamond-core-runtime-gate.sh
 
       - name: Install exact root lockfile without lifecycle scripts
         run: npm ci --ignore-scripts --no-audit --no-fund
