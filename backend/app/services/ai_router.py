@@ -273,6 +273,10 @@ class AIRouter:
                     f"HeavyJudge action {action or 'UNKNOWN'}; provider output withheld"
                 )
 
+            memory_loaded = review.get("memory_loaded")
+            judge_network_accessed = review.get("network_accessed")
+            if not isinstance(memory_loaded, bool) or not isinstance(judge_network_accessed, bool):
+                raise RuntimeError("ComposedHeavyJudge access telemetry is missing or malformed; output withheld")
             output_hash = verdict.get("output_hash")
             # Gate 2 verifies the exact output digest and commits evidence before release.
             receipt = verify_before_release(
@@ -284,7 +288,7 @@ class AIRouter:
                 },
                 expected_task_id=task_id,
                 evidence_sink=self._append_evidence,
-                memory_loaded=review.get("memory_loaded") if isinstance(review.get("memory_loaded"), bool) else False,
+                memory_loaded=memory_loaded,
                 # This router's configured providers are remote APIs; the call used the network.
                 network_accessed=True,
             )
