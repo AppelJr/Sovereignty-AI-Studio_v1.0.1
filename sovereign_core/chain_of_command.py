@@ -143,6 +143,10 @@ class ChainOfCommand:
         if not isinstance(route, Mapping):
             raise ChainOfCommandError("Smart Provider Router returned an invalid route")
         selected = tuple(route.get("selected_lanes", LANES))
+        memory_loaded = route.get("memory_loaded")
+        network_accessed = route.get("network_accessed")
+        if not isinstance(memory_loaded, bool) or not isinstance(network_accessed, bool):
+            raise ChainOfCommandError("route must explicitly declare memory_loaded and network_accessed")
         if set(selected) != set(LANES):
             raise ChainOfCommandError("the configured chain requires Grok, GPT/Codex, and Claude")
 
@@ -168,16 +172,19 @@ class ChainOfCommand:
             last_verdict = dict(verdict)
             self._record(request, "COUNCIL_VERDICT", str(last_council["action"]),
                          "Three provider lane recommendations aggregated",
-                         votes=dict(last_council["votes"]))
+                         votes=dict(last_council["votes"]),
+                         memory_loaded=memory_loaded, network_accessed=network_accessed)
             self._record(request, "HEAVY_JUDGE_VERDICT", str(verdict.get("action", "")),
                          "Heavy Judge evaluated the Council candidate",
                          risk_score=verdict.get("risk_score"),
-                         verdict_hash=verdict.get("output_hash", verdict.get("hash")))
+                         verdict_hash=verdict.get("output_hash", verdict.get("hash")),
+                         memory_loaded=memory_loaded, network_accessed=network_accessed)
             judge_action = str(verdict.get("action", "")).upper()
             if judge_action not in ACTIONS:
                 return self._escrow(
                     request, attempt + 1, last_council, last_verdict,
                     "Heavy Judge returned an unsupported action",
+                    memory_loaded=memory_loaded, network_accessed=network_accessed,
                 )
 
             council_action = str(last_council["action"])
@@ -185,17 +192,20 @@ class ChainOfCommand:
                 return self._escrow(
                     request, attempt + 1, last_council, last_verdict,
                     "YANK: quarantine and second review required",
+                    memory_loaded=memory_loaded, network_accessed=network_accessed,
                 )
 
             if judge_action == "PASS" and council_action == "PASS":
                 return self._deliver(
-                    request, candidate, attempt + 1, last_council, last_verdict, verified
+                    request, candidate, attempt + 1, last_council, last_verdict, verified,
+                    memory_loaded=memory_loaded, network_accessed=network_accessed,
                 )
 
             if attempt >= self._max_rewrites or self._rewrite is None:
                 return self._escrow(
                     request, attempt + 1, last_council, last_verdict,
                     "REWRITE could not be completed and revalidated",
+                    memory_loaded=memory_loaded, network_accessed=network_accessed,
                 )
 
             revised = self._rewrite({
@@ -211,12 +221,14 @@ class ChainOfCommand:
                 return self._escrow(
                     request, attempt + 1, last_council, last_verdict,
                     "rewrite handler returned no validated candidate",
+                    memory_loaded=memory_loaded, network_accessed=network_accessed,
                 )
             previous_output = revised
 
         return self._escrow(
             request, self._max_rewrites + 1, last_council, last_verdict,
             "retry limit reached",
+            memory_loaded=memory_loaded, network_accessed=network_accessed,
         )
 
     def _collect_lanes(
@@ -279,6 +291,9 @@ class ChainOfCommand:
         council: Mapping[str, Any],
         verdict: Mapping[str, Any],
         verified_claims: Mapping[str, Any],
+        *,
+        memory_loaded: bool,
+        network_accessed: bool,
     ) -> ChainResult:
         digest = hashlib.sha3_512(output.encode("utf-8")).hexdigest()
         output_hash = f"sha3-512:{digest}"
@@ -301,7 +316,8 @@ class ChainOfCommand:
             judge_verdict=dict(verdict),
         )
         self._record(request, "OUTENV_RELEASED", "PASS", "Verified output released",
-                     output_hash=result.output_hash, attempts=attempts)
+                     output_hash=result.output_hash, attempts=attempts,
+                     memory_loaded=memory_loaded, network_accessed=network_accessed)
         return result
 
     def _escrow(
@@ -311,8 +327,12 @@ class ChainOfCommand:
         council: Mapping[str, Any],
         verdict: Mapping[str, Any],
         reason: str,
+        *,
+        memory_loaded: bool = False,
+        network_accessed: bool = False,
     ) -> ChainResult:
-        self._record(request, "ESCROW_PENDING_REVIEW", "YANK", reason, attempts=attempts)
+        self._record(request, "ESCROW_PENDING_REVIEW", "YANK", reason, attempts=attempts,
+                     memory_loaded=memory_loaded, network_accessed=network_accessed)
         return ChainResult(
             request_id=request.request_id,
             status="ESCROW_PENDING_REVIEW",
