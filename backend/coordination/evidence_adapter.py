@@ -26,20 +26,35 @@ class SCARLedgerSink:
         self._ledger = ledger
 
     def __call__(self, event: dict[str, Any]) -> Any:
+        if not isinstance(event, dict):
+            raise TypeError("SCAR evidence event must be a mapping")
+        required = ("event", "task_id", "event_hash", "timestamp")
+        if any(not event.get(key) for key in required):
+            raise ValueError("SCAR evidence requires event, task_id, event_hash, and timestamp")
         route_trace = {
             key: event[key]
-            for key in ("route", "mode", "decision", "policy_hash", "receipt_hash")
+            for key in (
+                "route", "mode", "decision", "policy_hash", "receipt_hash",
+                "authorization", "output_hash", "provider",
+            )
             if event.get(key) is not None
+        }
+        # Preserve the public-safe 5W1H and access telemetry in signed SCAR metadata.
+        metadata = {
+            "task_id": str(event["task_id"]),
+            "event_hash": str(event["event_hash"]),
+            "evidence": {
+                key: value
+                for key, value in event.items()
+                if key not in {"event", "task_id", "event_hash", "timestamp"}
+            },
         }
         return self._ledger.append_event(
             str(event["event"]),
             actor=SCARActor.DEVICE,
             event_class=EventClass.AUDIT,
             route_trace=route_trace,
-            metadata={
-                "task_id": str(event["task_id"]),
-                "event_hash": str(event["event_hash"]),
-            },
+            metadata=metadata,
             timestamp=str(event["timestamp"]),
         )
 
