@@ -70,7 +70,11 @@ class ExampleChatPlugin(PluginBase):
         system = payload.get("system", self.system_prompt)
 
         try:
-            result = self._run_async_chat(prompt, system)
+            result = self._run_async_chat(
+                prompt, system,
+                authorization_proof=payload.get("authorization_proof"),
+                task_id=payload.get("task_id"),
+            )
             return {
                 "text": result.get("text", ""),
                 "provider": result.get("provider", "unknown"),
@@ -82,7 +86,10 @@ class ExampleChatPlugin(PluginBase):
             self.logger.error("ExampleChatPlugin run failed: %s", exc)
             return {"error": str(exc), "text": ""}
 
-    def _run_async_chat(self, prompt: str, system: str) -> dict:
+    def _run_async_chat(
+        self, prompt: str, system: str, *,
+        authorization_proof: str | None, task_id: str | None,
+    ) -> dict:
         """Bridge sync plugin interface to async AI router."""
         from app.services.ai_router import ai_router
 
@@ -103,6 +110,8 @@ class ExampleChatPlugin(PluginBase):
                         system=system,
                         preferred_provider=self.preferred_provider,
                         max_tokens=self.max_tokens,
+                        authorization_proof=authorization_proof,
+                        task_id=task_id,
                     ),
                 )
                 return future.result(timeout=60)
@@ -113,6 +122,8 @@ class ExampleChatPlugin(PluginBase):
                     system=system,
                     preferred_provider=self.preferred_provider,
                     max_tokens=self.max_tokens,
+                    authorization_proof=authorization_proof,
+                    task_id=task_id,
                 )
             )
 
