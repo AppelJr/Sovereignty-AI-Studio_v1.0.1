@@ -66,6 +66,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           python3 scripts/validate-runtime-coherence.py
+          bash -n scripts/diamond-core-runtime-gate.sh
           npm run check
           npm run build --if-present
           npm test --if-present
