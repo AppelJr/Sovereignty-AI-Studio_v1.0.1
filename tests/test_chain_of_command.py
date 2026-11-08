@@ -40,7 +40,7 @@ def build(*, judge_action="PASS", recommendation="PASS", evidence=None,
         release_verifier=release or (lambda _claims, _req, output, digest: (
             digest == "sha3-512:" + hashlib.sha3_512(output.encode()).hexdigest()
         )),
-        route_selector=lambda _req: {"selected_lanes": ["grok", "gpt_codex", "claude"]},
+        route_selector=lambda _req: {"selected_lanes": ["grok", "gpt_codex", "claude"], "memory_loaded": False, "network_accessed": False},
         lane_adapters=lanes(recommendation),
         judge=Judge(judge_action),
         evidence_sink=events.append,
