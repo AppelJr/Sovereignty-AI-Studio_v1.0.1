@@ -33,7 +33,7 @@ fi
 [[ -f "$ROOT_DIR/node-bridge/devassist420-preload.js" ]] || { echo "Missing DevAssist420 preload." >&2; exit 1; }
 [[ -d "$ROOT_DIR/node_modules/ws" ]] || { echo "Missing root ws dependency. Run npm ci." >&2; exit 1; }
 [[ -d "$ROOT_DIR/node-bridge/node_modules/express" || -d "$ROOT_DIR/node_modules/express" ]] || { echo "Missing Node bridge dependencies. Run npm ci --prefix node-bridge." >&2; exit 1; }
-"$ROOT_DIR/scripts/diamond-core-runtime-gate.sh"
+bash "$ROOT_DIR/scripts/diamond-core-runtime-gate.sh"
 "$PYTHON_BIN" - "$PY_PORT" "$DASHBOARD_PORT" "$UNIFIED_PORT" <<'PY'
 import socket
 import sys
