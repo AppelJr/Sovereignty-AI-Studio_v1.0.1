@@ -55,10 +55,15 @@ jobs:
       - name: Install exact root lockfile without lifecycle scripts
         run: npm ci --ignore-scripts --no-audit --no-fund
 
-      - name: Validate runtime and execute root tests
+      - name: Install exact Node bridge lockfile without lifecycle scripts
+        run: npm ci --prefix node-bridge --ignore-scripts --no-audit --no-fund
+
+      - name: Validate runtime coherence and execute both Node test suites
         shell: bash
         run: |
           set -Eeuo pipefail
+          python3 scripts/validate-runtime-coherence.py
           npm run check
           npm run build --if-present
           npm test --if-present
+          npm test --prefix node-bridge
