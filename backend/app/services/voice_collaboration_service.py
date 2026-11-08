@@ -130,7 +130,9 @@ class VoiceCollaborationService:
         task["next_step"] = "Agent may proceed only with the approved action."
         return self._write(task)
 
-    async def collaborate(self, task_id: str, transcript: str) -> dict[str, Any]:
+    async def collaborate(
+        self, task_id: str, transcript: str, *, authorization_proof: str | None = None
+    ) -> dict[str, Any]:
         task = self.record_transcript(task_id, transcript)
         if task["pending_approval"]:
             return self._response(task, "Approval is pending; no coding action will be taken.")
@@ -154,6 +156,8 @@ class VoiceCollaborationService:
             preferred_provider={"grok": "xai", "claude": "anthropic", "gpt": "openai"}.get(task["agent_id"]),
             max_tokens=512,
             temperature=0.1,
+            authorization_proof=authorization_proof,
+            task_id=task_id,
         )
         task["transcript"].append({"at": _now(), "role": "assistant", "text": response["text"]})
         task["next_step"] = "Review the proposal, then explicitly approve an execution request."

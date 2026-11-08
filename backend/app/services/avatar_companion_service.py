@@ -76,13 +76,18 @@ class AvatarCompanionService:
         avatar.mood = AvatarMood(mood)
         return self._avatar_to_dict(avatar)
 
-    def interact(self, avatar_id: str, message: str) -> Dict[str, Any]:
+    def interact(
+        self, avatar_id: str, message: str, *,
+        authorization_proof: str | None = None, task_id: str | None = None,
+    ) -> Dict[str, Any]:
         avatar = self._avatars.get(avatar_id)
         if not avatar:
             return {"error": "Avatar not found"}
         avatar.interaction_count += 1
         avatar.mood = AvatarMood.THINKING
-        response = self._generate_avatar_response(avatar, message)
+        response = self._generate_avatar_response(
+            avatar, message, authorization_proof=authorization_proof, task_id=task_id
+        )
         avatar.mood = AvatarMood.HAPPY
         return {
             "avatar_id": avatar.avatar_id,
@@ -102,17 +107,23 @@ class AvatarCompanionService:
     def get_status(self) -> Dict[str, Any]:
         return {"service": "avatar_companion", "status": "online", "active_avatars": len(self._avatars), "available_styles": [s.value for s in AvatarStyle], "available_moods": [m.value for m in AvatarMood]}
 
-    def _generate_avatar_response(self, avatar: AvatarProfile, message: str) -> str:
+    def _generate_avatar_response(
+        self, avatar: AvatarProfile, message: str, *,
+        authorization_proof: str | None = None, task_id: str | None = None,
+    ) -> str:
         try:
             import asyncio
             from app.services.ai_router import ai_router
             if not ai_router.available_providers:
-                return f"[{avatar.name}] Received: '{message}'"
+                raise RuntimeError("No configured provider; output withheld")
             system_prompt = (f"You are {avatar.name}, an AI companion avatar in the Sovereignty AI Studio. "
                              f"Your personality is {avatar.personality}. Your current mood is {avatar.mood.value}. "
                              "Help the user with media creation, project building, voice interaction, and creative workflows. Be concise and in character.")
             async def call():
-                return await ai_router.chat(prompt=message, system=system_prompt, max_tokens=512, temperature=0.7)
+                return await ai_router.chat(
+                    prompt=message, system=system_prompt, max_tokens=512, temperature=0.7,
+                    authorization_proof=authorization_proof, task_id=task_id,
+                )
             try:
                 loop = asyncio.get_running_loop()
             except RuntimeError:
@@ -123,10 +134,13 @@ class AvatarCompanionService:
                     result = pool.submit(asyncio.run, call()).result(timeout=30)
             else:
                 result = asyncio.run(call())
-            return result.get("text", f"[{avatar.name}] Received: '{message}'")
+            response_text = result.get("text")
+            if not isinstance(response_text, str) or not response_text.strip():
+                raise RuntimeError("Router returned no releasable text")
+            return response_text
         except Exception as exc:
-            logger.error("Avatar AI response failed: %s", exc)
-            return f"[{avatar.name} – AI unavailable] Received: '{message}'"
+            logger.error("Avatar AI response failed: %s", type(exc).__name__)
+            raise RuntimeError("Avatar AI response unavailable; output withheld") from exc
 
     @staticmethod
     def _avatar_to_dict(avatar: AvatarProfile) -> Dict[str, Any]:
