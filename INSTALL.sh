@@ -22,7 +22,20 @@ if ! NPM_VERSION="$(npm --version 2>&1)"; then
   exit 1
 fi
 printf 'Runtime toolchain: Node.js %s, npm %s\n' "$NODE_VERSION" "$NPM_VERSION"
+command -v cargo >/dev/null 2>&1 || { echo "ERROR: Cargo is required for the Diamond Core startup gate." >&2; exit 1; }
 cd "$SCRIPT_DIR"
+[[ -f diamond-core/Cargo.toml ]] || { echo "ERROR: diamond-core/Cargo.toml is missing." >&2; exit 1; }
+CARGO_TMP_DIR="$(mktemp -d "\${TMPDIR:-/tmp}/diamond-core-install.XXXXXX")"
+cleanup_cargo_tmp() { rm -rf -- "$CARGO_TMP_DIR"; }
+trap cleanup_cargo_tmp EXIT
+cp -R "$SCRIPT_DIR/diamond-core" "$CARGO_TMP_DIR/diamond-core"
+if (( OFFLINE )); then
+  CARGO_NET_OFFLINE=true cargo fetch --manifest-path "$CARGO_TMP_DIR/diamond-core/Cargo.toml"
+else
+  CARGO_NET_OFFLINE=false cargo fetch --manifest-path "$CARGO_TMP_DIR/diamond-core/Cargo.toml"
+fi
+cleanup_cargo_tmp
+trap - EXIT
 [[ -f requirements-runtime.txt ]] || { echo "ERROR: requirements-runtime.txt is missing." >&2; exit 1; }
 [[ -f package.json && -f package-lock.json ]] || { echo "ERROR: root package.json and package-lock.json are required." >&2; exit 1; }
 [[ -f server_9898.js && -f Unified_Server.js ]] || { echo "ERROR: canonical Node entrypoints are missing." >&2; exit 1; }
