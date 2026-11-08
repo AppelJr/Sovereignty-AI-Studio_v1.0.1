@@ -47,6 +47,8 @@ def main() -> int:
     installer = (ROOT / "INSTALL.sh").read_text(encoding="utf-8")
     if "(( NODE_MAJOR >= 24 ))" not in installer or 'npm --version' not in installer:
         fail("installer must enforce Node.js 24+ and verify npm execution before installing")
+    if "cargo fetch" not in installer or "CARGO_TMP_DIR" not in installer:
+        fail("installer must prefetch Diamond Core crates into the local Cargo cache without changing the checkout")
 
     launcher = (ROOT / canonical["launcher"]).read_text(encoding="utf-8")
     required_tokens = (
