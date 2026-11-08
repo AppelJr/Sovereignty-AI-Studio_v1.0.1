@@ -92,7 +92,8 @@ class HeavyJudge:
             if council_action not in {"PASS", "REWRITE", "YANK"}:
                 raise ValueError("Council action must be PASS, REWRITE, or YANK")
 
-        if council_action == "YANK" or score >= min(0.90, threshold + 0.40):
+        critical_signal = any(item in reasons for item in ("credential or secret exposure", "destructive operation"))
+        if council_action == "YANK" or critical_signal or score >= min(0.90, threshold + 0.40):
             action: Action = "YANK"
         elif council_action == "REWRITE" or score > threshold:
             action = "REWRITE"
