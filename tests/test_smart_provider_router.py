@@ -101,7 +101,7 @@ def test_router_releases_only_after_composed_judge_and_both_gates():
     assert result["output_hash"] == (
         "sha3-512:" + hashlib.sha3_512(result["output"].encode("utf-8")).hexdigest()
     )
-    assert any(event["what"] == "COMPOSED_JUDGE_VERDICT" for event in events)
+    assert any(event.get("what") == "COMPOSED_JUDGE_VERDICT" for event in events)
     assert events[-1]["what"] == "OUTENV_RELEASE_AUTHORIZED"
 
 
