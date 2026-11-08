@@ -40,3 +40,18 @@ Consumers exchange only versioned envelopes and evidence references:
 - `NOT_RUN`: integration tests have not been executed.
 
 Do not report a repository as WIRED based on a manifest, README, import, or file copy.
+
+## Current rollout evidence
+
+The canonical `integration/repository-registry.json` records eighteen repositories
+under the AppelJr namespace. The Studio branch contains the central Heavy Judge,
+router and dual-gate implementation. The other seventeen repositories have
+role-specific `SOVEREIGNTY_CHAIN_OF_COMMAND_CONSUMER.json` declarations on
+dedicated agent branches.
+
+Those seventeen declarations are **contract registration, not executable
+wiring**. Each remains `DECLARED` / `NOT_RUN` until its native adapter is
+implemented and cross-repository tests pass. The Studio implementation is
+`IMPLEMENTATION_COMMITTED_NOT_VALIDATED`; tests have been authored but not
+executed in this environment. No repository has been merged or promoted to
+production.
