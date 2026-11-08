@@ -20,12 +20,15 @@ def proof(task="task-1", owner="owner", scope=("repo/",)):
     )
 
 
-def test_gate_one_binds_owner_task_and_scope():
-    claims = authorize_before_route(
+def claims():
+    return authorize_before_route(
         proof(), verification_key=KEY, task_id="task-1",
         owner_id="owner", required_scope=("repo/",), now=200,
     )
-    assert claims.proof_id == "proof-1"
+
+
+def test_gate_one_binds_owner_task_and_scope():
+    assert claims().proof_id == "proof-1"
 
 
 def test_gate_one_rejects_wrong_owner():
@@ -37,34 +40,22 @@ def test_gate_one_rejects_wrong_owner():
 
 
 def test_gate_two_rejects_non_pass():
-    claims = authorize_before_route(
-        proof(), verification_key=KEY, task_id="task-1",
-        owner_id="owner", required_scope=("repo/",), now=200,
-    )
     with pytest.raises(DualGateDenied, match="only Heavy Judge PASS"):
         verify_before_release(
-            claims, {"status": "ESCROW_PENDING_REVIEW"},
+            claims(), {"status": "ESCROW_PENDING_REVIEW"},
             expected_task_id="task-1", evidence_sink=lambda _event: None,
         )
 
 
 def test_gate_two_rejects_digest_mismatch():
-    claims = authorize_before_route(
-        proof(), verification_key=KEY, task_id="task-1",
-        owner_id="owner", required_scope=("repo/",), now=200,
-    )
     with pytest.raises(ReleaseIntegrityError, match="digest mismatch"):
         verify_before_release(
-            claims, {"status": "PASS", "output": "x", "output_hash": "sha3-512:bad"},
+            claims(), {"status": "PASS", "output": "x", "output_hash": "sha3-512:bad"},
             expected_task_id="task-1", evidence_sink=lambda _event: None,
         )
 
 
 def test_gate_two_requires_evidence_before_release():
-    claims = authorize_before_route(
-        proof(), verification_key=KEY, task_id="task-1",
-        owner_id="owner", required_scope=("repo/",), now=200,
-    )
     output = "approved"
     result = {"status": "PASS", "output": output,
               "output_hash": "sha3-512:" + hashlib.sha3_512(output.encode()).hexdigest()}
@@ -72,5 +63,5 @@ def test_gate_two_requires_evidence_before_release():
         raise OSError("ledger unavailable")
     with pytest.raises(ReleaseIntegrityError, match="evidence append failed"):
         verify_before_release(
-            claims, result, expected_task_id="task-1", evidence_sink=fail,
+            claims(), result, expected_task_id="task-1", evidence_sink=fail,
         )
