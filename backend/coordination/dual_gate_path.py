@@ -64,6 +64,8 @@ def verify_before_release(
     *,
     expected_task_id: str,
     evidence_sink: Callable[[dict[str, Any]], Any],
+    memory_loaded: bool = False,
+    network_accessed: bool = False,
 ) -> DualGateReceipt:
     """Gate 2. Validate PASS, payload digest, and append evidence before release."""
     if proof.task_id != expected_task_id:
@@ -92,8 +94,8 @@ def verify_before_release(
         "why": "Gate proof and Heavy Judge output integrity verified",
         "how": "pre-route Gate proof + post-judge SHA3-512 verification",
         "authorization": proof.proof_id,
-        "memory_loaded": False,
-        "network_accessed": False,
+        "memory_loaded": bool(memory_loaded),
+        "network_accessed": bool(network_accessed),
         "files_changed": [],
         "result": "PASS",
         "task_id": expected_task_id,
@@ -117,6 +119,8 @@ def run_dual_gated(
     route_and_judge: Callable[[GateAuthorizationProof], Mapping[str, Any]],
     evidence_sink: Callable[[dict[str, Any]], Any],
     now: int | None = None,
+    memory_loaded: bool = False,
+    network_accessed: bool = False,
 ) -> DualGateReceipt:
     """Execute only after Gate 1; release only after Gate 2 and durable evidence."""
     claims = authorize_before_route(
@@ -125,5 +129,6 @@ def run_dual_gated(
     )
     result = route_and_judge(claims)
     return verify_before_release(
-        claims, result, expected_task_id=task_id, evidence_sink=evidence_sink
+        claims, result, expected_task_id=task_id, evidence_sink=evidence_sink,
+        memory_loaded=memory_loaded, network_accessed=network_accessed,
     )
