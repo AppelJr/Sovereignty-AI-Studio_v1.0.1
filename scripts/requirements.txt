@@ -10,7 +10,7 @@ biopython>=1.88
 scikit-learn>=1.4.0
 pysam>=0.22.0
 pybedtools>=0.12.1
-pyBigWig>=0.3.26
+pyBigWig>=0.3.29
 
 # Optional (for full single-cell support)
 # archr (R package - run via rpy2 if needed)
