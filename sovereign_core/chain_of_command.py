@@ -136,6 +136,8 @@ class ChainOfCommand:
             raise AuthorizationRequired("Gate proof task mismatch")
         if str(verified.get("decision", "")).upper() not in {"ALLOW", "APPROVED", "OWNER_AUTHORIZED", "DELEGATED_AUTHORIZED", "OWNER_OVERRIDE"}:
             raise AuthorizationRequired("Gate proof decision is not an allow")
+        if not str(verified.get("proof_id", "")).strip() or not str(verified.get("policy_hash", "")).strip():
+            raise AuthorizationRequired("Gate proof identity and policy binding are required")
 
         route = self._route(request)
         if not isinstance(route, Mapping):
@@ -164,6 +166,13 @@ class ChainOfCommand:
             if not isinstance(verdict, Mapping):
                 raise ChainOfCommandError("Heavy Judge verdict is missing")
             last_verdict = dict(verdict)
+            self._record(request, "COUNCIL_VERDICT", str(last_council["action"]),
+                         "Three provider lane recommendations aggregated",
+                         votes=dict(last_council["votes"]))
+            self._record(request, "HEAVY_JUDGE_VERDICT", str(verdict.get("action", "")),
+                         "Heavy Judge evaluated the Council candidate",
+                         risk_score=verdict.get("risk_score"),
+                         verdict_hash=verdict.get("output_hash", verdict.get("hash")))
             judge_action = str(verdict.get("action", "")).upper()
             if judge_action not in ACTIONS:
                 return self._escrow(
@@ -274,7 +283,9 @@ class ChainOfCommand:
         digest = hashlib.sha3_512(output.encode("utf-8")).hexdigest()
         output_hash = f"sha3-512:{digest}"
         try:
-            self._verify_release(verified_claims, request, output, output_hash)
+            release_result = self._verify_release(verified_claims, request, output, output_hash)
+            if release_result is False:
+                raise PermissionError("release verifier rejected OUTENV")
         except Exception as exc:
             raise EvidenceWriteError("post-judge release gate failed; output withheld") from exc
         signature = self._signer(bytes.fromhex(digest)) if self._signer else None
