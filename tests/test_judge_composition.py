@@ -22,7 +22,7 @@ class Backend:
     def evaluate(self, candidate, context):
         if self.fail:
             raise RuntimeError("backend offline")
-        return {"action": self.action, "reason": "fixture"}
+        return {"action": self.action, "reason": "fixture", "memory_loaded": False, "network_accessed": False}
 
 
 def make_composed(model_action="PASS", *, evidence=None, backend_fail=False):
