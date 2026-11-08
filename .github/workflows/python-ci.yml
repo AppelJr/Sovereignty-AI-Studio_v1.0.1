@@ -37,7 +37,7 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          python3 -m pip install pytest
+          python3 -m pip install pytest httpx
           python3 -m pytest -q tests/unit/test_offline_tool_dispatcher.py
 
       - name: Run focused HeavyJudge and dual-gate tests
