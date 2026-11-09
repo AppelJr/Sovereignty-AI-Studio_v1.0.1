@@ -215,7 +215,7 @@ class SmartProviderRouter:
                     "memory_loaded": False,
                     "network_accessed": True,
                     "files_changed": [],
-                    "result": "YANK",
+                    "result": action or "UNAVAILABLE",
                     "task_id": task_id,
                     "judge_verdict": dict(verdict) if isinstance(verdict, Mapping) else {},
                     "council": dict(council),
