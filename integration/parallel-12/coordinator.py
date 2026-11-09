@@ -75,7 +75,7 @@ def validate_preflight(evidence: Mapping[str, Any]) -> None:
 
 
 def _digest(value: Any) -> str:
-    canonical = json.dumps(value, sort_keys=True, separators=(",", ":"), default=str)
+    canonical = json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False)
     return hashlib.sha256(canonical.encode()).hexdigest()
 
 
