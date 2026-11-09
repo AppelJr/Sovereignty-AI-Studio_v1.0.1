@@ -7,6 +7,58 @@ before output is returned. The judge is injected by validated owner startup.
 """
 from __future__ import annotations
 
+import pytest
+
+from sovereign_core.heavy_judge import HeavyJudge
+from sovereign_core.judge_composition import (
+    BackendConfigurationError,
+    ComposedHeavyJudge,
+    EvidenceUnavailable,
+    build_judge,
+    compose_judge,
+)
+
+
+class Backend:
+    model_id = "test-judge-model"
+
+    def __init__(self, action="PASS", fail=False):
+        self.action = action
+        self.fail = fail
+
+    def evaluate(self, candidate, context):
+        if self.fail:
+            raise RuntimeError("backend offline")
+        return {"action": self.action, "reason": "fixture", "memory_loaded": False, "network_accessed": False}
+
+
+def make_composed(model_action="PASS", *, evidence=None, backend_fail=False):
+    events = evidence if evidence is not None else []
+    backend = Backend(model_action, fail=backend_fail)
+    return ComposedHeavyJudge(
+        backend=backend,
+        behavioral_judge=HeavyJudge(),
+        evidence_sink=events.append,
+    ), events
+
+
+def test_pass_requires_both_layers_and_records_hash():
+    judge, events = make_composed()
+    result = judge.review("A concise factual answer.")
+    assert result["verdict"]["action"] == "PASS"
+    assert result["final_output"] == "A concise factual answer."
+    assert events[-1]["result"] == "PASS"
+    assert events[-1]["output_hash"].startswith("sha3-512:")
+
+
+@pytest.mark.parametrize("action", ["REWRITE", "YANK", "COUNCIL"])
+def test_model_escalation_never_releases_output(action):
+    judge, _events = make_composed(action)
+    result = judge.review("A concise factual answer.")
+    assert result["verdict"]["action"] == action
+    assert result["final_output"] is None
+
+
 def test_behavioral_yank_overrides_model_pass():
     judge, _events = make_composed()
     result = judge.review("The password=supersecret value is exposed.")
@@ -50,3 +102,13 @@ def test_evidence_failure_blocks_release():
         judge.review("A concise factual answer.")
 
 
+def test_compose_judge_constructs_backend_lazily():
+    built = []
+    judge = compose_judge(
+        backend_builder=lambda name: (built.append(name) or Backend()),
+        behavioral_judge=HeavyJudge(),
+        evidence_sink=lambda _event: None,
+        environ={"HEAVYJUDGE_MODEL": "configured-model"},
+    )
+    assert built == ["configured-model"]
+    assert judge.review("A concise factual answer.")["verdict"]["action"] == "PASS"
