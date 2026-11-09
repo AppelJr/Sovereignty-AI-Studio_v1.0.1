@@ -47,6 +47,16 @@ def test_gate_one_rejects_wrong_owner():
         )
 
 
+def test_gate_two_reverifies_expiry_before_release():
+    expired = proof()
+    with pytest.raises(DualGateDenied, match="authorization failed"):
+        verify_before_release(
+            expired, valid_result(), verification_key=KEY,
+            expected_task_id="task-1", expected_owner_id="owner",
+            required_scope=("repo/",), evidence_sink=acknowledged, now=500,
+        )
+
+
 def test_gate_two_rejects_non_pass():
     with pytest.raises(DualGateDenied, match="only Heavy Judge PASS"):
         release({"status": "ESCROW_PENDING_REVIEW"}, lambda _event: None)
