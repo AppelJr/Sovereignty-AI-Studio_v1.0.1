@@ -15,73 +15,85 @@
       "id": "studio",
       "repo": "AppelJr/Sovereignty-AI-Studio_v1.0.1",
       "type": "integration-host",
-      "default_branch": "Collaboration"
+      "default_branch": "Collaboration",
+      "integration_status": "coordinator_added_tests_not_run"
     },
     {
       "id": "gateone",
       "repo": "AppelJr/gateone",
       "type": "admission-authority",
-      "default_branch": "main"
+      "default_branch": "main",
+      "integration_status": "authority_adapter_added_tests_not_run"
     },
     {
       "id": "iso-unc-ai",
       "repo": "AppelJr/ISO-UNC-AI",
       "type": "evidence-validator",
-      "default_branch": "main"
+      "default_branch": "main",
+      "integration_status": "validator_wrapper_added_tests_not_run"
     },
     {
       "id": "model-router",
       "repo": "AppelJr/Grok-4.7-ChatGPT-6.1-Claude-5.5-Skeleton",
       "type": "bounded-model-router",
-      "default_branch": "main"
+      "default_branch": "main",
+      "integration_status": "bounded_fanout_added_provider_adapters_unbound"
     },
     {
       "id": "mldsa-native",
       "repo": "AppelJr/mldsa-native",
       "type": "native-pqc-library",
-      "default_branch": "main"
+      "default_branch": "main",
+      "integration_status": "binding_contract_only_native_link_unverified"
     },
     {
       "id": "sovereignty-gate",
       "repo": "AppelJr/Sovereignty-AI-Gate",
       "type": "authorization-contracts",
-      "default_branch": "main"
+      "default_branch": "main",
+      "integration_status": "genesis_contract_bridge_added_gate_receipt_not_cryptographically_attested"
     },
     {
       "id": "neuralscene-ios",
       "repo": "AppelJr/NeuralScene-iOS",
       "type": "ios-evidence-view",
-      "default_branch": "main"
+      "default_branch": "main",
+      "integration_status": "read_only_overlay_added_feed_unbound"
     },
     {
       "id": "cloud-sealer",
       "repo": "AppelJr/every-cloud-for-everyone",
       "type": "swift-client-side-sealing",
-      "default_branch": "main"
+      "default_branch": "main",
+      "integration_status": "local_sealing_adapter_added_egress_disabled"
     },
     {
       "id": "genesis",
       "repo": "AppelJr/Genesis",
       "type": "task-origin-router",
-      "default_branch": "main"
+      "default_branch": "main",
+      "integration_status": "route_adapter_added_tests_not_run"
     },
     {
       "id": "git-sovereign",
       "repo": "AppelJr/Git-Sovereign",
       "type": "governed-git-adapter",
-      "default_branch": "main"
+      "default_branch": "main",
+      "integration_status": "blocked_source_adapter_api_not_present"
     },
     {
       "id": "devassist420",
       "repo": "AppelJr/Sovereignty-AI-Gate_DevAssist420",
       "type": "device-client",
-      "default_branch": "main"
+      "default_branch": "main",
+      "integration_status": "middleware_added_not_mounted_to_execution_route"
     },
     {
       "id": "risk-engine",
       "repo": "AppelJr/Sovereignty-Risk-Engine-Runtime-Assurance",
       "type": "risk-assurance",
-      "default_branch": "main"
+      "default_branch": "main",
+      "integration_status": "policy_adapter_added_cargo_tests_not_run"
     }
   ],
   "stages": [
