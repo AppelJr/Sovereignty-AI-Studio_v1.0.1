@@ -164,3 +164,20 @@ def test_each_adapter_receives_isolated_payload_copy():
     assert len(received) == 4
     assert all(item["nested"]["value"] == "mutated" for item in received)
     assert len({id(item) for item in received}) == 4
+
+
+def test_adapter_result_requires_canonical_json_evidence():
+    class NonSerializable:
+        pass
+    async def adapter(**_kwargs):
+        return {"status": "pass", "evidence": NonSerializable()}
+    coordinator = Parallel12Coordinator({
+        "genesis": adapter, "gateone": adapter,
+        "sovereignty-gate": adapter, "risk-engine": adapter,
+    }, lambda auth, task: auth.is_valid_for(task))
+    results = asyncio.run(coordinator.run_stage(
+        stage_id="stage-1-control", task_id="task-1", payload={},
+        authorization=Authorization(), preflight_evidence=PREFLIGHT,
+    ))
+    assert all(item.status == "failed" for item in results)
+    assert all(item.reason_code == "ADAPTER_RESULT_NOT_CANONICAL_JSON" for item in results)
