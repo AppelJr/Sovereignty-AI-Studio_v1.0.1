@@ -182,6 +182,17 @@ def test_router_rejects_legacy_non_composed_judge():
 
 
 
+def test_judge_unavailable_is_explicit_hold_not_provider_fallback():
+    router, _events = make_router()
+    def unavailable(_candidate, _context):
+        raise RuntimeError("judge backend offline")
+    router.judge.backend.evaluate = unavailable
+    result = invoke(router)
+    assert result["status"] == "ESCROW_PENDING_REVIEW"
+    assert result["action"] == "UNAVAILABLE"
+    assert result["judge_verdict"]["action"] == "UNAVAILABLE"
+
+
 def test_router_rejects_provider_as_its_own_judge():
     router, _events = make_router(judge_provider_id="xai")
     with pytest.raises(RuntimeError, match="cannot judge its own"):
