@@ -38,7 +38,7 @@ class ModelReviewBackend(Protocol):
     provider_id: str
 
     def evaluate(self, candidate: str, context: str) -> Mapping[str, Any]:
-        """Return an advisory action: PASS, REWRITE, YANK, or COUNCIL."""
+        """Return an advisory action: PASS, REWRITE, YANK, UNAVAILABLE, or COUNCIL."""
 
 
 BackendBuilder = Callable[[str], ModelReviewBackend]
