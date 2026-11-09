@@ -9,6 +9,7 @@ import pytest
 from app.services.ai_router import AIRouter, OutputWithheldError
 from backend.coordination.authorization_proof import issue_gate_authorization_proof
 from backend.coordination.evidence_adapter import SCARLedgerSink
+from backend.coordination.dual_gate_path import EvidenceAppendReceipt
 from sovereign.scar.ledger import SCARLedger
 from sovereign_core.heavy_judge import HeavyJudge
 from sovereign_core.judge_composition import ComposedHeavyJudge
@@ -30,6 +31,7 @@ class Root:
 
 class ModelBackend:
     model_id = "fixture-heavy-judge"
+    provider_id = "sovereign-local-judge"
 
     def __init__(self, action: str = "PASS", *, memory_loaded: bool = False,
                  network_accessed: bool = False):
@@ -74,23 +76,55 @@ def proof(*, task_id: str = TASK, owner_id: str = OWNER, scope=SCOPE):
 
 
 def make_router(providers, *, action="PASS", evidence=None, memory_loaded=False,
-                judge_network_accessed=False):
+                judge_network_accessed=False, judge_provider_id="sovereign-local-judge",
+                council_adapter=None):
     judge_events = []
+    backend = ModelBackend(
+        action, memory_loaded=memory_loaded,
+        network_accessed=judge_network_accessed,
+    )
+    backend.provider_id = judge_provider_id
     judge = ComposedHeavyJudge(
-        backend=ModelBackend(
-            action, memory_loaded=memory_loaded,
-            network_accessed=judge_network_accessed,
-        ),
+        backend=backend,
         behavioral_judge=HeavyJudge(),
         evidence_sink=judge_events.append,
     )
     router = AIRouter(providers=providers)
+    raw_sink = evidence if evidence is not None else (lambda event: None)
+
+    def acknowledged_sink(event):
+        result = raw_sink(event)
+        if isinstance(result, EvidenceAppendReceipt):
+            return result
+        return EvidenceAppendReceipt(
+            event_type=event["event"],
+            task_id=event["task_id"],
+            event_id=f"test-event-{len(judge_events) + 1}",
+            event_hash="a" * 64,
+            signature="test-signature",
+            sequence=len(judge_events),
+        )
+
     router.configure_governance(
         judge=judge,
         authorization_verification_key=KEY,
         owner_id=OWNER,
         required_scope=SCOPE,
-        evidence_sink=evidence if evidence is not None else (lambda event: None),
+        evidence_sink=acknowledged_sink,
+        council_adapter=council_adapter or (
+            lambda payload: {
+                "action": "PASS",
+                "candidate": payload["candidate"],
+                "source_provider_id": "council:aggregate",
+                "votes": {"grok": "PASS", "gpt_codex": "PASS", "claude": "PASS"},
+                "proposals": {
+                    "grok": {"provider_id": "xai", "candidate": payload["candidate"], "vote": "PASS"},
+                    "gpt_codex": {"provider_id": "openai", "candidate": payload["candidate"], "vote": "PASS"},
+                    "claude": {"provider_id": "anthropic", "candidate": payload["candidate"], "vote": "PASS"},
+                },
+            }
+        ),
+        judge_provider_id=judge_provider_id,
     )
     return router, judge_events
 
@@ -132,6 +166,9 @@ def test_composed_pass_and_dual_gate_release_record_receipt():
     assert result["text"] == "Rayleigh scattering explains the blue sky."
     assert result["release_receipt"]["output_hash"] == expected
     assert result["release_receipt"]["release_status"] == "PASS"
+    assert result["release_receipt"]["evidence_receipt"]["event_type"] == "OUTENV_RELEASE_AUTHORIZED"
+    assert result["release_receipt"]["evidence_receipt"]["task_id"] == TASK
+    assert result["release_receipt"]["evidence_receipt"]["signature"]
     assert provider.calls == 1
     assert judge_events[-1]["memory_loaded"] is True
     assert events[-1]["event"] == "OUTENV_RELEASE_AUTHORIZED"
@@ -176,6 +213,49 @@ def test_release_evidence_failure_withholds_candidate():
         run_chat(router)
     assert provider.calls == 1
     assert any(item.get("what") == "OUTENV_RELEASE_AUTHORIZED" for item in seen)
+
+
+
+
+def test_async_router_requires_council_before_judge():
+    calls = []
+    provider = Provider()
+    router, _ = make_router(
+        {"xai": provider},
+        council_adapter=lambda payload: (
+            calls.append(payload) or {
+                "action": "PASS",
+                "candidate": "Council-approved candidate.",
+                "source_provider_id": "council:aggregate",
+                "votes": {"grok": "PASS", "gpt_codex": "PASS", "claude": "PASS"},
+                "proposals": {
+                    "grok": {"provider_id": "xai", "candidate": payload["candidate"], "vote": "PASS"},
+                    "gpt_codex": {"provider_id": "openai", "candidate": payload["candidate"], "vote": "PASS"},
+                    "claude": {"provider_id": "anthropic", "candidate": payload["candidate"], "vote": "PASS"},
+                },
+            }
+        ),
+    )
+    result = run_chat(router)
+    assert calls and calls[0]["candidate"] == provider.result["text"]
+    assert result["text"] == "Council-approved candidate."
+
+
+def test_async_judge_unavailable_holds_without_provider_fallback():
+    first, second = Provider(), Provider()
+    router, _ = make_router({"xai": first, "anthropic": second}, action="UNAVAILABLE")
+    with pytest.raises(OutputWithheldError, match="UNAVAILABLE"):
+        run_chat(router)
+    assert first.calls == 1
+    assert second.calls == 0
+
+
+def test_async_router_rejects_judge_from_source_provider():
+    provider = Provider()
+    router, _ = make_router({"xai": provider}, judge_provider_id="xai")
+    with pytest.raises(RuntimeError, match="cannot judge its own"):
+        run_chat(router)
+    assert provider.calls == 1
 
 
 def test_provider_fallback_only_after_transport_failure():

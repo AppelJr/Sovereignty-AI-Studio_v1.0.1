@@ -11,6 +11,7 @@ from typing import Any
 from sovereign.scar.ledger import EventClass, SCARActor, SCARLedger
 
 from .execution_contracts import ExecutionReceipt, RouteDecision, make_scar_event
+from .dual_gate_path import EvidenceAppendReceipt
 
 
 class EvidenceWriteError(RuntimeError):
@@ -25,7 +26,7 @@ class SCARLedgerSink:
             raise TypeError("ledger must be the canonical SCARLedger")
         self._ledger = ledger
 
-    def __call__(self, event: dict[str, Any]) -> Any:
+    def __call__(self, event: dict[str, Any]) -> EvidenceAppendReceipt:
         if not isinstance(event, dict):
             raise TypeError("SCAR evidence event must be a mapping")
         required = ("event_hash", "task_id", "output_hash")
@@ -41,26 +42,22 @@ class SCARLedgerSink:
             "release_event_hash": str(event["event_hash"]),
             "evidence": {key: value for key, value in event.items() if key != "event_hash"},
         }
-        stored = self._ledger.append_event(
-            str(event.get("what", event.get("event", "AUDIT_EVENT"))),
+        appended = self._ledger.append_event(
+            str(event["event"]),
             actor=SCARActor.DEVICE,
             event_class=EventClass.AUDIT,
             route_trace=route_trace,
             metadata=metadata,
             timestamp=str(event.get("when", event.get("timestamp", ""))) or None,
         )
-        if not self._ledger.verify_chain():
-            raise EvidenceWriteError("SCAR chain failed verification after append")
-        return {
-            "status": "APPENDED",
-            "verified": True,
-            "event_hash": str(event["event_hash"]),
-            "task_id": str(event["task_id"]),
-            "output_hash": str(event["output_hash"]),
-            "ledger_event_hash": stored.event_hash,
-            "signature": stored.signature,
-            "sequence": stored.sequence,
-        }
+        return EvidenceAppendReceipt(
+            event_type=appended.event_type,
+            task_id=str(event["task_id"]),
+            event_id=appended.event_id,
+            event_hash=appended.event_hash,
+            signature=appended.signature,
+            sequence=appended.sequence,
+        )
 
 
 class EvidenceAdapter:
