@@ -30,7 +30,7 @@ def test_preflight_fails_closed():
 
 
 def test_missing_adapter_blocks_stage_before_execution():
-    coordinator = Parallel12Coordinator({})
+    coordinator = Parallel12Coordinator({}, authorization_verifier=lambda _auth, _task: True)
     with pytest.raises(RuntimeError, match="adapters unbound"):
         asyncio.run(coordinator.run_stage(
             stage_id="stage-1-control",
@@ -49,7 +49,7 @@ def test_missing_authorization_blocks_before_adapter():
     coordinator = Parallel12Coordinator({
         "genesis": adapter, "gateone": adapter,
         "sovereignty-gate": adapter, "risk-engine": adapter,
-    })
+    }, authorization_verifier=lambda auth, task: auth.is_valid_for(task))
     with pytest.raises(PermissionError):
         asyncio.run(coordinator.run_stage(
             stage_id="stage-1-control",
@@ -104,3 +104,20 @@ def test_registry_rejects_stage_dependency_cycle(monkeypatch, tmp_path):
     monkeypatch.setattr(module, "REGISTRY_PATH", path)
     with pytest.raises(ValueError, match="cycle"):
         module.load_registry()
+
+
+def test_cryptographic_verifier_failure_blocks_stage():
+    called = []
+    async def adapter(**kwargs):
+        called.append(True)
+        return {"status": "pass"}
+    coordinator = Parallel12Coordinator({
+        "genesis": adapter, "gateone": adapter,
+        "sovereignty-gate": adapter, "risk-engine": adapter,
+    }, authorization_verifier=lambda _auth, _task: False)
+    with pytest.raises(PermissionError, match="cryptographic verification"):
+        asyncio.run(coordinator.run_stage(
+            stage_id="stage-1-control", task_id="task-1", payload={},
+            authorization=Authorization(), preflight_evidence=PREFLIGHT,
+        ))
+    assert called == []
