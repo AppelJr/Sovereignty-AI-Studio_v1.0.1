@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-import importlib.util
 import json
 import tempfile
 import unittest
 from pathlib import Path
+
+import importlib.util
 
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "parallel_repository_runtime.py"
 SPEC = importlib.util.spec_from_file_location("parallel_repository_runtime", SCRIPT)
@@ -41,26 +42,21 @@ class ParallelRepositoryRuntimeTests(unittest.TestCase):
     def test_unknown_dependency_is_rejected(self):
         graph = [{"id": "alpha", "depends_on": ["missing"]}]
         with self.assertRaisesRegex(ValueError, "unknown dependency"):
-            runtime.load_manifest.__globals__["dependency_layers"](graph)
+            runtime.dependency_layers(graph)
 
     def test_path_traversal_is_rejected(self):
-        bad = {
-            "id": "unsafe",
-            "local_path": "../outside",
-            "repository": "AppelJr/unsafe",
-            "depends_on": [],
-        }
+        manifest = runtime.load_manifest()
+        manifest["repositories"][1]["local_path"] = "../outside"
         with tempfile.TemporaryDirectory() as tmp:
-            old_root = runtime.ROOT
+            path = Path(tmp) / "registry.json"
+            path.write_text(json.dumps(manifest), encoding="utf-8")
+            previous = runtime.MANIFEST
             try:
-                runtime.ROOT = Path(tmp)
+                runtime.MANIFEST = path
                 with self.assertRaisesRegex(ValueError, "unsafe local_path"):
-                    runtime.load_manifest.__globals__["load_manifest"]()
-                # Direct path validation is covered by constructing an invalid manifest copy.
-                rel = Path(bad["local_path"])
-                self.assertTrue(rel.is_absolute() or ".." in rel.parts)
+                    runtime.load_manifest()
             finally:
-                runtime.ROOT = old_root
+                runtime.MANIFEST = previous
 
 
 if __name__ == "__main__":
