@@ -10,7 +10,7 @@ from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 import hashlib
 import os
-from typing import Any, Callable, Literal, Mapping, Protocol
+from typing import Any, Callable, Literal, Mapping, Protocol, Sequence
 
 Action = Literal["PASS", "REWRITE", "YANK", "COUNCIL"]
 ACTIONS = frozenset({"PASS", "REWRITE", "YANK", "COUNCIL"})
@@ -141,6 +141,7 @@ class ComposedHeavyJudge:
         judge_id: str | None = None,
         judge_provider_id: str | None = None,
         source_provider_id: str | None = None,
+        contributing_provider_ids: Sequence[str] | None = None,
     ) -> dict[str, Any]:
         del force_judge, token_manager
         if not isinstance(original_output, str) or not original_output.strip():
@@ -160,8 +161,13 @@ class ComposedHeavyJudge:
             if not all(isinstance(value, str) and value.strip()
                        for value in required_bindings):
                 raise BackendUnavailable("task, policy, Judge, and provider bindings are required")
-            if judge_provider_id.strip().casefold() == source_provider_id.strip().casefold():
-                raise BackendUnavailable("provider cannot judge its own output")
+            contributors = tuple(contributing_provider_ids or (source_provider_id,))
+            if not contributors or any(not isinstance(value, str) or not value.strip()
+                                       for value in contributors):
+                raise BackendUnavailable("Council contributor identities are required")
+            judge_provider_key = judge_provider_id.strip().casefold()
+            if judge_provider_key in {value.strip().casefold() for value in contributors}:
+                raise BackendUnavailable("provider cannot judge its own or a contributing lane's output")
 
         try:
             raw_model_review = self.backend.evaluate(original_output, str(context))
@@ -255,6 +261,7 @@ class ComposedHeavyJudge:
             "judge_id": judge_id or model_id,
             "judge_provider_id": judge_provider_id,
             "source_provider_id": source_provider_id,
+            "contributing_provider_ids": list(contributing_provider_ids or (source_provider_id,)),
             "judge_model": model_id,
             "reason": (
                 f"model={model_action}:{model_reason}; "
