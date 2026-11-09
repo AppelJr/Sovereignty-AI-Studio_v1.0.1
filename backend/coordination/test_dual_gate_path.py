@@ -107,9 +107,7 @@ def test_gate_two_rejects_provider_self_judging():
     result = valid_result()
     result["judge_verdict"]["judge_provider_id"] = "xai"
     with pytest.raises(ReleaseIntegrityError, match="cannot judge its own"):
-        verify_before_release(
-            claims(), result, expected_task_id="task-1", evidence_sink=acknowledged,
-        )
+        release(result, acknowledged)
 
 
 def test_gate_two_rejects_unacknowledged_evidence():
