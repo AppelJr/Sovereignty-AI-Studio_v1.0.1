@@ -173,6 +173,13 @@ class SmartProviderRouter:
                 proposal_provider_ids.append(provider_id.strip())
             if len({item.casefold() for item in proposal_provider_ids}) != len(REQUIRED_COUNCIL_LANES):
                 raise RuntimeError("Council lanes must have distinct provider identities")
+            for lane in REQUIRED_COUNCIL_LANES:
+                if str(votes[lane]).upper() != str(proposals[lane]["vote"]).upper():
+                    raise RuntimeError(f"Council vote/proposal mismatch for {lane}")
+            routed_proposal = next((item for item in proposals.values()
+                                    if item["provider_id"].casefold() == decision.provider.casefold()), None)
+            if routed_proposal is None or routed_proposal["candidate"] != candidate:
+                raise RuntimeError("Council omitted or altered the routed provider proposal")
             if not isinstance(source_provider_id, str) or not source_provider_id.strip():
                 raise RuntimeError("Council source-provider identity is missing")
             if source_provider_id != "council:aggregate":
