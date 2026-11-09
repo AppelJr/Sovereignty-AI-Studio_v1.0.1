@@ -11,6 +11,7 @@ from typing import Any
 from sovereign.scar.ledger import EventClass, SCARActor, SCARLedger
 
 from .execution_contracts import ExecutionReceipt, RouteDecision, make_scar_event
+from .dual_gate_path import EvidenceAppendReceipt
 
 
 class EvidenceWriteError(RuntimeError):
@@ -25,7 +26,7 @@ class SCARLedgerSink:
             raise TypeError("ledger must be the canonical SCARLedger")
         self._ledger = ledger
 
-    def __call__(self, event: dict[str, Any]) -> Any:
+    def __call__(self, event: dict[str, Any]) -> EvidenceAppendReceipt:
         if not isinstance(event, dict):
             raise TypeError("SCAR evidence event must be a mapping")
         required = ("event", "task_id", "event_hash", "timestamp")
@@ -49,13 +50,20 @@ class SCARLedgerSink:
                 if key not in {"event", "task_id", "event_hash", "timestamp"}
             },
         }
-        return self._ledger.append_event(
+        appended = self._ledger.append_event(
             str(event["event"]),
             actor=SCARActor.DEVICE,
             event_class=EventClass.AUDIT,
             route_trace=route_trace,
             metadata=metadata,
             timestamp=str(event["timestamp"]),
+        )
+        return EvidenceAppendReceipt(
+            event_type=appended.event_type,
+            task_id=str(event["task_id"]),
+            event_id=appended.event_id,
+            event_hash=appended.event_hash,
+            sequence=appended.sequence,
         )
 
 
