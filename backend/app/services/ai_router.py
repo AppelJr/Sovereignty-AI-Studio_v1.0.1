@@ -29,6 +29,8 @@ from sovereign_core.judge_composition import ComposedHeavyJudge
 
 logger = logging.getLogger(__name__)
 PROVIDER_ORDER = ["xai", "anthropic", "openai"]
+REQUIRED_COUNCIL_LANES = frozenset({"grok", "gpt_codex", "claude"})
+VALID_COUNCIL_ACTIONS = frozenset({"PASS", "REWRITE", "YANK"})
 
 
 class OutputWithheldError(PermissionError):
@@ -286,12 +288,37 @@ class AIRouter:
             council_action = str(council.get("action", "")).upper()
             council_candidate = council.get("candidate")
             source_provider_id = council.get("source_provider_id")
-            if council_action not in {"PASS", "REWRITE", "YANK"}:
+            proposals = council.get("proposals")
+            if council_action not in VALID_COUNCIL_ACTIONS:
                 raise RuntimeError("Council aggregate action is missing or invalid; output withheld")
             if not isinstance(council_candidate, str) or not council_candidate.strip():
                 raise RuntimeError("Council did not provide a consolidated candidate; output withheld")
+            if not isinstance(proposals, Mapping) or not REQUIRED_COUNCIL_LANES.issubset(proposals):
+                raise RuntimeError("Council must provide Grok, GPT/Codex, and Claude proposals")
+            proposal_provider_ids = []
+            for lane in REQUIRED_COUNCIL_LANES:
+                proposal = proposals[lane]
+                if not isinstance(proposal, Mapping):
+                    raise RuntimeError(f"Council proposal for {lane} is malformed")
+                provider_id = proposal.get("provider_id")
+                proposal_text = proposal.get("candidate")
+                vote = str(proposal.get("vote", "")).upper()
+                if not isinstance(provider_id, str) or not provider_id.strip():
+                    raise RuntimeError(f"Council provider identity missing for {lane}")
+                if not isinstance(proposal_text, str) or not proposal_text.strip():
+                    raise RuntimeError(f"Council candidate missing for {lane}")
+                if vote not in VALID_COUNCIL_ACTIONS:
+                    raise RuntimeError(f"Council vote invalid for {lane}")
+                proposal_provider_ids.append(provider_id.strip())
+            if len({item.casefold() for item in proposal_provider_ids}) != len(REQUIRED_COUNCIL_LANES):
+                raise RuntimeError("Council lanes must have distinct provider identities")
             if not isinstance(source_provider_id, str) or not source_provider_id.strip():
                 raise RuntimeError("Council source-provider identity is missing; output withheld")
+            if source_provider_id != "council:aggregate":
+                selected = next((item for item in proposals.values()
+                                 if item["provider_id"].casefold() == source_provider_id.casefold()), None)
+                if selected is None or selected["candidate"] != council_candidate:
+                    raise RuntimeError("Council candidate/source binding mismatch")
 
             # Judge/evidence failures are terminal: never send the same task to another provider.
             review = self.judge.review(
@@ -303,6 +330,7 @@ class AIRouter:
                 judge_id=str(getattr(self.judge.backend, "model_id", "")),
                 judge_provider_id=self._judge_provider_id,
                 source_provider_id=source_provider_id,
+                contributing_provider_ids=proposal_provider_ids,
             )
             verdict = review.get("verdict")
             if not isinstance(verdict, Mapping):
