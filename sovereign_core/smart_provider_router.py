@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 import hashlib
+import json
 from typing import Any, Callable, Mapping
 
 from backend.coordination.dual_gate_path import run_dual_gated
@@ -119,6 +120,25 @@ class SmartProviderRouter:
             raise TypeError("evidence_sink is mandatory")
         execution: dict[str, Any] = {}
 
+        def append_evidence(event: dict[str, Any]) -> Any:
+            payload = dict(event)
+            event_task = payload.get("task_id")
+            if not isinstance(event_task, str) or not event_task:
+                raise EvidenceWriteError("evidence event task_id is required")
+            timestamp = payload.get("when")
+            if not isinstance(timestamp, str) or not timestamp:
+                timestamp = datetime.now(timezone.utc).isoformat()
+            canonical = json.dumps(
+                payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+            ).encode("utf-8")
+            normalized = {
+                **payload,
+                "event": str(payload.get("what", "SMART_PROVIDER_ROUTER_EVENT")),
+                "timestamp": timestamp,
+                "event_hash": "sha256:" + hashlib.sha256(canonical).hexdigest(),
+            }
+            return evidence_sink(normalized)
+
         def route_and_judge(verified_claims: Any) -> Mapping[str, Any]:
             decision = self.route_request(text, context, prefer_cheap)
             if decision.provider not in self.token_manager.states:
@@ -221,7 +241,7 @@ class SmartProviderRouter:
                     "council": dict(council),
                 }
                 try:
-                    evidence_sink(event)
+                    append_evidence(event)
                 except Exception as exc:
                     raise EvidenceWriteError("escrow evidence append failed") from exc
                 execution.update({
@@ -262,7 +282,7 @@ class SmartProviderRouter:
                 owner_id=owner_id,
                 required_scope=required_scope,
                 route_and_judge=route_and_judge,
-                evidence_sink=evidence_sink,
+                evidence_sink=append_evidence,
                 now=now,
                 memory_loaded=False,
                 network_accessed=True,
