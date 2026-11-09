@@ -183,6 +183,7 @@ def test_router_rejects_legacy_non_composed_judge():
             TokenManager(),
             council_adapter=lambda _payload: council(),
             judge=HeavyJudge(),
+            judge_provider_id="sovereign-local-judge",
         )
 
 
