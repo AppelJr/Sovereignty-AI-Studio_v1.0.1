@@ -46,11 +46,15 @@ class SmartProviderRouter:
         *,
         council_adapter: Callable[[dict[str, Any]], Mapping[str, Any]],
         judge: ComposedHeavyJudge,
+        judge_provider_id: str,
     ) -> None:
         if not callable(council_adapter):
             raise TypeError("a real three-lane council_adapter is mandatory")
         if not isinstance(judge, ComposedHeavyJudge):
             raise TypeError("a configured ComposedHeavyJudge is mandatory; no legacy bypass")
+        if not isinstance(judge_provider_id, str) or not judge_provider_id.strip():
+            raise ValueError("an independent Judge provider identity is mandatory")
+        self.judge_provider_id = judge_provider_id.strip()
         self.token_manager = token_manager
         self.config = token_manager.config
         self.judge = judge
@@ -115,7 +119,7 @@ class SmartProviderRouter:
             raise TypeError("evidence_sink is mandatory")
         execution: dict[str, Any] = {}
 
-        def route_and_judge(_verified_claims: Any) -> Mapping[str, Any]:
+        def route_and_judge(verified_claims: Any) -> Mapping[str, Any]:
             decision = self.route_request(text, context, prefer_cheap)
             if decision.provider not in self.token_manager.states:
                 self.token_manager.start_session(decision.provider)
@@ -145,11 +149,22 @@ class SmartProviderRouter:
             if str(council.get("action", "")).upper() not in VALID_COUNCIL_ACTIONS:
                 raise RuntimeError("Council aggregate action is missing or unsupported")
 
+            council_candidate = council.get("candidate")
+            source_provider_id = council.get("source_provider_id", decision.provider)
+            if not isinstance(council_candidate, str) or not council_candidate.strip():
+                raise RuntimeError("Council did not provide a consolidated candidate")
+            if not isinstance(source_provider_id, str) or not source_provider_id.strip():
+                raise RuntimeError("Council source-provider identity is missing")
             judged = self.judge.review(
-                original_output=candidate,
+                original_output=council_candidate,
                 context=context,
                 force_judge=True,
                 council_result=council,
+                task_id=task_id,
+                policy_hash=verified_claims.policy_hash,
+                judge_id=str(getattr(self.judge.backend, "model_id", "")),
+                judge_provider_id=self.judge_provider_id,
+                source_provider_id=source_provider_id,
             )
             if not isinstance(judged, Mapping):
                 raise RuntimeError("ComposedHeavyJudge returned invalid result")
@@ -185,7 +200,7 @@ class SmartProviderRouter:
                 raise EscrowPending(f"{action or 'INVALID'} requires second review")
 
             output = judged.get("final_output")
-            if not isinstance(output, str) or not output.strip() or output != candidate:
+            if not isinstance(output, str) or not output.strip() or output != council_candidate:
                 raise RuntimeError("Heavy Judge PASS did not preserve the validated candidate")
             output_hash = "sha3-512:" + hashlib.sha3_512(output.encode("utf-8")).hexdigest()
             execution.update({
@@ -196,8 +211,15 @@ class SmartProviderRouter:
                 "routing_reason": decision.reason,
                 "council": dict(council),
                 "judge_verdict": dict(verdict),
+                "source_provider_id": source_provider_id,
             })
-            return {"status": "PASS", "output": output, "output_hash": output_hash}
+            return {
+                "status": "PASS",
+                "output": output,
+                "output_hash": output_hash,
+                "judge_verdict": dict(verdict),
+                "source_provider_id": source_provider_id,
+            }
 
         try:
             receipt = run_dual_gated(
