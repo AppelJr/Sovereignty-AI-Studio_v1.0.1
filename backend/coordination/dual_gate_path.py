@@ -44,7 +44,7 @@ class DualGateReceipt:
 
 
 def authorize_before_route(
-    proof: str,
+    proof: str | Mapping[str, Any],
     *,
     verification_key: bytes,
     task_id: str,
