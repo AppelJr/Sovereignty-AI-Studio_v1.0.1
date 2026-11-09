@@ -28,6 +28,7 @@ class EvidenceAppendReceipt:
     task_id: str
     event_id: str
     event_hash: str
+    signature: str
     sequence: int
 
 
@@ -152,7 +153,11 @@ def verify_before_release(
         append_receipt.event_type != event["what"]
         or append_receipt.task_id != expected_task_id
         or not append_receipt.event_id
-        or not append_receipt.event_hash
+        or not isinstance(append_receipt.event_hash, str)
+        or len(append_receipt.event_hash) != 64
+        or any(char not in "0123456789abcdef" for char in append_receipt.event_hash.lower())
+        or not isinstance(append_receipt.signature, str)
+        or not append_receipt.signature.strip()
         or not isinstance(append_receipt.sequence, int)
         or append_receipt.sequence < 0
     ):
