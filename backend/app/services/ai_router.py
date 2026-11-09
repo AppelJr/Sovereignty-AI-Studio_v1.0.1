@@ -378,7 +378,7 @@ class AIRouter:
             output_hash = verdict.get("output_hash")
             # Gate 2 verifies the exact output digest and commits evidence before release.
             receipt = verify_before_release(
-                claims,
+                authorization_proof,
                 {
                     "status": "PASS",
                     "output": final_output,
@@ -386,7 +386,10 @@ class AIRouter:
                     "judge_verdict": dict(verdict),
                     "source_provider_id": source_provider_id,
                 },
+                verification_key=self._verification_key,
                 expected_task_id=task_id,
+                expected_owner_id=self._owner_id,
+                required_scope=self._required_scope,
                 evidence_sink=self._append_evidence,
                 memory_loaded=memory_loaded,
                 # This router's configured providers are remote APIs; the call used the network.
