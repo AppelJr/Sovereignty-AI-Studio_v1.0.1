@@ -241,6 +241,15 @@ def test_async_router_requires_council_before_judge():
     assert result["text"] == "Council-approved candidate."
 
 
+def test_async_judge_unavailable_holds_without_provider_fallback():
+    first, second = Provider(), Provider()
+    router, _ = make_router({"xai": first, "anthropic": second}, action="UNAVAILABLE")
+    with pytest.raises(OutputWithheldError, match="UNAVAILABLE"):
+        run_chat(router)
+    assert first.calls == 1
+    assert second.calls == 0
+
+
 def test_async_router_rejects_judge_from_source_provider():
     provider = Provider()
     router, _ = make_router({"xai": provider}, judge_provider_id="xai")
