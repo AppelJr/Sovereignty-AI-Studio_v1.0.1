@@ -1,225 +1,327 @@
-#!/usr/bin/env python3
-"""Gate-bound smart provider router with mandatory composed Heavy Judge.
+"""Compose an advisory model judge with the deterministic HeavyJudge gate.
 
-The router is not an authority. A verified Gate proof is required before any
-provider route; a composed judge PASS and durable release evidence are required
-before output is returned. The judge is injected by validated owner startup.
+The model backend may escalate a candidate, but can never downgrade the
+behavioral judge's action or authorize release. Backend construction is lazy:
+missing configuration fails at construction time, never at import time.
 """
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 import hashlib
-from typing import Any, Callable, Mapping
+import os
+from typing import Any, Callable, Literal, Mapping, Protocol, Sequence
 
-from backend.coordination.dual_gate_path import run_dual_gated
-from sovereign_core.judge_composition import ComposedHeavyJudge
+Action = Literal["PASS", "REWRITE", "YANK", "COUNCIL"]
+ACTIONS = frozenset({"PASS", "REWRITE", "YANK", "COUNCIL"})
+SEVERITY = {"PASS": 0, "REWRITE": 1, "COUNCIL": 2, "YANK": 3}
 
-COST_TIERS = {"xai": 1.0, "anthropic": 1.8, "openai": 2.2}
-REQUIRED_COUNCIL_LANES = frozenset({"grok", "gpt_codex", "claude"})
-VALID_COUNCIL_ACTIONS = frozenset({"PASS", "REWRITE", "YANK"})
+
+class JudgeCompositionError(RuntimeError):
+    """Base error for a fail-closed composed judge."""
+
+
+class BackendConfigurationError(JudgeCompositionError):
+    """The judge backend cannot be safely constructed."""
+
+
+class BackendUnavailable(JudgeCompositionError):
+    """The configured judge backend failed or is unbound."""
+
+
+class EvidenceUnavailable(JudgeCompositionError):
+    """Mandatory composed-judge evidence could not be persisted."""
+
+
+class ModelReviewBackend(Protocol):
+    model_id: str
+
+    def evaluate(self, candidate: str, context: str) -> Mapping[str, Any]:
+        """Return an advisory action: PASS, REWRITE, YANK, or COUNCIL."""
+
+
+BackendBuilder = Callable[[str], ModelReviewBackend]
+EvidenceSink = Callable[[dict[str, Any]], Any]
 
 
 @dataclass(frozen=True, slots=True)
-class RoutingDecision:
-    provider: str
+class ModelReview:
+    model_id: str
+    action: Action
     reason: str
-    remaining_capacity: int
-    estimated_cost: float
-    used_judge: bool = False
 
 
-class EscrowPending(RuntimeError):
-    """Candidate was withheld for second review or approved repair."""
+@dataclass(frozen=True, slots=True)
+class ComposedReview:
+    model_review: ModelReview
+    behavioral_verdict: Mapping[str, Any]
+    action: Action
+    output_hash: str
+    final_output: str | None
 
 
-class EvidenceWriteError(RuntimeError):
-    """Mandatory evidence could not be persisted."""
+def build_judge(
+    backend_builder: BackendBuilder,
+    *,
+    environ: Mapping[str, str] | None = None,
+) -> ModelReviewBackend:
+    """Build the model-review backend on demand; never read config at import.
+
+    The caller supplies the HFChatModel-compatible adapter factory. The adapter
+    must expose evaluate(candidate, context) and model_id. LOCAL_LLM is rejected
+    as an override so this path cannot silently select an alternate local model.
+    """
+    if not callable(backend_builder):
+        raise BackendConfigurationError("judge backend builder is unbound")
+    env = os.environ if environ is None else environ
+    model_name = str(env.get("HEAVYJUDGE_MODEL", "")).strip()
+    if not model_name:
+        raise BackendConfigurationError("HEAVYJUDGE_MODEL is required")
+    if str(env.get("LOCAL_LLM", "")).strip().lower() in {"1", "true", "yes", "on"}:
+        raise BackendConfigurationError("LOCAL_LLM override is prohibited")
+    try:
+        backend = backend_builder(model_name)
+    except Exception as exc:
+        raise BackendUnavailable("judge backend construction failed") from exc
+    if not callable(getattr(backend, "evaluate", None)):
+        raise BackendUnavailable("backend must implement evaluate(candidate, context)")
+    model_id = getattr(backend, "model_id", model_name)
+    if not isinstance(model_id, str) or not model_id.strip():
+        raise BackendUnavailable("backend model_id is missing")
+    return backend
 
 
-class SmartProviderRouter:
-    """Context-aware provider selection with mandatory dual-gate release."""
+class ComposedHeavyJudge:
+    """HeavyJudge-compatible composition: model advisory + behavioral gate.
+
+    PASS is possible only when both layers PASS. Any disagreement resolves to
+    the more restrictive action. COUNCIL is a hold state, never a release state.
+    """
 
     def __init__(
         self,
-        token_manager: Any,
         *,
-        council_adapter: Callable[[dict[str, Any]], Mapping[str, Any]],
-        judge: ComposedHeavyJudge,
+        backend: ModelReviewBackend,
+        behavioral_judge: Any,
+        evidence_sink: EvidenceSink,
+        judge_id: str | None = None,
+        provider_ids: Sequence[str] | None = None,
     ) -> None:
-        if not callable(council_adapter):
-            raise TypeError("a real three-lane council_adapter is mandatory")
-        if not isinstance(judge, ComposedHeavyJudge):
-            raise TypeError("a configured ComposedHeavyJudge is mandatory; no legacy bypass")
-        self.token_manager = token_manager
-        self.config = token_manager.config
-        self.judge = judge
-        self.council_adapter = council_adapter
-        self.priority_rules = {
-            "medical": ["anthropic", "xai", "openai"],
-            "education": ["anthropic", "xai", "openai"],
-            "general": ["xai", "anthropic", "openai"],
-            "coding": ["openai", "anthropic", "xai"],
-            "legal": ["anthropic", "openai", "xai"],
-            "financial": ["openai", "anthropic", "xai"],
-            "security": ["openai", "xai", "anthropic"],
-        }
-
-    def _get_provider_capacity(self, provider: str) -> int:
-        state = self.token_manager.states.get(provider)
-        if not state:
-            cfg = self.config["providers"].get(provider)
-            if not isinstance(cfg, Mapping):
-                return 0
-            return int(cfg.get("base_max_tokens", 0))
-        return max(0, int(state.max_tokens) - int(state.token_count))
-
-    def route_request(
-        self, text: str, context: str = "general", prefer_cheap: bool = True
-    ) -> RoutingDecision:
-        del text, prefer_cheap
-        priorities = self.priority_rules.get(context, self.priority_rules["general"])
-        for provider in priorities:
-            capacity = self._get_provider_capacity(provider)
-            if capacity > 512:
-                return RoutingDecision(
-                    provider=provider,
-                    reason=f"Best available for context={context}",
-                    remaining_capacity=capacity,
-                    estimated_cost=COST_TIERS.get(provider, 2.0),
-                )
-        raise RuntimeError("no provider has sufficient configured capacity; refusing fallback")
-
-    def consume_with_routing(
-        self,
-        tokens: int,
-        text: str,
-        *,
-        context: str,
-        authorization_proof: str,
-        verification_key: bytes,
-        task_id: str,
-        owner_id: str,
-        required_scope: tuple[str, ...],
-        evidence_sink: Callable[[dict[str, Any]], Any],
-        prefer_cheap: bool = True,
-        now: int | None = None,
-    ) -> dict[str, Any]:
-        """Route only after Gate 1; release only after judge PASS and Gate 2.
-
-        Council votes must be attributable and complete. Every non-PASS judge
-        result is escrowed and withheld. Judge, provider, and evidence errors
-        propagate; they never trigger an unapproved provider fallback.
-        """
+        if not callable(getattr(backend, "evaluate", None)):
+            raise TypeError("a bound model review backend is mandatory")
+        if not callable(getattr(behavioral_judge, "review", None)):
+            raise TypeError("behavioral_judge.review is mandatory")
         if not callable(evidence_sink):
-            raise TypeError("evidence_sink is mandatory")
-        execution: dict[str, Any] = {}
+            raise TypeError("mandatory evidence_sink is required")
+        backend_id = str(getattr(backend, "model_id", "unknown"))
+        forbidden = {str(item).strip() for item in (provider_ids or ()) if str(item).strip()}
+        if backend_id in forbidden:
+            raise ValueError("judge backend identity must be independent of the provider identities")
+        self.backend = backend
+        self.behavioral_judge = behavioral_judge
+        self.evidence_sink = evidence_sink
+        self.judge_id = str(judge_id or backend_id)
+        self._provider_ids = tuple(sorted(forbidden))
 
-        def route_and_judge(_verified_claims: Any) -> Mapping[str, Any]:
-            decision = self.route_request(text, context, prefer_cheap)
-            if decision.provider not in self.token_manager.states:
-                self.token_manager.start_session(decision.provider)
-            model_result = self.token_manager.consume_tokens(decision.provider, tokens)
-            if not isinstance(model_result, Mapping):
-                raise RuntimeError("provider returned invalid result")
-            candidate = model_result.get("output")
-            if not isinstance(candidate, str) or not candidate.strip():
-                raise RuntimeError("provider returned no candidate output; refusing placeholder")
+    @staticmethod
+    def _action(value: Any) -> Action:
+        action = str(value).upper()
+        if action not in ACTIONS:
+            raise ValueError("unsupported model or behavioral action")
+        return action  # type: ignore[return-value]
 
-            council = self.council_adapter({
-                "task_id": task_id,
-                "owner_id": owner_id,
-                "request": text,
-                "candidate": candidate,
-                "context": context,
-                "route": asdict(decision),
-            })
-            if not isinstance(council, Mapping):
-                raise RuntimeError("Council returned invalid result")
-            votes = council.get("votes")
-            if not isinstance(votes, Mapping) or not REQUIRED_COUNCIL_LANES.issubset(votes):
-                raise RuntimeError("Council must provide all three lanes: Grok, GPT/Codex and Claude votes")
-            if any(str(votes[lane]).upper() not in VALID_COUNCIL_ACTIONS
-                   for lane in REQUIRED_COUNCIL_LANES):
-                raise RuntimeError("Council contains unsupported lane action")
-            if str(council.get("action", "")).upper() not in VALID_COUNCIL_ACTIONS:
-                raise RuntimeError("Council aggregate action is missing or unsupported")
+    def _record(self, event: dict[str, Any]) -> None:
+        try:
+            self.evidence_sink(event)
+        except Exception as exc:
+            raise EvidenceUnavailable("composed judge evidence append failed") from exc
 
-            judged = self.judge.review(
-                original_output=candidate,
-                context=context,
-                force_judge=True,
-                council_result=council,
-            )
-            if not isinstance(judged, Mapping):
-                raise RuntimeError("ComposedHeavyJudge returned invalid result")
-            verdict = judged.get("verdict")
-            action = str(verdict.get("action", "")).upper() if isinstance(verdict, Mapping) else ""
-            if action != "PASS":
-                event = {
-                    "who": "SmartProviderRouter",
-                    "what": "ESCROW_PENDING_REVIEW",
-                    "when": datetime.now(timezone.utc).isoformat(),
-                    "where": "Sovereignty-AI-Studio_v1.0.1",
-                    "why": "Council or composed Heavy Judge did not return PASS",
-                    "how": "provider -> three-lane Council -> composed Heavy Judge",
-                    "authorization": "pre-route-gate-verified",
-                    "memory_loaded": False,
-                    "network_accessed": True,
-                    "files_changed": [],
-                    "result": "YANK",
-                    "task_id": task_id,
-                    "judge_verdict": dict(verdict) if isinstance(verdict, Mapping) else {},
-                    "council": dict(council),
-                }
-                try:
-                    evidence_sink(event)
-                except Exception as exc:
-                    raise EvidenceWriteError("escrow evidence append failed") from exc
-                execution.update({
-                    "status": "ESCROW_PENDING_REVIEW",
-                    "action": action,
-                    "council": dict(council),
-                    "judge_verdict": dict(verdict) if isinstance(verdict, Mapping) else {},
-                })
-                raise EscrowPending(f"{action or 'INVALID'} requires second review")
-
-            output = judged.get("final_output")
-            if not isinstance(output, str) or not output.strip() or output != candidate:
-                raise RuntimeError("Heavy Judge PASS did not preserve the validated candidate")
-            output_hash = "sha3-512:" + hashlib.sha3_512(output.encode("utf-8")).hexdigest()
-            execution.update({
-                "status": "PASS",
-                "output": output,
-                "output_hash": output_hash,
-                "routed_to": decision.provider,
-                "routing_reason": decision.reason,
-                "council": dict(council),
-                "judge_verdict": dict(verdict),
-            })
-            return {"status": "PASS", "output": output, "output_hash": output_hash}
+    def review(
+        self,
+        original_output: str,
+        context: str = "general",
+        force_judge: bool = False,
+        token_manager: Any = None,
+        *,
+        council_result: Mapping[str, Any] | None = None,
+        task_id: str | None = None,
+        policy_hash: str | None = None,
+        candidate_hash: str | None = None,
+    ) -> dict[str, Any]:
+        del force_judge, token_manager
+        if not isinstance(original_output, str) or not original_output.strip():
+            raise ValueError("candidate output must be non-empty")
+        digest = "sha3-512:" + hashlib.sha3_512(
+            original_output.encode("utf-8")
+        ).hexdigest()
+        if candidate_hash is not None and candidate_hash != digest:
+            raise ValueError("candidate hash does not match the exact output being judged")
+        timestamp = datetime.now(timezone.utc).isoformat()
+        model_id = str(getattr(self.backend, "model_id", "unknown"))
 
         try:
-            receipt = run_dual_gated(
-                proof=authorization_proof,
-                verification_key=verification_key,
-                task_id=task_id,
-                owner_id=owner_id,
-                required_scope=required_scope,
-                route_and_judge=route_and_judge,
-                evidence_sink=evidence_sink,
-                now=now,
-                memory_loaded=False,
-                network_accessed=True,
+            raw_model_review = self.backend.evaluate(original_output, str(context))
+            if not isinstance(raw_model_review, Mapping):
+                raise BackendUnavailable("model review must be a mapping")
+            model_action = self._action(raw_model_review.get("action"))
+            model_reason = str(raw_model_review.get("reason", "model review"))
+            model_id = str(raw_model_review.get("model_id", model_id))
+            memory_loaded = raw_model_review.get("memory_loaded")
+            network_accessed = raw_model_review.get("network_accessed")
+            if not isinstance(memory_loaded, bool) or not isinstance(network_accessed, bool):
+                raise BackendUnavailable(
+                    "backend must report boolean memory_loaded and network_accessed"
+                )
+        except Exception as exc:
+            self._record({
+                "who": "ComposedHeavyJudge",
+                "what": "JUDGE_BACKEND_FAILURE",
+                "when": timestamp,
+                "where": "sovereign_core.judge_composition",
+                "why": "model review unavailable or malformed",
+                "how": "model backend failure defaults to YANK",
+                "authorization": "not_authorized_by_judge",
+                "memory_loaded": "UNKNOWN",
+                "network_accessed": "UNKNOWN",
+                "files_changed": [],
+                "result": "YANK",
+                "output_hash": digest,
+                "model_id": model_id,
+                "error_type": type(exc).__name__,
+            })
+            return {
+                "final_output": None,
+                "verdict": {
+                    "timestamp": timestamp, "risk_score": 1.0, "action": "YANK",
+                    "output_hash": digest, "signature": None, "context": str(context),
+                    "judge_model": model_id, "reason": "model backend failure",
+                    "judge_id": self.judge_id,
+                    "task_id": task_id,
+                    "policy_hash": policy_hash,
+                },
+                "model_review": {"action": "YANK", "reason": "model backend failure"},
+            }
+
+        try:
+            behavioral = self.behavioral_judge.review(
+                original_output=original_output,
+                context=str(context),
+                force_judge=True,
+                council_result=council_result,
             )
-        except EscrowPending:
-            return execution
-        return {
-            **execution,
-            "status": receipt.release_status,
-            "output": receipt.output,
-            "output_hash": receipt.output_hash,
-            "authorization_proof_id": receipt.authorization_proof_id,
-            "policy_hash": receipt.authorization_policy_hash,
-            "used_judge": True,
+            if not isinstance(behavioral, Mapping):
+                raise ValueError("behavioral judge result must be a mapping")
+            behavioral_verdict = behavioral.get("verdict")
+            if not isinstance(behavioral_verdict, Mapping):
+                raise ValueError("behavioral judge verdict missing")
+            behavioral_action = self._action(behavioral_verdict.get("action"))
+            risk_score = float(behavioral_verdict.get("risk_score", 1.0))
+            if not 0.0 <= risk_score <= 1.0:
+                raise ValueError("behavioral risk_score outside [0, 1]")
+        except Exception as exc:
+            behavioral_action = "YANK"
+            risk_score = 1.0
+            behavioral_verdict = {
+                "timestamp": timestamp, "risk_score": 1.0, "action": "YANK",
+                "output_hash": digest, "signature": None, "context": str(context),
+                "judge_model": "behavioral-judge", "reason": type(exc).__name__,
+                "judge_id": self.judge_id,
+                "task_id": task_id,
+                "policy_hash": policy_hash,
+            }
+
+        action = max(
+            (model_action, behavioral_action),
+            key=lambda item: SEVERITY[item],
+        )
+        final_output = (
+            behavioral.get("final_output")
+            if action == "PASS" and isinstance(behavioral, Mapping)
+            else None
+        )
+        if action == "PASS" and (
+            not isinstance(final_output, str) or final_output != original_output
+        ):
+            action = "YANK"
+            final_output = None
+
+        verdict = {
+            **dict(behavioral_verdict),
+            "timestamp": timestamp,
+            "risk_score": risk_score,
+            "action": action,
+            "output_hash": digest,
+            "judge_model": model_id,
+            "judge_id": self.judge_id,
+            "task_id": task_id,
+            "policy_hash": policy_hash,
+            "reason": (
+                f"model={model_action}:{model_reason}; "
+                f"behavioral={behavioral_action}"
+            ),
         }
+        self._record({
+            "who": "ComposedHeavyJudge",
+            "what": "COMPOSED_JUDGE_VERDICT",
+            "when": timestamp,
+            "where": "sovereign_core.judge_composition",
+            "why": verdict["reason"],
+            "how": "model advisory + deterministic behavioral gate; restrictive action wins",
+            "authorization": "Gate authorization remains external",
+            "memory_loaded": memory_loaded,
+            "network_accessed": network_accessed,
+            "files_changed": [],
+            "result": action,
+            "model_id": model_id,
+            "model_action": model_action,
+            "behavioral_action": behavioral_action,
+            "output_hash": digest,
+            "judge_id": self.judge_id,
+            "task_id": task_id,
+            "policy_hash": policy_hash,
+        })
+        return {
+            "final_output": final_output if action == "PASS" else None,
+            "verdict": verdict,
+            "model_review": asdict(ModelReview(
+                model_id=model_id, action=model_action, reason=model_reason
+            )),
+            "behavioral_verdict": dict(behavioral_verdict),
+            "memory_loaded": memory_loaded,
+            "network_accessed": network_accessed,
+        }
+
+
+def compose_judge(
+    *,
+    backend_builder: BackendBuilder,
+    behavioral_judge: Any,
+    evidence_sink: EvidenceSink,
+    environ: Mapping[str, str] | None = None,
+    judge_id: str | None = None,
+    provider_ids: Sequence[str] | None = None,
+) -> ComposedHeavyJudge:
+    """Construct the one composed judge without import-time model loading."""
+    backend = build_judge(backend_builder, environ=environ)
+    return ComposedHeavyJudge(
+        backend=backend,
+        behavioral_judge=behavioral_judge,
+        evidence_sink=evidence_sink,
+        judge_id=judge_id,
+        provider_ids=provider_ids,
+    )
+
+
+__all__ = [
+    "Action",
+    "ACTIONS",
+    "BackendConfigurationError",
+    "BackendUnavailable",
+    "ComposedHeavyJudge",
+    "EvidenceUnavailable",
+    "JudgeCompositionError",
+    "ModelReview",
+    "build_judge",
+    "compose_judge",
+]
+
