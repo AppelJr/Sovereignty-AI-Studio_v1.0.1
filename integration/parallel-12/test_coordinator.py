@@ -1,0 +1,82 @@
+import asyncio
+import pytest
+
+from coordinator import Parallel12Coordinator, load_registry, validate_preflight
+
+
+class Authorization:
+    def is_valid_for(self, task_id):
+        return task_id == "task-1"
+
+
+PREFLIGHT = {
+    "owner_acceptance": True,
+    "registry_valid": True,
+    "branches_isolated": True,
+    "authorization_boundary_reviewed": True,
+    "no_merge_enabled": True,
+}
+
+
+def test_registry_contains_twelve_unique_repositories():
+    registry = load_registry()
+    assert len(registry["repositories"]) == 12
+    assert len({item["id"] for item in registry["repositories"]}) == 12
+
+
+def test_preflight_fails_closed():
+    with pytest.raises(PermissionError):
+        validate_preflight({"owner_acceptance": True})
+
+
+def test_missing_adapter_blocks_stage_before_execution():
+    coordinator = Parallel12Coordinator({})
+    with pytest.raises(RuntimeError, match="adapters unbound"):
+        asyncio.run(coordinator.run_stage(
+            stage_id="stage-1-control",
+            task_id="task-1",
+            payload={},
+            authorization=Authorization(),
+            preflight_evidence=PREFLIGHT,
+        ))
+
+
+def test_missing_authorization_blocks_before_adapter():
+    called = []
+    async def adapter(**kwargs):
+        called.append(True)
+        return {"status": "pass"}
+    coordinator = Parallel12Coordinator({
+        "genesis": adapter, "gateone": adapter,
+        "sovereignty-gate": adapter, "risk-engine": adapter,
+    })
+    with pytest.raises(PermissionError):
+        asyncio.run(coordinator.run_stage(
+            stage_id="stage-1-control",
+            task_id="task-1",
+            payload={},
+            authorization=object(),
+            preflight_evidence=PREFLIGHT,
+        ))
+    assert called == []
+
+
+def test_parallel_stage_runs_all_registered_adapters():
+    called = []
+    async def adapter(**kwargs):
+        called.append(kwargs["task_id"])
+        return {"status": "pass", "result": "bounded"}
+    coordinator = Parallel12Coordinator({
+        "genesis": adapter, "gateone": adapter,
+        "sovereignty-gate": adapter, "risk-engine": adapter,
+    })
+    results = asyncio.run(coordinator.run_stage(
+        stage_id="stage-1-control",
+        task_id="task-1",
+        payload={"intent": "inspect"},
+        authorization=Authorization(),
+        preflight_evidence=PREFLIGHT,
+    ))
+    assert len(results) == 4
+    assert all(result.status == "pass" for result in results)
+    assert called == ["task-1"] * 4
