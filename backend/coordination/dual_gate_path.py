@@ -53,6 +53,11 @@ def authorize_before_route(
     now: int | None = None,
 ) -> GateAuthorizationProof:
     """Gate 1. Verify cryptographic proof and bind it to owner/task/scope."""
+    if not isinstance(owner_id, str) or not owner_id.strip():
+        raise DualGateDenied("expected owner identity is required")
+    if not required_scope or any(not isinstance(item, str) or not item.strip()
+                                 for item in required_scope):
+        raise DualGateDenied("explicit required scope is mandatory")
     try:
         claims = verify_gate_authorization_proof(
             proof,
@@ -72,7 +77,7 @@ def authorize_before_route(
 
 
 def verify_before_release(
-    authorization_proof: str,
+    authorization_proof: str | Mapping[str, Any],
     execution_result: Mapping[str, Any],
     *,
     verification_key: bytes,
@@ -186,7 +191,7 @@ def verify_before_release(
 
 def run_dual_gated(
     *,
-    proof: str,
+    proof: str | Mapping[str, Any],
     verification_key: bytes,
     task_id: str,
     owner_id: str,
