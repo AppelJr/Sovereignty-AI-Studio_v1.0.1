@@ -136,6 +136,11 @@ class ComposedHeavyJudge:
         token_manager: Any = None,
         *,
         council_result: Mapping[str, Any] | None = None,
+        task_id: str | None = None,
+        policy_hash: str | None = None,
+        judge_id: str | None = None,
+        judge_provider_id: str | None = None,
+        source_provider_id: str | None = None,
     ) -> dict[str, Any]:
         del force_judge, token_manager
         if not isinstance(original_output, str) or not original_output.strip():
@@ -145,6 +150,18 @@ class ComposedHeavyJudge:
         ).hexdigest()
         timestamp = datetime.now(timezone.utc).isoformat()
         model_id = str(getattr(self.backend, "model_id", "unknown"))
+        if any(value is not None for value in (
+            task_id, policy_hash, judge_id, judge_provider_id, source_provider_id
+        )):
+            required_bindings = (
+                task_id, policy_hash, judge_id or model_id,
+                judge_provider_id, source_provider_id,
+            )
+            if not all(isinstance(value, str) and value.strip()
+                       for value in required_bindings):
+                raise BackendUnavailable("task, policy, Judge, and provider bindings are required")
+            if judge_provider_id.strip().casefold() == source_provider_id.strip().casefold():
+                raise BackendUnavailable("provider cannot judge its own output")
 
         try:
             raw_model_review = self.backend.evaluate(original_output, str(context))
@@ -232,6 +249,12 @@ class ComposedHeavyJudge:
             "risk_score": risk_score,
             "action": action,
             "output_hash": digest,
+            "candidate_hash": digest,
+            "task_id": task_id,
+            "policy_hash": policy_hash,
+            "judge_id": judge_id or model_id,
+            "judge_provider_id": judge_provider_id,
+            "source_provider_id": source_provider_id,
             "judge_model": model_id,
             "reason": (
                 f"model={model_action}:{model_reason}; "
