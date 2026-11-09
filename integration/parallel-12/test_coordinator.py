@@ -121,3 +121,46 @@ def test_cryptographic_verifier_failure_blocks_stage():
             authorization=Authorization(), preflight_evidence=PREFLIGHT,
         ))
     assert called == []
+
+
+def test_constructor_rejects_unregistered_adapter():
+    with pytest.raises(ValueError, match="unregistered adapter"):
+        Parallel12Coordinator({"unexpected-repo": asyncio.sleep}, lambda _a, _t: True)
+
+
+def test_constructor_rejects_sync_adapter():
+    def sync_adapter(**_kwargs):
+        return {"status": "pass"}
+    with pytest.raises(TypeError, match="async callables"):
+        Parallel12Coordinator({"genesis": sync_adapter}, lambda _a, _t: True)
+
+
+def test_payload_rejects_non_finite_json_values():
+    coordinator = Parallel12Coordinator({}, lambda _a, _t: True)
+    with pytest.raises(ValueError, match="finite JSON"):
+        asyncio.run(coordinator.run_stage(
+            stage_id="stage-1-control", task_id="task-1",
+            payload={"unsafe": float("nan")}, authorization=Authorization(),
+            preflight_evidence=PREFLIGHT,
+        ))
+
+
+def test_each_adapter_receives_isolated_payload_copy():
+    received = []
+    async def adapter(**kwargs):
+        payload = kwargs["payload"]
+        received.append(payload)
+        payload["nested"]["value"] = "mutated"
+        return {"status": "pass"}
+    coordinator = Parallel12Coordinator({
+        "genesis": adapter, "gateone": adapter,
+        "sovereignty-gate": adapter, "risk-engine": adapter,
+    }, lambda auth, task: auth.is_valid_for(task))
+    asyncio.run(coordinator.run_stage(
+        stage_id="stage-1-control", task_id="task-1",
+        payload={"nested": {"value": "original"}},
+        authorization=Authorization(), preflight_evidence=PREFLIGHT,
+    ))
+    assert len(received) == 4
+    assert all(item["nested"]["value"] == "mutated" for item in received)
+    assert len({id(item) for item in received}) == 4
