@@ -55,7 +55,7 @@ def test_model_escalation_never_releases_output(action):
 def test_behavioral_yank_overrides_model_pass():
     judge, _events = make_composed()
     result = judge.review("The password=supersecret value is exposed.")
-    assert result["verdict"]["action"] == "UNAVAILABLE"
+    assert result["verdict"]["action"] == "YANK"
     assert result["final_output"] is None
 
 
