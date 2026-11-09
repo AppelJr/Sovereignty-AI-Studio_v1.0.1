@@ -43,11 +43,28 @@ def load_registry() -> dict[str, Any]:
     stage_ids = {stage["id"] for stage in registry.get("stages", [])}
     if not stage_ids:
         raise ValueError("at least one stage is required")
+    seen_repositories: list[str] = []
+    dependencies = {}
     for stage in registry["stages"]:
-        if not set(stage.get("repositories", [])) <= set(ids):
+        stage_repositories = stage.get("repositories", [])
+        if not set(stage_repositories) <= set(ids):
             raise ValueError(f"unknown repository in stage {stage['id']}")
-        if not set(stage.get("depends_on", [])) <= stage_ids:
+        seen_repositories.extend(stage_repositories)
+        stage_dependencies = set(stage.get("depends_on", []))
+        if not stage_dependencies <= stage_ids:
             raise ValueError(f"unknown stage dependency in {stage['id']}")
+        dependencies[stage["id"]] = stage_dependencies
+    if len(seen_repositories) != len(set(seen_repositories)) or set(seen_repositories) != set(ids):
+        raise ValueError("every repository must appear exactly once across stages")
+    completed: set[str] = set()
+    pending = dict(dependencies)
+    while pending:
+        ready = {key for key, deps in pending.items() if deps <= completed}
+        if not ready:
+            raise ValueError("integration stage dependency cycle detected")
+        completed.update(ready)
+        for key in ready:
+            del pending[key]
     return registry
 
 
