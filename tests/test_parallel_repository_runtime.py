@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import tempfile
 import unittest
+import sys
 from pathlib import Path
 
 import importlib.util
@@ -11,6 +12,7 @@ SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "parallel_repository_
 SPEC = importlib.util.spec_from_file_location("parallel_repository_runtime", SCRIPT)
 assert SPEC and SPEC.loader
 runtime = importlib.util.module_from_spec(SPEC)
+sys.modules[SPEC.name] = runtime
 SPEC.loader.exec_module(runtime)
 
 
