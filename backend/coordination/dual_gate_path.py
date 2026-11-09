@@ -72,17 +72,27 @@ def authorize_before_route(
 
 
 def verify_before_release(
-    proof: GateAuthorizationProof,
+    authorization_proof: str,
     execution_result: Mapping[str, Any],
     *,
+    verification_key: bytes,
     expected_task_id: str,
+    expected_owner_id: str,
+    required_scope: tuple[str, ...],
     evidence_sink: Callable[[dict[str, Any]], Any],
+    now: int | None = None,
     memory_loaded: bool = False,
     network_accessed: bool = False,
 ) -> DualGateReceipt:
-    """Gate 2. Bind exact Judge verdict, output digest, and acknowledged evidence."""
-    if proof.task_id != expected_task_id:
-        raise DualGateDenied("release task does not match authorized task")
+    """Gate 2. Reverify Gate authority, then bind verdict, digest, and evidence."""
+    proof = authorize_before_route(
+        authorization_proof,
+        verification_key=verification_key,
+        task_id=expected_task_id,
+        owner_id=expected_owner_id,
+        required_scope=required_scope,
+        now=now,
+    )
     if str(execution_result.get("status", "")).upper() != "PASS":
         raise DualGateDenied("only Heavy Judge PASS may reach OUTENV")
     output = execution_result.get("output")
@@ -194,6 +204,8 @@ def run_dual_gated(
     )
     result = route_and_judge(claims)
     return verify_before_release(
-        claims, result, expected_task_id=task_id, evidence_sink=evidence_sink,
+        proof, result, verification_key=verification_key,
+        expected_task_id=task_id, expected_owner_id=owner_id,
+        required_scope=required_scope, evidence_sink=evidence_sink, now=now,
         memory_loaded=memory_loaded, network_accessed=network_accessed,
     )
