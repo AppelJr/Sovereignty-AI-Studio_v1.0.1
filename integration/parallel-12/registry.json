@@ -1,0 +1,145 @@
+{
+  "contract": "SOVEREIGNTY_PARALLEL_12/1.0",
+  "policy": {
+    "mode": "offline-first",
+    "network_default": "DENY",
+    "merge": "manual-owner-only",
+    "branch": "integration/parallel-12",
+    "execution": "registered-adapters-only",
+    "authority": "GateOne and Sovereignty-AI-Gate",
+    "router_is_authority": false,
+    "council_is_authority": false
+  },
+  "repositories": [
+    {
+      "id": "studio",
+      "repo": "AppelJr/Sovereignty-AI-Studio_v1.0.1",
+      "type": "integration-host",
+      "default_branch": "Collaboration"
+    },
+    {
+      "id": "gateone",
+      "repo": "AppelJr/gateone",
+      "type": "admission-authority",
+      "default_branch": "main"
+    },
+    {
+      "id": "iso-unc-ai",
+      "repo": "AppelJr/ISO-UNC-AI",
+      "type": "evidence-validator",
+      "default_branch": "main"
+    },
+    {
+      "id": "model-router",
+      "repo": "AppelJr/Grok-4.7-ChatGPT-6.1-Claude-5.5-Skeleton",
+      "type": "bounded-model-router",
+      "default_branch": "main"
+    },
+    {
+      "id": "mldsa-native",
+      "repo": "AppelJr/mldsa-native",
+      "type": "native-pqc-library",
+      "default_branch": "main"
+    },
+    {
+      "id": "sovereignty-gate",
+      "repo": "AppelJr/Sovereignty-AI-Gate",
+      "type": "authorization-contracts",
+      "default_branch": "main"
+    },
+    {
+      "id": "neuralscene-ios",
+      "repo": "AppelJr/NeuralScene-iOS",
+      "type": "ios-evidence-view",
+      "default_branch": "main"
+    },
+    {
+      "id": "cloud-sealer",
+      "repo": "AppelJr/every-cloud-for-everyone",
+      "type": "swift-client-side-sealing",
+      "default_branch": "main"
+    },
+    {
+      "id": "genesis",
+      "repo": "AppelJr/Genesis",
+      "type": "task-origin-router",
+      "default_branch": "main"
+    },
+    {
+      "id": "git-sovereign",
+      "repo": "AppelJr/Git-Sovereign",
+      "type": "governed-git-adapter",
+      "default_branch": "main"
+    },
+    {
+      "id": "devassist420",
+      "repo": "AppelJr/Sovereignty-AI-Gate_DevAssist420",
+      "type": "device-client",
+      "default_branch": "main"
+    },
+    {
+      "id": "risk-engine",
+      "repo": "AppelJr/Sovereignty-Risk-Engine-Runtime-Assurance",
+      "type": "risk-assurance",
+      "default_branch": "main"
+    }
+  ],
+  "stages": [
+    {
+      "id": "stage-1-control",
+      "depends_on": [],
+      "repositories": [
+        "genesis",
+        "gateone",
+        "sovereignty-gate",
+        "risk-engine"
+      ]
+    },
+    {
+      "id": "stage-2-parallel-analysis",
+      "depends_on": [
+        "stage-1-control"
+      ],
+      "repositories": [
+        "model-router",
+        "iso-unc-ai",
+        "mldsa-native"
+      ]
+    },
+    {
+      "id": "stage-3-governed-operations",
+      "depends_on": [
+        "stage-1-control",
+        "stage-2-parallel-analysis"
+      ],
+      "repositories": [
+        "git-sovereign",
+        "cloud-sealer"
+      ]
+    },
+    {
+      "id": "stage-4-clients",
+      "depends_on": [
+        "stage-1-control",
+        "stage-2-parallel-analysis",
+        "stage-3-governed-operations"
+      ],
+      "repositories": [
+        "devassist420",
+        "neuralscene-ios"
+      ]
+    },
+    {
+      "id": "stage-5-studio-integration",
+      "depends_on": [
+        "stage-1-control",
+        "stage-2-parallel-analysis",
+        "stage-3-governed-operations",
+        "stage-4-clients"
+      ],
+      "repositories": [
+        "studio"
+      ]
+    }
+  ]
+}
