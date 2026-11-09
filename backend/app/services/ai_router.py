@@ -133,7 +133,7 @@ class AIRouter:
             "event_hash": "sha256:" + hashlib.sha256(canonical).hexdigest(),
         }
         try:
-            self._evidence_sink(normalized)
+            return self._evidence_sink(normalized)
         except Exception as exc:
             raise RuntimeError("Mandatory SCAR evidence append failed; output withheld") from exc
 
