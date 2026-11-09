@@ -69,7 +69,8 @@ def valid_result(output="approved"):
             "candidate_hash": digest,
             "output_hash": digest,
             "judge_id": "heavy-judge-v1",
-            "judge_provider_id": "anthropic",
+            "judge_provider_id": "sovereign-local-judge",
+            "contributing_provider_ids": ["xai", "openai", "anthropic"],
         },
     }
 
