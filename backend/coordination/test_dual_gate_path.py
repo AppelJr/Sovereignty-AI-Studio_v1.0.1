@@ -80,7 +80,8 @@ def acknowledged(event):
         event_type=event["what"],
         task_id=event["task_id"],
         event_id="test-event-1",
-        event_hash="sha256:test-event",
+        event_hash="a".repeat(64),
+        signature="test-signature",
         sequence=0,
     )
 
