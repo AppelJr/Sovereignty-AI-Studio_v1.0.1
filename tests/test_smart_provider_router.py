@@ -104,7 +104,8 @@ def invoke(router, *, proof=None, evidence=None):
             event_type=event["what"],
             task_id=event["task_id"],
             event_id="test-release-event",
-            event_hash="sha256:test-release-event",
+            event_hash="a" * 64,
+            signature="test-signature",
             sequence=0,
         )
 
