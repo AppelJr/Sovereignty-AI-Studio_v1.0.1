@@ -61,16 +61,22 @@ def council(action="PASS", payload=None):
     if action != "PASS":
         votes["grok"] = action
     payload = payload or {}
+    candidate = payload.get("candidate", "Rayleigh scattering explains the blue sky.")
     return {
         "action": action,
         "votes": votes,
-        "candidate": payload.get("candidate", "Rayleigh scattering explains the blue sky."),
-        "source_provider_id": payload.get("source_provider_id", "xai"),
+        "candidate": candidate,
+        "source_provider_id": "council:aggregate",
+        "proposals": {
+            "grok": {"provider_id": "xai", "candidate": candidate, "vote": votes["grok"]},
+            "gpt_codex": {"provider_id": "openai", "candidate": candidate, "vote": votes["gpt_codex"]},
+            "claude": {"provider_id": "anthropic", "candidate": candidate, "vote": votes["claude"]},
+        },
     }
 
 
 def make_router(model_action="PASS", council_action="PASS", events=None,
-                judge_provider_id="anthropic"):
+                judge_provider_id="sovereign-local-judge"):
     audit = events if events is not None else []
     behavioral = HeavyJudge(evidence_sink=audit.append)
     judge = ComposedHeavyJudge(
