@@ -97,7 +97,8 @@ def make_router(providers, *, action="PASS", evidence=None, memory_loaded=False,
             event_type=event["event"],
             task_id=event["task_id"],
             event_id=f"test-event-{len(judge_events) + 1}",
-            event_hash=event["event_hash"],
+            event_hash="a" * 64,
+            signature="test-signature",
             sequence=len(judge_events),
         )
 
