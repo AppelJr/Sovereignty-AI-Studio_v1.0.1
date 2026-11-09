@@ -189,7 +189,7 @@ class ComposedHeavyJudge:
                 "when": timestamp,
                 "where": "sovereign_core.judge_composition",
                 "why": "model review unavailable or malformed",
-                "how": "model backend failure defaults to YANK",
+                "how": "model backend unavailable produces UNAVAILABLE hold",
                 "authorization": "not_authorized_by_judge",
                 "memory_loaded": "UNKNOWN",
                 "network_accessed": "UNKNOWN",
@@ -226,12 +226,12 @@ class ComposedHeavyJudge:
             if not 0.0 <= risk_score <= 1.0:
                 raise ValueError("behavioral risk_score outside [0, 1]")
         except Exception as exc:
-            behavioral_action = "YANK"
+            behavioral_action = "UNAVAILABLE"
             risk_score = 1.0
             behavioral_verdict = {
                 "timestamp": timestamp, "risk_score": 1.0, "action": "UNAVAILABLE",
                 "output_hash": digest, "signature": None, "context": str(context),
-                "judge_model": "behavioral-judge", "reason": type(exc).__name__,
+                "judge_model": "behavioral-judge", "reason": "behavioral evaluator unavailable",
             }
 
         action = max(
