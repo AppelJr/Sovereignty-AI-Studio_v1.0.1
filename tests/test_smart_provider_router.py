@@ -131,6 +131,9 @@ def test_router_releases_only_after_composed_judge_and_both_gates():
     result = invoke(router, evidence=events.append)
     assert result["status"] == "PASS"
     assert result["used_judge"] is True
+    assert result["evidence_receipt"]["event_type"] == "OUTENV_RELEASE_AUTHORIZED"
+    assert result["evidence_receipt"]["task_id"] == "task-1"
+    assert result["evidence_receipt"]["signature"]
     assert result["output_hash"] == (
         "sha3-512:" + hashlib.sha3_512(result["output"].encode("utf-8")).hexdigest()
     )
