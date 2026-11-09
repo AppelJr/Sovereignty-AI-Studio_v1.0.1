@@ -29,7 +29,8 @@ from sovereign_core.judge_composition import ComposedHeavyJudge
 
 logger = logging.getLogger(__name__)
 PROVIDER_ORDER = ["xai", "anthropic", "openai"]
-REQUIRED_COUNCIL_LANES = frozenset({"grok", "gpt_codex", "claude"})
+COUNCIL_LANES = ("grok", "gpt_codex", "claude")
+REQUIRED_COUNCIL_LANES = frozenset(COUNCIL_LANES)
 VALID_COUNCIL_ACTIONS = frozenset({"PASS", "REWRITE", "YANK"})
 
 
@@ -302,7 +303,7 @@ class AIRouter:
             if not isinstance(proposals, Mapping) or not REQUIRED_COUNCIL_LANES.issubset(proposals):
                 raise RuntimeError("Council must provide Grok, GPT/Codex, and Claude proposals")
             proposal_provider_ids = []
-            for lane in REQUIRED_COUNCIL_LANES:
+            for lane in COUNCIL_LANES:
                 proposal = proposals[lane]
                 if not isinstance(proposal, Mapping):
                     raise RuntimeError(f"Council proposal for {lane} is malformed")
