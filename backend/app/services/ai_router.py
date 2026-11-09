@@ -410,6 +410,14 @@ class AIRouter:
                 "authorization_policy_hash": receipt.authorization_policy_hash,
                 "output_hash": receipt.output_hash,
                 "release_status": receipt.release_status,
+                "evidence_receipt": {
+                    "event_type": receipt.evidence_receipt.event_type,
+                    "task_id": receipt.evidence_receipt.task_id,
+                    "event_id": receipt.evidence_receipt.event_id,
+                    "event_hash": receipt.evidence_receipt.event_hash,
+                    "signature": receipt.evidence_receipt.signature,
+                    "sequence": receipt.evidence_receipt.sequence,
+                },
             }
             if errors:
                 result["fallback_from"] = errors
