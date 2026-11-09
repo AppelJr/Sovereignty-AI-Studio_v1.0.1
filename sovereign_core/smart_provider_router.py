@@ -17,7 +17,8 @@ from backend.coordination.dual_gate_path import run_dual_gated
 from sovereign_core.judge_composition import ComposedHeavyJudge
 
 COST_TIERS = {"xai": 1.0, "anthropic": 1.8, "openai": 2.2}
-REQUIRED_COUNCIL_LANES = frozenset({"grok", "gpt_codex", "claude"})
+COUNCIL_LANES = ("grok", "gpt_codex", "claude")
+REQUIRED_COUNCIL_LANES = frozenset(COUNCIL_LANES)
 VALID_COUNCIL_ACTIONS = frozenset({"PASS", "REWRITE", "YANK"})
 
 
@@ -180,7 +181,7 @@ class SmartProviderRouter:
             if not isinstance(proposals, Mapping) or not REQUIRED_COUNCIL_LANES.issubset(proposals):
                 raise RuntimeError("Council must provide all three attributable lane proposals")
             proposal_provider_ids = []
-            for lane in REQUIRED_COUNCIL_LANES:
+            for lane in COUNCIL_LANES:
                 proposal = proposals[lane]
                 if not isinstance(proposal, Mapping):
                     raise RuntimeError(f"Council proposal for {lane} is malformed")
@@ -196,7 +197,7 @@ class SmartProviderRouter:
                 proposal_provider_ids.append(provider_id.strip())
             if len({item.casefold() for item in proposal_provider_ids}) != len(REQUIRED_COUNCIL_LANES):
                 raise RuntimeError("Council lanes must have distinct provider identities")
-            for lane in REQUIRED_COUNCIL_LANES:
+            for lane in COUNCIL_LANES:
                 if str(votes[lane]).upper() != str(proposals[lane]["vote"]).upper():
                     raise RuntimeError(f"Council vote/proposal mismatch for {lane}")
             routed_proposal = next((item for item in proposals.values()
