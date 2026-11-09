@@ -92,3 +92,15 @@ def test_later_stage_requires_prior_stage_pass():
             authorization=Authorization(),
             preflight_evidence=PREFLIGHT,
         ))
+
+
+def test_registry_rejects_stage_dependency_cycle(monkeypatch, tmp_path):
+    import json
+    import coordinator as module
+    registry = load_registry()
+    registry["stages"][0]["depends_on"] = ["stage-5-studio-integration"]
+    path = tmp_path / "registry.json"
+    path.write_text(json.dumps(registry), encoding="utf-8")
+    monkeypatch.setattr(module, "REGISTRY_PATH", path)
+    with pytest.raises(ValueError, match="cycle"):
+        module.load_registry()
