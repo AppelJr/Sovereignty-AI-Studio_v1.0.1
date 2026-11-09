@@ -75,7 +75,7 @@ def validate_preflight(evidence: Mapping[str, Any]) -> None:
 
 
 def _digest(value: Any) -> str:
-    canonical = json.dumps(value, sort_keys=True, separators=(",", ":"), default=str)
+    canonical = json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False)
     return hashlib.sha256(canonical.encode()).hexdigest()
 
 
@@ -88,6 +88,19 @@ class Parallel12Coordinator:
         if not callable(authorization_verifier):
             raise TypeError("cryptographic authorization verifier is required")
         self.registry = load_registry()
+        if not isinstance(adapters, Mapping):
+            raise TypeError("adapters must be a mapping")
+        known_ids = {item["id"] for item in self.registry["repositories"]}
+        unknown = set(adapters) - known_ids
+        if unknown:
+            raise ValueError("unregistered adapter IDs: " + ",".join(sorted(unknown)))
+        invalid = [
+            adapter_id for adapter_id, adapter in adapters.items()
+            if not isinstance(adapter_id, str) or not adapter_id
+            or not callable(adapter) or not asyncio.iscoroutinefunction(adapter)
+        ]
+        if invalid:
+            raise TypeError("adapters must be named async callables: " + ",".join(map(str, invalid)))
         self.adapters = dict(adapters)
         self.authorization_verifier = authorization_verifier
         self.completed_stages: set[str] = set()
@@ -114,6 +127,14 @@ class Parallel12Coordinator:
         if missing_dependencies:
             raise RuntimeError("stage dependencies incomplete: " + ",".join(sorted(missing_dependencies)))
 
+        # Validate once, then give each concurrent adapter an isolated JSON value.
+        # This prevents shared nested objects from becoming a cross-adapter write channel.
+        try:
+            canonical_payload = json.dumps(
+                payload, sort_keys=True, separators=(",", ":"), allow_nan=False
+            )
+        except (TypeError, ValueError) as exc:
+            raise ValueError("payload must contain finite JSON values only") from exc
         requested = list(stage["repositories"])
         missing = [repo_id for repo_id in requested if repo_id not in self.adapters]
         if missing:
@@ -122,12 +143,16 @@ class Parallel12Coordinator:
         async def invoke(repo_id: str) -> AdapterResult:
             result = await self.adapters[repo_id](
                 task_id=task_id,
-                payload=dict(payload),
+                payload=json.loads(canonical_payload),
                 authorization=authorization,
             )
             if not isinstance(result, Mapping) or result.get("status") != "pass":
                 return AdapterResult(repo_id, "failed", reason_code="ADAPTER_DID_NOT_PASS")
-            return AdapterResult(repo_id, "pass", _digest(result))
+            try:
+                evidence_digest = _digest(result)
+            except (TypeError, ValueError):
+                return AdapterResult(repo_id, "failed", reason_code="ADAPTER_RESULT_NOT_CANONICAL_JSON")
+            return AdapterResult(repo_id, "pass", evidence_digest)
 
         tasks = [asyncio.create_task(invoke(repo_id)) for repo_id in requested]
         try:
