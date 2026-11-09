@@ -55,6 +55,9 @@ class SmartProviderRouter:
             raise TypeError("a configured ComposedHeavyJudge is mandatory; no legacy bypass")
         if not isinstance(judge_provider_id, str) or not judge_provider_id.strip():
             raise ValueError("an independent Judge provider identity is mandatory")
+        backend_provider_id = getattr(judge.backend, "provider_id", None)
+        if not isinstance(backend_provider_id, str) or backend_provider_id != judge_provider_id:
+            raise ValueError("Judge provider identity must match the injected Judge backend")
         self.judge_provider_id = judge_provider_id.strip()
         self.token_manager = token_manager
         self.config = token_manager.config
