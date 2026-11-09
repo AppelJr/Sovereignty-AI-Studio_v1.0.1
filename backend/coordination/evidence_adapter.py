@@ -63,6 +63,7 @@ class SCARLedgerSink:
             task_id=str(event["task_id"]),
             event_id=appended.event_id,
             event_hash=appended.event_hash,
+            signature=appended.signature,
             sequence=appended.sequence,
         )
 
