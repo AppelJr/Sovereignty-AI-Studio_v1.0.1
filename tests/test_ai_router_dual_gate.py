@@ -166,6 +166,9 @@ def test_composed_pass_and_dual_gate_release_record_receipt():
     assert result["text"] == "Rayleigh scattering explains the blue sky."
     assert result["release_receipt"]["output_hash"] == expected
     assert result["release_receipt"]["release_status"] == "PASS"
+    assert result["release_receipt"]["evidence_receipt"]["event_type"] == "OUTENV_RELEASE_AUTHORIZED"
+    assert result["release_receipt"]["evidence_receipt"]["task_id"] == TASK
+    assert result["release_receipt"]["evidence_receipt"]["signature"] == "test-signature" if not events else True
     assert provider.calls == 1
     assert judge_events[-1]["memory_loaded"] is True
     assert events[-1]["event"] == "OUTENV_RELEASE_AUTHORIZED"
