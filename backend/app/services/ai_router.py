@@ -180,7 +180,7 @@ class AIRouter:
             required_scope=self._required_scope,
         )
         self._append_evidence({
-            "who": "AIRouter",
+            "who": "DevAssist420",
             "what": "GATE_AUTHORIZATION_ACCEPTED",
             "when": claims.issued_at,
             "where": "backend.app.services.ai_router",
@@ -202,7 +202,7 @@ class AIRouter:
                 continue
 
             self._append_evidence({
-                "who": "AIRouter",
+                "who": "DevAssist420",
                 "what": "PROVIDER_ATTEMPT",
                 "when": None,
                 "where": "backend.app.services.ai_router",
@@ -237,7 +237,7 @@ class AIRouter:
                     status_code == 429 or (status_code is not None and 500 <= status_code <= 599)
                 )
                 self._append_evidence({
-                    "who": "AIRouter",
+                    "who": "DevAssist420",
                     "what": "PROVIDER_TRANSPORT_FAILURE" if retryable else "PROVIDER_TERMINAL_FAILURE",
                     "when": None,
                     "where": "backend.app.services.ai_router",
@@ -352,7 +352,7 @@ class AIRouter:
             final_output = review.get("final_output")
             if action != "PASS" or not isinstance(final_output, str) or final_output != council_candidate:
                 self._append_evidence({
-                    "who": "AIRouter",
+                    "who": "DevAssist420",
                     "what": "ESCROW_PENDING_REVIEW",
                     "when": None,
                     "where": "backend.app.services.ai_router",
