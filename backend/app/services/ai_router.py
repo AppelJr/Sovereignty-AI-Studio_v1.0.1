@@ -49,6 +49,8 @@ class AIRouter:
         self._owner_id: str | None = None
         self._required_scope: tuple[str, ...] = ()
         self._evidence_sink = None
+        self._council_adapter = None
+        self._judge_provider_id: str | None = None
         if providers is None:
             self._init_providers()
 
@@ -77,6 +79,8 @@ class AIRouter:
         owner_id: str,
         required_scope: tuple[str, ...],
         evidence_sink,
+        council_adapter,
+        judge_provider_id: str,
     ) -> None:
         """Bind governance only after canonical owner/device startup validation."""
         if not isinstance(judge, ComposedHeavyJudge):
@@ -89,8 +93,14 @@ class AIRouter:
             raise ValueError("required_scope must contain explicit non-empty capabilities")
         if not callable(evidence_sink):
             raise TypeError("mandatory SCAR evidence_sink is required")
+        if not callable(council_adapter):
+            raise TypeError("a Council aggregation adapter is mandatory")
+        if not isinstance(judge_provider_id, str) or not judge_provider_id.strip():
+            raise ValueError("an independent Judge provider identity is mandatory")
 
         self.judge = judge
+        self._council_adapter = council_adapter
+        self._judge_provider_id = judge_provider_id.strip()
         self._verification_key = authorization_verification_key
         self._owner_id = owner_id
         self._required_scope = tuple(required_scope)
@@ -260,14 +270,46 @@ class AIRouter:
                     f"Provider {provider_name} returned empty output; output withheld"
                 )
 
+            # Council is the only path from provider proposals into the Judge.
+            if not callable(self._council_adapter):
+                raise RuntimeError("Council adapter is unavailable; output withheld")
+            council = self._council_adapter({
+                "task_id": task_id,
+                "owner_id": claims.owner_id,
+                "request": prompt,
+                "candidate": candidate,
+                "source_provider_id": provider_name,
+                "context": context,
+            })
+            if not isinstance(council, Mapping):
+                raise RuntimeError("Council returned an invalid aggregation; output withheld")
+            council_action = str(council.get("action", "")).upper()
+            council_candidate = council.get("candidate")
+            source_provider_id = council.get("source_provider_id")
+            if council_action not in {"PASS", "REWRITE", "YANK"}:
+                raise RuntimeError("Council aggregate action is missing or invalid; output withheld")
+            if not isinstance(council_candidate, str) or not council_candidate.strip():
+                raise RuntimeError("Council did not provide a consolidated candidate; output withheld")
+            if not isinstance(source_provider_id, str) or not source_provider_id.strip():
+                raise RuntimeError("Council source-provider identity is missing; output withheld")
+
             # Judge/evidence failures are terminal: never send the same task to another provider.
-            review = self.judge.review(candidate, context)
+            review = self.judge.review(
+                council_candidate,
+                context,
+                council_result={"action": council_action, **dict(council)},
+                task_id=task_id,
+                policy_hash=claims.policy_hash,
+                judge_id=str(getattr(self.judge.backend, "model_id", "")),
+                judge_provider_id=self._judge_provider_id,
+                source_provider_id=source_provider_id,
+            )
             verdict = review.get("verdict")
             if not isinstance(verdict, Mapping):
                 raise RuntimeError("ComposedHeavyJudge returned a malformed verdict; output withheld")
             action = str(verdict.get("action", "")).upper()
             final_output = review.get("final_output")
-            if action != "PASS" or not isinstance(final_output, str) or final_output != candidate:
+            if action != "PASS" or not isinstance(final_output, str) or final_output != council_candidate:
                 self._append_evidence({
                     "who": "AIRouter",
                     "what": "ESCROW_PENDING_REVIEW",
@@ -283,6 +325,10 @@ class AIRouter:
                     "task_id": task_id,
                     "provider": provider_name,
                     "output_hash": verdict.get("output_hash"),
+                    "candidate_hash": verdict.get("candidate_hash"),
+                    "policy_hash": claims.policy_hash,
+                    "judge_id": verdict.get("judge_id"),
+                    "source_provider_id": source_provider_id,
                 })
                 raise OutputWithheldError(
                     f"HeavyJudge action {action or 'UNKNOWN'}; provider output withheld"
@@ -300,6 +346,8 @@ class AIRouter:
                     "status": "PASS",
                     "output": final_output,
                     "output_hash": output_hash,
+                    "judge_verdict": dict(verdict),
+                    "source_provider_id": source_provider_id,
                 },
                 expected_task_id=task_id,
                 evidence_sink=self._append_evidence,
