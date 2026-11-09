@@ -105,11 +105,19 @@ def verify_before_release(
     judge_id = verdict.get("judge_id")
     judge_provider_id = verdict.get("judge_provider_id")
     source_provider_id = execution_result.get("source_provider_id")
+    contributors = verdict.get("contributing_provider_ids")
     if not all(isinstance(value, str) and value.strip()
                for value in (judge_id, judge_provider_id, source_provider_id)):
         raise ReleaseIntegrityError("Judge and source-provider identities are required")
-    if judge_provider_id.strip().casefold() == source_provider_id.strip().casefold():
-        raise ReleaseIntegrityError("provider cannot judge its own output")
+    if not isinstance(contributors, (list, tuple)) or not contributors:
+        raise ReleaseIntegrityError("Council contributor identities are required")
+    if any(not isinstance(value, str) or not value.strip() for value in contributors):
+        raise ReleaseIntegrityError("Council contributor identity is malformed")
+    contributor_ids = {value.strip().casefold() for value in contributors}
+    if source_provider_id.strip().casefold() not in contributor_ids and source_provider_id != "council:aggregate":
+        raise ReleaseIntegrityError("candidate source is not bound to Council contributors")
+    if judge_provider_id.strip().casefold() in contributor_ids:
+        raise ReleaseIntegrityError("provider cannot judge its own or a contributing lane's output")
     if not callable(evidence_sink):
         raise ReleaseIntegrityError("mandatory release evidence sink is unavailable")
 
@@ -132,6 +140,7 @@ def verify_before_release(
         "judge_id": judge_id,
         "judge_provider_id": judge_provider_id,
         "source_provider_id": source_provider_id,
+        "contributing_provider_ids": list(contributors),
     }
     try:
         append_receipt = evidence_sink(event)
