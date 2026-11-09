@@ -12,9 +12,9 @@ import hashlib
 import os
 from typing import Any, Callable, Literal, Mapping, Protocol, Sequence
 
-Action = Literal["PASS", "REWRITE", "YANK", "COUNCIL"]
-ACTIONS = frozenset({"PASS", "REWRITE", "YANK", "COUNCIL"})
-SEVERITY = {"PASS": 0, "REWRITE": 1, "COUNCIL": 2, "YANK": 3}
+Action = Literal["PASS", "REWRITE", "YANK", "UNAVAILABLE", "COUNCIL"]
+ACTIONS = frozenset({"PASS", "REWRITE", "YANK", "UNAVAILABLE", "COUNCIL"})
+SEVERITY = {"PASS": 0, "REWRITE": 1, "COUNCIL": 2, "YANK": 3, "UNAVAILABLE": 4}
 
 
 class JudgeCompositionError(RuntimeError):
@@ -194,7 +194,7 @@ class ComposedHeavyJudge:
                 "memory_loaded": "UNKNOWN",
                 "network_accessed": "UNKNOWN",
                 "files_changed": [],
-                "result": "YANK",
+                "result": "UNAVAILABLE",
                 "output_hash": digest,
                 "model_id": model_id,
                 "error_type": type(exc).__name__,
@@ -202,11 +202,11 @@ class ComposedHeavyJudge:
             return {
                 "final_output": None,
                 "verdict": {
-                    "timestamp": timestamp, "risk_score": 1.0, "action": "YANK",
+                    "timestamp": timestamp, "risk_score": 1.0, "action": "UNAVAILABLE",
                     "output_hash": digest, "signature": None, "context": str(context),
-                    "judge_model": model_id, "reason": "model backend failure",
+                    "judge_model": model_id, "reason": "model backend unavailable",
                 },
-                "model_review": {"action": "YANK", "reason": "model backend failure"},
+                "model_review": {"action": "UNAVAILABLE", "reason": "model backend unavailable"},
             }
 
         try:
@@ -229,7 +229,7 @@ class ComposedHeavyJudge:
             behavioral_action = "YANK"
             risk_score = 1.0
             behavioral_verdict = {
-                "timestamp": timestamp, "risk_score": 1.0, "action": "YANK",
+                "timestamp": timestamp, "risk_score": 1.0, "action": "UNAVAILABLE",
                 "output_hash": digest, "signature": None, "context": str(context),
                 "judge_model": "behavioral-judge", "reason": type(exc).__name__,
             }
