@@ -16,6 +16,7 @@ KEY = b"router-composition-test-key"
 
 class Backend:
     model_id = "fixture-judge"
+    provider_id = "sovereign-local-judge"
 
     def __init__(self, action: str = "PASS"):
         self.action = action
@@ -79,8 +80,10 @@ def make_router(model_action="PASS", council_action="PASS", events=None,
                 judge_provider_id="sovereign-local-judge"):
     audit = events if events is not None else []
     behavioral = HeavyJudge(evidence_sink=audit.append)
+    backend = Backend(model_action)
+    backend.provider_id = judge_provider_id
     judge = ComposedHeavyJudge(
-        backend=Backend(model_action),
+        backend=backend,
         behavioral_judge=behavioral,
         evidence_sink=audit.append,
     )
