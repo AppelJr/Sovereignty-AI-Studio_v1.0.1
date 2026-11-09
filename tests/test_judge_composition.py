@@ -80,7 +80,7 @@ def test_unbound_backend_builder_is_rejected():
 def test_backend_unavailable_holds_and_never_returns_candidate():
     judge, events = make_composed(backend_fail=True)
     result = judge.review("Candidate must never escape.")
-    assert result["verdict"]["action"] == "YANK"
+    assert result["verdict"]["action"] == "UNAVAILABLE"
     assert result["final_output"] is None
     assert events[-1]["what"] == "JUDGE_BACKEND_FAILURE"
 
