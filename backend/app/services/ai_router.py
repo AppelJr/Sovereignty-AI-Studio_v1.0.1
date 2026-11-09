@@ -289,6 +289,9 @@ class AIRouter:
             council_candidate = council.get("candidate")
             source_provider_id = council.get("source_provider_id")
             proposals = council.get("proposals")
+            votes = council.get("votes")
+            if not isinstance(votes, Mapping) or not REQUIRED_COUNCIL_LANES.issubset(votes):
+                raise RuntimeError("Council must provide all three lane votes")
             if council_action not in VALID_COUNCIL_ACTIONS:
                 raise RuntimeError("Council aggregate action is missing or invalid; output withheld")
             if not isinstance(council_candidate, str) or not council_candidate.strip():
@@ -309,11 +312,17 @@ class AIRouter:
                     raise RuntimeError(f"Council candidate missing for {lane}")
                 if vote not in VALID_COUNCIL_ACTIONS:
                     raise RuntimeError(f"Council vote invalid for {lane}")
+                if str(votes[lane]).upper() != vote:
+                    raise RuntimeError(f"Council vote/proposal mismatch for {lane}")
                 proposal_provider_ids.append(provider_id.strip())
             if len({item.casefold() for item in proposal_provider_ids}) != len(REQUIRED_COUNCIL_LANES):
                 raise RuntimeError("Council lanes must have distinct provider identities")
             if not isinstance(source_provider_id, str) or not source_provider_id.strip():
                 raise RuntimeError("Council source-provider identity is missing; output withheld")
+            routed_proposal = next((item for item in proposals.values()
+                                    if item["provider_id"].casefold() == provider_name.casefold()), None)
+            if routed_proposal is None or routed_proposal["candidate"] != candidate:
+                raise RuntimeError("Council omitted or altered the routed provider proposal")
             if source_provider_id != "council:aggregate":
                 selected = next((item for item in proposals.values()
                                  if item["provider_id"].casefold() == source_provider_id.casefold()), None)
