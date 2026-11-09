@@ -31,6 +31,7 @@ class Root:
 
 class ModelBackend:
     model_id = "fixture-heavy-judge"
+    provider_id = "sovereign-local-judge"
 
     def __init__(self, action: str = "PASS", *, memory_loaded: bool = False,
                  network_accessed: bool = False):
@@ -78,11 +79,13 @@ def make_router(providers, *, action="PASS", evidence=None, memory_loaded=False,
                 judge_network_accessed=False, judge_provider_id="sovereign-local-judge",
                 council_adapter=None):
     judge_events = []
+    backend = ModelBackend(
+        action, memory_loaded=memory_loaded,
+        network_accessed=judge_network_accessed,
+    )
+    backend.provider_id = judge_provider_id
     judge = ComposedHeavyJudge(
-        backend=ModelBackend(
-            action, memory_loaded=memory_loaded,
-            network_accessed=judge_network_accessed,
-        ),
+        backend=backend,
         behavioral_judge=HeavyJudge(),
         evidence_sink=judge_events.append,
     )
