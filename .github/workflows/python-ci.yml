@@ -45,6 +45,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           python3 -m pytest -q \
+            backend/coordination/test_dual_gate_path.py \
             tests/test_heavy_judge_gate.py \
             tests/test_judge_composition.py \
             tests/test_smart_provider_router.py \

@@ -10,11 +10,11 @@ from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 import hashlib
 import os
-from typing import Any, Callable, Literal, Mapping, Protocol
+from typing import Any, Callable, Literal, Mapping, Protocol, Sequence
 
-Action = Literal["PASS", "REWRITE", "YANK", "COUNCIL"]
-ACTIONS = frozenset({"PASS", "REWRITE", "YANK", "COUNCIL"})
-SEVERITY = {"PASS": 0, "REWRITE": 1, "COUNCIL": 2, "YANK": 3}
+Action = Literal["PASS", "REWRITE", "YANK", "UNAVAILABLE", "COUNCIL"]
+ACTIONS = frozenset({"PASS", "REWRITE", "YANK", "UNAVAILABLE", "COUNCIL"})
+SEVERITY = {"PASS": 0, "REWRITE": 1, "COUNCIL": 2, "YANK": 3, "UNAVAILABLE": 4}
 
 
 class JudgeCompositionError(RuntimeError):
@@ -35,9 +35,10 @@ class EvidenceUnavailable(JudgeCompositionError):
 
 class ModelReviewBackend(Protocol):
     model_id: str
+    provider_id: str
 
     def evaluate(self, candidate: str, context: str) -> Mapping[str, Any]:
-        """Return an advisory action: PASS, REWRITE, YANK, or COUNCIL."""
+        """Return an advisory action: PASS, REWRITE, YANK, UNAVAILABLE, or COUNCIL."""
 
 
 BackendBuilder = Callable[[str], ModelReviewBackend]
@@ -136,6 +137,12 @@ class ComposedHeavyJudge:
         token_manager: Any = None,
         *,
         council_result: Mapping[str, Any] | None = None,
+        task_id: str | None = None,
+        policy_hash: str | None = None,
+        judge_id: str | None = None,
+        judge_provider_id: str | None = None,
+        source_provider_id: str | None = None,
+        contributing_provider_ids: Sequence[str] | None = None,
     ) -> dict[str, Any]:
         del force_judge, token_manager
         if not isinstance(original_output, str) or not original_output.strip():
@@ -145,6 +152,29 @@ class ComposedHeavyJudge:
         ).hexdigest()
         timestamp = datetime.now(timezone.utc).isoformat()
         model_id = str(getattr(self.backend, "model_id", "unknown"))
+        if any(value is not None for value in (
+            task_id, policy_hash, judge_id, judge_provider_id, source_provider_id
+        )):
+            required_bindings = (
+                task_id, policy_hash, judge_id or model_id,
+                judge_provider_id, source_provider_id,
+            )
+            if not all(isinstance(value, str) and value.strip()
+                       for value in required_bindings):
+                raise BackendUnavailable("task, policy, Judge, and provider bindings are required")
+            backend_model_id = getattr(self.backend, "model_id", None)
+            backend_provider_id = getattr(self.backend, "provider_id", None)
+            if judge_id != backend_model_id:
+                raise BackendUnavailable("Judge model identity does not match configured backend")
+            if judge_provider_id != backend_provider_id:
+                raise BackendUnavailable("Judge provider identity does not match configured backend")
+            contributors = tuple(contributing_provider_ids or (source_provider_id,))
+            if not contributors or any(not isinstance(value, str) or not value.strip()
+                                       for value in contributors):
+                raise BackendUnavailable("Council contributor identities are required")
+            judge_provider_key = judge_provider_id.strip().casefold()
+            if judge_provider_key in {value.strip().casefold() for value in contributors}:
+                raise BackendUnavailable("provider cannot judge its own or a contributing lane's output")
 
         try:
             raw_model_review = self.backend.evaluate(original_output, str(context))
@@ -166,12 +196,12 @@ class ComposedHeavyJudge:
                 "when": timestamp,
                 "where": "sovereign_core.judge_composition",
                 "why": "model review unavailable or malformed",
-                "how": "model backend failure defaults to YANK",
+                "how": "model backend unavailable produces UNAVAILABLE hold",
                 "authorization": "not_authorized_by_judge",
                 "memory_loaded": "UNKNOWN",
                 "network_accessed": "UNKNOWN",
                 "files_changed": [],
-                "result": "YANK",
+                "result": "UNAVAILABLE",
                 "output_hash": digest,
                 "model_id": model_id,
                 "error_type": type(exc).__name__,
@@ -179,11 +209,11 @@ class ComposedHeavyJudge:
             return {
                 "final_output": None,
                 "verdict": {
-                    "timestamp": timestamp, "risk_score": 1.0, "action": "YANK",
+                    "timestamp": timestamp, "risk_score": 1.0, "action": "UNAVAILABLE",
                     "output_hash": digest, "signature": None, "context": str(context),
-                    "judge_model": model_id, "reason": "model backend failure",
+                    "judge_model": model_id, "reason": "model backend unavailable",
                 },
-                "model_review": {"action": "YANK", "reason": "model backend failure"},
+                "model_review": {"action": "UNAVAILABLE", "reason": "model backend unavailable"},
             }
 
         try:
@@ -203,12 +233,12 @@ class ComposedHeavyJudge:
             if not 0.0 <= risk_score <= 1.0:
                 raise ValueError("behavioral risk_score outside [0, 1]")
         except Exception as exc:
-            behavioral_action = "YANK"
+            behavioral_action = "UNAVAILABLE"
             risk_score = 1.0
             behavioral_verdict = {
-                "timestamp": timestamp, "risk_score": 1.0, "action": "YANK",
+                "timestamp": timestamp, "risk_score": 1.0, "action": "UNAVAILABLE",
                 "output_hash": digest, "signature": None, "context": str(context),
-                "judge_model": "behavioral-judge", "reason": type(exc).__name__,
+                "judge_model": "behavioral-judge", "reason": "behavioral evaluator unavailable",
             }
 
         action = max(
@@ -232,6 +262,13 @@ class ComposedHeavyJudge:
             "risk_score": risk_score,
             "action": action,
             "output_hash": digest,
+            "candidate_hash": digest,
+            "task_id": task_id,
+            "policy_hash": policy_hash,
+            "judge_id": judge_id or model_id,
+            "judge_provider_id": judge_provider_id,
+            "source_provider_id": source_provider_id,
+            "contributing_provider_ids": list(contributing_provider_ids or (source_provider_id,)),
             "judge_model": model_id,
             "reason": (
                 f"model={model_action}:{model_reason}; "

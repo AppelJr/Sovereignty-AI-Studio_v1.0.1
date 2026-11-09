@@ -29,6 +29,9 @@ from sovereign_core.judge_composition import ComposedHeavyJudge
 
 logger = logging.getLogger(__name__)
 PROVIDER_ORDER = ["xai", "anthropic", "openai"]
+COUNCIL_LANES = ("grok", "gpt_codex", "claude")
+REQUIRED_COUNCIL_LANES = frozenset(COUNCIL_LANES)
+VALID_COUNCIL_ACTIONS = frozenset({"PASS", "REWRITE", "YANK"})
 
 
 class OutputWithheldError(PermissionError):
@@ -49,6 +52,8 @@ class AIRouter:
         self._owner_id: str | None = None
         self._required_scope: tuple[str, ...] = ()
         self._evidence_sink = None
+        self._council_adapter = None
+        self._judge_provider_id: str | None = None
         if providers is None:
             self._init_providers()
 
@@ -77,6 +82,8 @@ class AIRouter:
         owner_id: str,
         required_scope: tuple[str, ...],
         evidence_sink,
+        council_adapter,
+        judge_provider_id: str,
     ) -> None:
         """Bind governance only after canonical owner/device startup validation."""
         if not isinstance(judge, ComposedHeavyJudge):
@@ -89,8 +96,17 @@ class AIRouter:
             raise ValueError("required_scope must contain explicit non-empty capabilities")
         if not callable(evidence_sink):
             raise TypeError("mandatory SCAR evidence_sink is required")
+        if not callable(council_adapter):
+            raise TypeError("a Council aggregation adapter is mandatory")
+        if not isinstance(judge_provider_id, str) or not judge_provider_id.strip():
+            raise ValueError("an independent Judge provider identity is mandatory")
+        backend_provider_id = getattr(judge.backend, "provider_id", None)
+        if not isinstance(backend_provider_id, str) or backend_provider_id != judge_provider_id:
+            raise ValueError("Judge provider identity must match the injected Judge backend")
 
         self.judge = judge
+        self._council_adapter = council_adapter
+        self._judge_provider_id = judge_provider_id.strip()
         self._verification_key = authorization_verification_key
         self._owner_id = owner_id
         self._required_scope = tuple(required_scope)
@@ -121,7 +137,7 @@ class AIRouter:
             "event_hash": "sha256:" + hashlib.sha256(canonical).hexdigest(),
         }
         try:
-            self._evidence_sink(normalized)
+            return self._evidence_sink(normalized)
         except Exception as exc:
             raise RuntimeError("Mandatory SCAR evidence append failed; output withheld") from exc
 
@@ -164,7 +180,7 @@ class AIRouter:
             required_scope=self._required_scope,
         )
         self._append_evidence({
-            "who": "AIRouter",
+            "who": "DevAssist420",
             "what": "GATE_AUTHORIZATION_ACCEPTED",
             "when": claims.issued_at,
             "where": "backend.app.services.ai_router",
@@ -186,7 +202,7 @@ class AIRouter:
                 continue
 
             self._append_evidence({
-                "who": "AIRouter",
+                "who": "DevAssist420",
                 "what": "PROVIDER_ATTEMPT",
                 "when": None,
                 "where": "backend.app.services.ai_router",
@@ -221,7 +237,7 @@ class AIRouter:
                     status_code == 429 or (status_code is not None and 500 <= status_code <= 599)
                 )
                 self._append_evidence({
-                    "who": "AIRouter",
+                    "who": "DevAssist420",
                     "what": "PROVIDER_TRANSPORT_FAILURE" if retryable else "PROVIDER_TERMINAL_FAILURE",
                     "when": None,
                     "where": "backend.app.services.ai_router",
@@ -260,16 +276,83 @@ class AIRouter:
                     f"Provider {provider_name} returned empty output; output withheld"
                 )
 
+            # Council is the only path from provider proposals into the Judge.
+            if not callable(self._council_adapter):
+                raise RuntimeError("Council adapter is unavailable; output withheld")
+            council = self._council_adapter({
+                "task_id": task_id,
+                "owner_id": claims.owner_id,
+                "request": prompt,
+                "candidate": candidate,
+                "source_provider_id": provider_name,
+                "context": context,
+            })
+            if not isinstance(council, Mapping):
+                raise RuntimeError("Council returned an invalid aggregation; output withheld")
+            council_action = str(council.get("action", "")).upper()
+            council_candidate = council.get("candidate")
+            source_provider_id = council.get("source_provider_id")
+            proposals = council.get("proposals")
+            votes = council.get("votes")
+            if not isinstance(votes, Mapping) or not REQUIRED_COUNCIL_LANES.issubset(votes):
+                raise RuntimeError("Council must provide all three lane votes")
+            if council_action not in VALID_COUNCIL_ACTIONS:
+                raise RuntimeError("Council aggregate action is missing or invalid; output withheld")
+            if not isinstance(council_candidate, str) or not council_candidate.strip():
+                raise RuntimeError("Council did not provide a consolidated candidate; output withheld")
+            if not isinstance(proposals, Mapping) or not REQUIRED_COUNCIL_LANES.issubset(proposals):
+                raise RuntimeError("Council must provide Grok, GPT/Codex, and Claude proposals")
+            proposal_provider_ids = []
+            for lane in COUNCIL_LANES:
+                proposal = proposals[lane]
+                if not isinstance(proposal, Mapping):
+                    raise RuntimeError(f"Council proposal for {lane} is malformed")
+                provider_id = proposal.get("provider_id")
+                proposal_text = proposal.get("candidate")
+                vote = str(proposal.get("vote", "")).upper()
+                if not isinstance(provider_id, str) or not provider_id.strip():
+                    raise RuntimeError(f"Council provider identity missing for {lane}")
+                if not isinstance(proposal_text, str) or not proposal_text.strip():
+                    raise RuntimeError(f"Council candidate missing for {lane}")
+                if vote not in VALID_COUNCIL_ACTIONS:
+                    raise RuntimeError(f"Council vote invalid for {lane}")
+                if str(votes[lane]).upper() != vote:
+                    raise RuntimeError(f"Council vote/proposal mismatch for {lane}")
+                proposal_provider_ids.append(provider_id.strip())
+            if len({item.casefold() for item in proposal_provider_ids}) != len(REQUIRED_COUNCIL_LANES):
+                raise RuntimeError("Council lanes must have distinct provider identities")
+            if not isinstance(source_provider_id, str) or not source_provider_id.strip():
+                raise RuntimeError("Council source-provider identity is missing; output withheld")
+            routed_proposal = next((item for item in proposals.values()
+                                    if item["provider_id"].casefold() == provider_name.casefold()), None)
+            if routed_proposal is None or routed_proposal["candidate"] != candidate:
+                raise RuntimeError("Council omitted or altered the routed provider proposal")
+            if source_provider_id != "council:aggregate":
+                selected = next((item for item in proposals.values()
+                                 if item["provider_id"].casefold() == source_provider_id.casefold()), None)
+                if selected is None or selected["candidate"] != council_candidate:
+                    raise RuntimeError("Council candidate/source binding mismatch")
+
             # Judge/evidence failures are terminal: never send the same task to another provider.
-            review = self.judge.review(candidate, context)
+            review = self.judge.review(
+                council_candidate,
+                context,
+                council_result={"action": council_action, **dict(council)},
+                task_id=task_id,
+                policy_hash=claims.policy_hash,
+                judge_id=str(getattr(self.judge.backend, "model_id", "")),
+                judge_provider_id=self._judge_provider_id,
+                source_provider_id=source_provider_id,
+                contributing_provider_ids=proposal_provider_ids,
+            )
             verdict = review.get("verdict")
             if not isinstance(verdict, Mapping):
                 raise RuntimeError("ComposedHeavyJudge returned a malformed verdict; output withheld")
             action = str(verdict.get("action", "")).upper()
             final_output = review.get("final_output")
-            if action != "PASS" or not isinstance(final_output, str) or final_output != candidate:
+            if action != "PASS" or not isinstance(final_output, str) or final_output != council_candidate:
                 self._append_evidence({
-                    "who": "AIRouter",
+                    "who": "DevAssist420",
                     "what": "ESCROW_PENDING_REVIEW",
                     "when": None,
                     "where": "backend.app.services.ai_router",
@@ -283,6 +366,10 @@ class AIRouter:
                     "task_id": task_id,
                     "provider": provider_name,
                     "output_hash": verdict.get("output_hash"),
+                    "candidate_hash": verdict.get("candidate_hash"),
+                    "policy_hash": claims.policy_hash,
+                    "judge_id": verdict.get("judge_id"),
+                    "source_provider_id": source_provider_id,
                 })
                 raise OutputWithheldError(
                     f"HeavyJudge action {action or 'UNKNOWN'}; provider output withheld"
@@ -295,13 +382,18 @@ class AIRouter:
             output_hash = verdict.get("output_hash")
             # Gate 2 verifies the exact output digest and commits evidence before release.
             receipt = verify_before_release(
-                claims,
+                authorization_proof,
                 {
                     "status": "PASS",
                     "output": final_output,
                     "output_hash": output_hash,
+                    "judge_verdict": dict(verdict),
+                    "source_provider_id": source_provider_id,
                 },
+                verification_key=self._verification_key,
                 expected_task_id=task_id,
+                expected_owner_id=self._owner_id,
+                required_scope=self._required_scope,
                 evidence_sink=self._append_evidence,
                 memory_loaded=memory_loaded,
                 # This router's configured providers are remote APIs; the call used the network.
@@ -319,6 +411,14 @@ class AIRouter:
                 "authorization_policy_hash": receipt.authorization_policy_hash,
                 "output_hash": receipt.output_hash,
                 "release_status": receipt.release_status,
+                "evidence_receipt": {
+                    "event_type": receipt.evidence_receipt.event_type,
+                    "task_id": receipt.evidence_receipt.task_id,
+                    "event_id": receipt.evidence_receipt.event_id,
+                    "event_hash": receipt.evidence_receipt.event_hash,
+                    "signature": receipt.evidence_receipt.signature,
+                    "sequence": receipt.evidence_receipt.sequence,
+                },
             }
             if errors:
                 result["fallback_from"] = errors
