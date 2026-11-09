@@ -35,6 +35,7 @@ class EvidenceUnavailable(JudgeCompositionError):
 
 class ModelReviewBackend(Protocol):
     model_id: str
+    provider_id: str
 
     def evaluate(self, candidate: str, context: str) -> Mapping[str, Any]:
         """Return an advisory action: PASS, REWRITE, YANK, or COUNCIL."""
