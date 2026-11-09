@@ -300,4 +300,12 @@ class SmartProviderRouter:
             "authorization_proof_id": receipt.authorization_proof_id,
             "policy_hash": receipt.authorization_policy_hash,
             "used_judge": True,
+            "evidence_receipt": {
+                "event_type": receipt.evidence_receipt.event_type,
+                "task_id": receipt.evidence_receipt.task_id,
+                "event_id": receipt.evidence_receipt.event_id,
+                "event_hash": receipt.evidence_receipt.event_hash,
+                "signature": receipt.evidence_receipt.signature,
+                "sequence": receipt.evidence_receipt.sequence,
+            },
         }
