@@ -5,8 +5,8 @@ import pytest
 
 from backend.coordination.authorization_proof import issue_gate_authorization_proof
 from backend.coordination.dual_gate_path import (
-    DualGateDenied, ReleaseIntegrityError, authorize_before_route,
-    verify_before_release,
+    DualGateDenied, EvidenceAppendReceipt, ReleaseIntegrityError,
+    authorize_before_route, verify_before_release,
 )
 
 KEY = b"test-only-key"
@@ -55,13 +55,75 @@ def test_gate_two_rejects_digest_mismatch():
         )
 
 
+def valid_result(output="approved"):
+    digest = "sha3-512:" + hashlib.sha3_512(output.encode()).hexdigest()
+    return {
+        "status": "PASS",
+        "output": output,
+        "output_hash": digest,
+        "source_provider_id": "xai",
+        "judge_verdict": {
+            "action": "PASS",
+            "task_id": "task-1",
+            "policy_hash": "sha256:policy",
+            "candidate_hash": digest,
+            "output_hash": digest,
+            "judge_id": "heavy-judge-v1",
+            "judge_provider_id": "anthropic",
+        },
+    }
+
+
+def acknowledged(event):
+    return EvidenceAppendReceipt(
+        event_type=event["what"],
+        task_id=event["task_id"],
+        event_id="test-event-1",
+        event_hash="sha256:test-event",
+        sequence=0,
+    )
+
+
 def test_gate_two_requires_evidence_before_release():
-    output = "approved"
-    result = {"status": "PASS", "output": output,
-              "output_hash": "sha3-512:" + hashlib.sha3_512(output.encode()).hexdigest()}
     def fail(_event):
         raise OSError("ledger unavailable")
     with pytest.raises(ReleaseIntegrityError, match="evidence append failed"):
         verify_before_release(
-            claims(), result, expected_task_id="task-1", evidence_sink=fail,
+            claims(), valid_result(), expected_task_id="task-1", evidence_sink=fail,
         )
+
+
+def test_gate_two_rejects_stale_candidate_verdict():
+    result = valid_result("changed after review")
+    result["judge_verdict"]["candidate_hash"] = "sha3-512:stale"
+    with pytest.raises(ReleaseIntegrityError, match="candidate hash"):
+        verify_before_release(
+            claims(), result, expected_task_id="task-1", evidence_sink=acknowledged,
+        )
+
+
+def test_gate_two_rejects_provider_self_judging():
+    result = valid_result()
+    result["judge_verdict"]["judge_provider_id"] = "xai"
+    with pytest.raises(ReleaseIntegrityError, match="cannot judge its own"):
+        verify_before_release(
+            claims(), result, expected_task_id="task-1", evidence_sink=acknowledged,
+        )
+
+
+def test_gate_two_rejects_unacknowledged_evidence():
+    with pytest.raises(ReleaseIntegrityError, match="no verifiable append receipt"):
+        verify_before_release(
+            claims(), valid_result(), expected_task_id="task-1",
+            evidence_sink=lambda _event: None,
+        )
+
+
+def test_gate_two_releases_only_after_bound_evidence_receipt():
+    receipt = verify_before_release(
+        claims(), valid_result(), expected_task_id="task-1",
+        evidence_sink=acknowledged,
+    )
+    assert receipt.release_status == "PASS"
+    assert receipt.evidence_receipt.event_type == "OUTENV_RELEASE_AUTHORIZED"
+    assert receipt.evidence_receipt.task_id == "task-1"
