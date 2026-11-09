@@ -58,15 +58,19 @@ test('lane calls do not expose another lane memory namespace', async () => {
   assert.equal(captured.transport.mode, 'LOCAL');
 });
 
-test('denies remote mode without explicit egress allow', async () => {
+test('rejects remote mode without explicit egress allow', () => {
   const f = fixture();
   f.transportPolicies['pipe-01'] = { mode: 'HYBRID', allow_external: false, allowed_hosts: ['api.example.test'] };
+  assert.throws(() => createCompanyPipeRegistry(f), /LANE_TRANSPORT_POLICY_INVALID:pipe-01/);
+});
+
+test('permits remote policy only with explicit allow and host allowlist', () => {
+  const f = fixture();
+  f.transportPolicies['pipe-01'] = {
+    mode: 'HYBRID', allow_external: true, allowed_hosts: ['api.example.test']
+  };
   const registry = createCompanyPipeRegistry(f);
-  const result = await registry.get('pipe-01').call({
-    requestId: 'req-2', actorId: 'owner', prompt: 'test'
-  });
-  assert.equal(result.ok, false);
-  assert.match(result.reason, /EXPLICIT_EGRESS_POLICY_REQUIRED/);
+  assert.equal(registry.get('pipe-01').state, 'BOUND');
 });
 
 test('SCAR failure invalidates successful provider response', async () => {
