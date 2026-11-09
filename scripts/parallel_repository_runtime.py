@@ -44,6 +44,11 @@ def load_manifest() -> dict[str, Any]:
 
 def dependency_layers(repositories: list[dict[str, Any]]) -> list[list[str]]:
     pending = {r["id"]: set(r.get("depends_on", [])) for r in repositories}
+    known = set(pending)
+    for repo_id, dependencies in pending.items():
+        unknown = dependencies - known
+        if unknown:
+            raise ValueError(f"unknown dependency {sorted(unknown)[0]!r} for {repo_id}")
     layers: list[list[str]] = []
     completed: set[str] = set()
     while pending:
