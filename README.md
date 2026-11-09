@@ -92,6 +92,10 @@ Compatibility launchers remain aliases; they are not additional runtime owners. 
 - **Hawking channel:** one local-first encrypted channel boundary with explicit trust verification.
 - **Repository registry:** provider-neutral, symmetric integration metadata for participating repositories.
 
+## Parallel repository integration
+
+The twelve-repository integration registry and offline dependency planner are documented in [Parallel Repository Integration](docs/PARALLEL_REPOSITORY_INTEGRATION.md). Run `python3 scripts/parallel_repository_runtime.py` to inspect local checkouts and dependency layers. This is a non-executing preflight; adapters remain blocked until their contracts and tests are implemented.
+
 ## Development checks
 
 ```bash

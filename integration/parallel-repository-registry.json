@@ -1,0 +1,236 @@
+{
+  "schema_version": "1.0",
+  "contract": "SOVEREIGNTY_PARALLEL_REPOSITORY_RUNTIME/1.0",
+  "status": "DECLARED_ADAPTERS_UNBOUND",
+  "runtime_mode": "LOCAL",
+  "network_policy": "offline-by-default; no remote calls during discovery or preflight",
+  "workspace_env": "SOVEREIGNTY_WORKSPACE",
+  "default_workspace": "~/Sovereignty",
+  "studio_root_env": "SOVEREIGNTY_STUDIO_ROOT",
+  "concurrency": "DAG dependency levels; peers within a level may run concurrently after authorization",
+  "repositories": [
+    {
+      "id": "studio",
+      "repository": "AppelJr/Sovereignty-AI-Studio_v1.0.1",
+      "local_path": ".",
+      "role": "integration_host",
+      "execution_type": "host",
+      "required_at_startup": true,
+      "parallel_group": "control",
+      "depends_on": [],
+      "adapter_status": "HOST_IMPLEMENTATION",
+      "capabilities": [
+        "dashboard",
+        "bridge",
+        "coordinator"
+      ]
+    },
+    {
+      "id": "genesis",
+      "repository": "AppelJr/Genesis",
+      "local_path": "Genesis",
+      "role": "event_origin_router",
+      "execution_type": "event_router",
+      "required_at_startup": true,
+      "parallel_group": "control",
+      "depends_on": [
+        "studio"
+      ],
+      "adapter_status": "UNBOUND",
+      "capabilities": [
+        "task_envelope",
+        "route_event",
+        "provenance_origin"
+      ]
+    },
+    {
+      "id": "gateone",
+      "repository": "AppelJr/gateone",
+      "local_path": "gateone",
+      "role": "admission_gateway",
+      "execution_type": "authority_service",
+      "required_at_startup": true,
+      "parallel_group": "control",
+      "depends_on": [
+        "genesis"
+      ],
+      "adapter_status": "UNBOUND",
+      "capabilities": [
+        "admission",
+        "policy_gate"
+      ]
+    },
+    {
+      "id": "sovereignty-ai-gate",
+      "repository": "AppelJr/Sovereignty-AI-Gate",
+      "local_path": "Sovereignty-AI-Gate",
+      "role": "identity_authorization_evidence",
+      "execution_type": "authority_service",
+      "required_at_startup": true,
+      "parallel_group": "control",
+      "depends_on": [
+        "gateone"
+      ],
+      "adapter_status": "UNBOUND",
+      "capabilities": [
+        "identity",
+        "authorization",
+        "capabilities",
+        "scar"
+      ]
+    },
+    {
+      "id": "risk-engine",
+      "repository": "AppelJr/Sovereignty-Risk-Engine-Runtime-Assurance",
+      "local_path": "Sovereignty-Risk-Engine-Runtime-Assurance",
+      "role": "risk_assurance",
+      "execution_type": "assurance_engine",
+      "required_at_startup": true,
+      "parallel_group": "control",
+      "depends_on": [
+        "sovereignty-ai-gate"
+      ],
+      "adapter_status": "UNBOUND",
+      "capabilities": [
+        "risk_evaluation",
+        "runtime_assurance",
+        "idempotency",
+        "evidence"
+      ]
+    },
+    {
+      "id": "model-router",
+      "repository": "AppelJr/Grok-4.7-ChatGPT-6.1-Claude-5.5-Skeleton",
+      "local_path": "Grok-4.7-ChatGPT-6.1-Claude-5.5-Skeleton",
+      "role": "provider_neutral_model_router",
+      "execution_type": "router",
+      "required_at_startup": true,
+      "parallel_group": "workers",
+      "depends_on": [
+        "genesis",
+        "gateone",
+        "sovereignty-ai-gate",
+        "risk-engine"
+      ],
+      "adapter_status": "UNBOUND",
+      "capabilities": [
+        "model_fanout",
+        "task_envelope",
+        "judge_candidate"
+      ]
+    },
+    {
+      "id": "iso-unc-ai",
+      "repository": "AppelJr/ISO-UNC-AI",
+      "local_path": "ISO-UNC-AI",
+      "role": "independent_system_validator",
+      "execution_type": "validator",
+      "required_at_startup": false,
+      "parallel_group": "workers",
+      "depends_on": [
+        "sovereignty-ai-gate",
+        "risk-engine"
+      ],
+      "adapter_status": "UNBOUND",
+      "capabilities": [
+        "compliance_validation",
+        "evidence_validation"
+      ]
+    },
+    {
+      "id": "mldsa-native",
+      "repository": "AppelJr/mldsa-native",
+      "local_path": "mldsa-native",
+      "role": "post_quantum_signature_primitive",
+      "execution_type": "native_library",
+      "required_at_startup": false,
+      "parallel_group": "crypto",
+      "depends_on": [],
+      "adapter_status": "UNBOUND",
+      "capabilities": [
+        "ml-dsa",
+        "fips-204"
+      ],
+      "integration_constraint": "Build and link through a reviewed native adapter; do not load arbitrary binaries."
+    },
+    {
+      "id": "git-sovereign",
+      "repository": "AppelJr/Git-Sovereign",
+      "local_path": "Git-Sovereign",
+      "role": "governed_git_execution",
+      "execution_type": "git_adapter",
+      "required_at_startup": false,
+      "parallel_group": "workers",
+      "depends_on": [
+        "sovereignty-ai-gate",
+        "risk-engine"
+      ],
+      "adapter_status": "UNBOUND",
+      "capabilities": [
+        "repository_inspection",
+        "branch_operations",
+        "evidence_binding"
+      ],
+      "integration_constraint": "No push, merge, or protected-branch mutation without a separate explicit capability and approval."
+    },
+    {
+      "id": "every-cloud-for-everyone",
+      "repository": "AppelJr/every-cloud-for-everyone",
+      "local_path": "every-cloud-for-everyone",
+      "role": "client_side_cloud_encryption",
+      "execution_type": "swift_library",
+      "required_at_startup": false,
+      "parallel_group": "workers",
+      "depends_on": [
+        "sovereignty-ai-gate",
+        "risk-engine",
+        "mldsa-native"
+      ],
+      "adapter_status": "UNBOUND",
+      "capabilities": [
+        "client_side_encryption",
+        "transport_policy"
+      ],
+      "integration_constraint": "No cloud upload, sync, or provider connection in LOCAL mode."
+    },
+    {
+      "id": "neuralscene-ios",
+      "repository": "AppelJr/NeuralScene-iOS",
+      "local_path": "NeuralScene-iOS",
+      "role": "verified_ios_visualization",
+      "execution_type": "ios_application",
+      "required_at_startup": false,
+      "parallel_group": "consumers",
+      "depends_on": [
+        "sovereignty-ai-gate",
+        "risk-engine"
+      ],
+      "adapter_status": "UNBOUND",
+      "capabilities": [
+        "metal_rendering",
+        "verified_output_display"
+      ],
+      "integration_constraint": "Build and device execution require macOS/Xcode and physical-device validation."
+    },
+    {
+      "id": "devassist420",
+      "repository": "AppelJr/Sovereignty-AI-Gate_DevAssist420",
+      "local_path": "Sovereignty-AI-Gate_DevAssist420",
+      "role": "device_assistant_client",
+      "execution_type": "client",
+      "required_at_startup": false,
+      "parallel_group": "consumers",
+      "depends_on": [
+        "sovereignty-ai-gate",
+        "risk-engine"
+      ],
+      "adapter_status": "UNBOUND",
+      "capabilities": [
+        "assistant_ui",
+        "voice_ui",
+        "developer_ui"
+      ],
+      "integration_constraint": "Client cannot grant authority; all actions pass through Gate."
+    }
+  ]
+}

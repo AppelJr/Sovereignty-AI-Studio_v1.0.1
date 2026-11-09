@@ -1,47 +1,168 @@
 {
-  "schema_version": "1.0",
+  "schema_version": "2.0",
   "workspace_env": "SOVEREIGNTY_WORKSPACE",
   "default_workspace": "~/Sovereignty",
   "repositories": [
     {
-      "id": "devassist420",
-      "name": "DevAssist420",
-      "remote": "https://github.com/Appel420/DevAssist420.git",
-      "relative_path": "DevAssist420",
-      "role": "device-client",
-      "required": false
-    },
-    {
       "id": "studio",
-      "name": "Sovereignty-AI-Studio",
-      "remote": "https://github.com/Appel420/Sovereignty-AI-Studio.git",
-      "relative_path": "Sovereignty-AI-Studio",
-      "role": "integration-host",
-      "required": true
+      "name": "Sovereignty-AI-Studio_v1.0.1",
+      "remote": "https://github.com/AppelJr/Sovereignty-AI-Studio_v1.0.1.git",
+      "relative_path": ".",
+      "role": "integration_host",
+      "required": true,
+      "execution_type": "host",
+      "parallel_group": "control",
+      "depends_on": []
     },
     {
-      "id": "gate",
+      "id": "genesis",
+      "name": "Genesis",
+      "remote": "https://github.com/AppelJr/Genesis.git",
+      "relative_path": "Genesis",
+      "role": "event_origin_router",
+      "required": true,
+      "execution_type": "event_router",
+      "parallel_group": "control",
+      "depends_on": [
+        "studio"
+      ]
+    },
+    {
+      "id": "gateone",
+      "name": "gateone",
+      "remote": "https://github.com/AppelJr/gateone.git",
+      "relative_path": "gateone",
+      "role": "admission_gateway",
+      "required": true,
+      "execution_type": "authority_service",
+      "parallel_group": "control",
+      "depends_on": [
+        "genesis"
+      ]
+    },
+    {
+      "id": "sovereignty-ai-gate",
       "name": "Sovereignty-AI-Gate",
-      "remote": "https://github.com/Appel420/Sovereignty-AI-Gate.git",
+      "remote": "https://github.com/AppelJr/Sovereignty-AI-Gate.git",
       "relative_path": "Sovereignty-AI-Gate",
-      "role": "authority-policy-evidence",
-      "required": true
+      "role": "identity_authorization_evidence",
+      "required": true,
+      "execution_type": "authority_service",
+      "parallel_group": "control",
+      "depends_on": [
+        "gateone"
+      ]
     },
     {
       "id": "risk-engine",
       "name": "Sovereignty-Risk-Engine-Runtime-Assurance",
-      "remote": "https://github.com/Appel420/Sovereignty-Risk-Engine-Runtime-Assurance.git",
+      "remote": "https://github.com/AppelJr/Sovereignty-Risk-Engine-Runtime-Assurance.git",
       "relative_path": "Sovereignty-Risk-Engine-Runtime-Assurance",
-      "role": "runtime-assurance",
-      "required": true
+      "role": "risk_assurance",
+      "required": true,
+      "execution_type": "assurance_engine",
+      "parallel_group": "control",
+      "depends_on": [
+        "sovereignty-ai-gate"
+      ]
     },
     {
-      "id": "skeleton",
-      "name": "SuperGrok-Heavy-4-2-Skeleton",
-      "remote": "https://github.com/Sovereignty-One/SuperGrok-Heavy-4-2-Skeleton.git",
-      "relative_path": "SuperGrok-Heavy-4-2-Skeleton",
-      "role": "reference-skeleton",
-      "required": false
+      "id": "model-router",
+      "name": "Grok-4.7-ChatGPT-6.1-Claude-5.5-Skeleton",
+      "remote": "https://github.com/AppelJr/Grok-4.7-ChatGPT-6.1-Claude-5.5-Skeleton.git",
+      "relative_path": "Grok-4.7-ChatGPT-6.1-Claude-5.5-Skeleton",
+      "role": "provider_neutral_model_router",
+      "required": true,
+      "execution_type": "router",
+      "parallel_group": "workers",
+      "depends_on": [
+        "genesis",
+        "gateone",
+        "sovereignty-ai-gate",
+        "risk-engine"
+      ]
+    },
+    {
+      "id": "iso-unc-ai",
+      "name": "ISO-UNC-AI",
+      "remote": "https://github.com/AppelJr/ISO-UNC-AI.git",
+      "relative_path": "ISO-UNC-AI",
+      "role": "independent_system_validator",
+      "required": false,
+      "execution_type": "validator",
+      "parallel_group": "workers",
+      "depends_on": [
+        "sovereignty-ai-gate",
+        "risk-engine"
+      ]
+    },
+    {
+      "id": "mldsa-native",
+      "name": "mldsa-native",
+      "remote": "https://github.com/AppelJr/mldsa-native.git",
+      "relative_path": "mldsa-native",
+      "role": "post_quantum_signature_primitive",
+      "required": false,
+      "execution_type": "native_library",
+      "parallel_group": "crypto",
+      "depends_on": []
+    },
+    {
+      "id": "git-sovereign",
+      "name": "Git-Sovereign",
+      "remote": "https://github.com/AppelJr/Git-Sovereign.git",
+      "relative_path": "Git-Sovereign",
+      "role": "governed_git_execution",
+      "required": false,
+      "execution_type": "git_adapter",
+      "parallel_group": "workers",
+      "depends_on": [
+        "sovereignty-ai-gate",
+        "risk-engine"
+      ]
+    },
+    {
+      "id": "every-cloud-for-everyone",
+      "name": "every-cloud-for-everyone",
+      "remote": "https://github.com/AppelJr/every-cloud-for-everyone.git",
+      "relative_path": "every-cloud-for-everyone",
+      "role": "client_side_cloud_encryption",
+      "required": false,
+      "execution_type": "swift_library",
+      "parallel_group": "workers",
+      "depends_on": [
+        "sovereignty-ai-gate",
+        "risk-engine",
+        "mldsa-native"
+      ]
+    },
+    {
+      "id": "neuralscene-ios",
+      "name": "NeuralScene-iOS",
+      "remote": "https://github.com/AppelJr/NeuralScene-iOS.git",
+      "relative_path": "NeuralScene-iOS",
+      "role": "verified_ios_visualization",
+      "required": false,
+      "execution_type": "ios_application",
+      "parallel_group": "consumers",
+      "depends_on": [
+        "sovereignty-ai-gate",
+        "risk-engine"
+      ]
+    },
+    {
+      "id": "devassist420",
+      "name": "Sovereignty-AI-Gate_DevAssist420",
+      "remote": "https://github.com/AppelJr/Sovereignty-AI-Gate_DevAssist420.git",
+      "relative_path": "Sovereignty-AI-Gate_DevAssist420",
+      "role": "device_assistant_client",
+      "required": false,
+      "execution_type": "client",
+      "parallel_group": "consumers",
+      "depends_on": [
+        "sovereignty-ai-gate",
+        "risk-engine"
+      ]
     }
   ]
 }
