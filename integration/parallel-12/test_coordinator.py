@@ -80,3 +80,15 @@ def test_parallel_stage_runs_all_registered_adapters():
     assert len(results) == 4
     assert all(result.status == "pass" for result in results)
     assert called == ["task-1"] * 4
+
+
+def test_later_stage_requires_prior_stage_pass():
+    coordinator = Parallel12Coordinator({})
+    with pytest.raises(RuntimeError, match="dependencies incomplete"):
+        asyncio.run(coordinator.run_stage(
+            stage_id="stage-2-parallel-analysis",
+            task_id="task-1",
+            payload={},
+            authorization=Authorization(),
+            preflight_evidence=PREFLIGHT,
+        ))
