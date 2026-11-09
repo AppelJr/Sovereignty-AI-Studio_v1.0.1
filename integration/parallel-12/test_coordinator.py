@@ -69,7 +69,7 @@ def test_parallel_stage_runs_all_registered_adapters():
     coordinator = Parallel12Coordinator({
         "genesis": adapter, "gateone": adapter,
         "sovereignty-gate": adapter, "risk-engine": adapter,
-    })
+    }, authorization_verifier=lambda auth, task: auth.is_valid_for(task))
     results = asyncio.run(coordinator.run_stage(
         stage_id="stage-1-control",
         task_id="task-1",
@@ -83,7 +83,7 @@ def test_parallel_stage_runs_all_registered_adapters():
 
 
 def test_later_stage_requires_prior_stage_pass():
-    coordinator = Parallel12Coordinator({})
+    coordinator = Parallel12Coordinator({}, authorization_verifier=lambda _auth, _task: True)
     with pytest.raises(RuntimeError, match="dependencies incomplete"):
         asyncio.run(coordinator.run_stage(
             stage_id="stage-2-parallel-analysis",
