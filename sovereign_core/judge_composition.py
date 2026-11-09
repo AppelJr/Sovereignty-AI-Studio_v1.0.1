@@ -161,6 +161,12 @@ class ComposedHeavyJudge:
             if not all(isinstance(value, str) and value.strip()
                        for value in required_bindings):
                 raise BackendUnavailable("task, policy, Judge, and provider bindings are required")
+            backend_model_id = getattr(self.backend, "model_id", None)
+            backend_provider_id = getattr(self.backend, "provider_id", None)
+            if judge_id != backend_model_id:
+                raise BackendUnavailable("Judge model identity does not match configured backend")
+            if judge_provider_id != backend_provider_id:
+                raise BackendUnavailable("Judge provider identity does not match configured backend")
             contributors = tuple(contributing_provider_ids or (source_provider_id,))
             if not contributors or any(not isinstance(value, str) or not value.strip()
                                        for value in contributors):
