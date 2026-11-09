@@ -66,6 +66,7 @@ class Parallel12Coordinator:
     def __init__(self, adapters: Mapping[str, Callable[..., Awaitable[Mapping[str, Any]]]]) -> None:
         self.registry = load_registry()
         self.adapters = dict(adapters)
+        self.completed_stages: set[str] = set()
 
     async def run_stage(
         self,
@@ -82,6 +83,10 @@ class Parallel12Coordinator:
         stage = next((item for item in self.registry["stages"] if item["id"] == stage_id), None)
         if stage is None:
             raise ValueError("unknown integration stage")
+
+        missing_dependencies = set(stage.get("depends_on", [])) - self.completed_stages
+        if missing_dependencies:
+            raise RuntimeError("stage dependencies incomplete: " + ",".join(sorted(missing_dependencies)))
 
         requested = list(stage["repositories"])
         missing = [repo_id for repo_id in requested if repo_id not in self.adapters]
@@ -107,4 +112,7 @@ class Parallel12Coordinator:
                     task.cancel()
             await asyncio.gather(*tasks, return_exceptions=True)
             raise
+        if any(result.status != "pass" for result in results):
+            return results
+        self.completed_stages.add(stage_id)
         return results
