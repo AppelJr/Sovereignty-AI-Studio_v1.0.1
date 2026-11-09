@@ -150,11 +150,36 @@ class SmartProviderRouter:
                 raise RuntimeError("Council aggregate action is missing or unsupported")
 
             council_candidate = council.get("candidate")
-            source_provider_id = council.get("source_provider_id", decision.provider)
+            source_provider_id = council.get("source_provider_id")
+            proposals = council.get("proposals")
             if not isinstance(council_candidate, str) or not council_candidate.strip():
                 raise RuntimeError("Council did not provide a consolidated candidate")
+            if not isinstance(proposals, Mapping) or not REQUIRED_COUNCIL_LANES.issubset(proposals):
+                raise RuntimeError("Council must provide all three attributable lane proposals")
+            proposal_provider_ids = []
+            for lane in REQUIRED_COUNCIL_LANES:
+                proposal = proposals[lane]
+                if not isinstance(proposal, Mapping):
+                    raise RuntimeError(f"Council proposal for {lane} is malformed")
+                provider_id = proposal.get("provider_id")
+                proposal_text = proposal.get("candidate")
+                vote = str(proposal.get("vote", "")).upper()
+                if not isinstance(provider_id, str) or not provider_id.strip():
+                    raise RuntimeError(f"Council provider identity missing for {lane}")
+                if not isinstance(proposal_text, str) or not proposal_text.strip():
+                    raise RuntimeError(f"Council candidate missing for {lane}")
+                if vote not in VALID_COUNCIL_ACTIONS:
+                    raise RuntimeError(f"Council vote invalid for {lane}")
+                proposal_provider_ids.append(provider_id.strip())
+            if len({item.casefold() for item in proposal_provider_ids}) != len(REQUIRED_COUNCIL_LANES):
+                raise RuntimeError("Council lanes must have distinct provider identities")
             if not isinstance(source_provider_id, str) or not source_provider_id.strip():
                 raise RuntimeError("Council source-provider identity is missing")
+            if source_provider_id != "council:aggregate":
+                selected = next((item for item in proposals.values()
+                                 if item["provider_id"].casefold() == source_provider_id.casefold()), None)
+                if selected is None or selected["candidate"] != council_candidate:
+                    raise RuntimeError("Council candidate/source binding mismatch")
             judged = self.judge.review(
                 original_output=council_candidate,
                 context=context,
@@ -165,6 +190,7 @@ class SmartProviderRouter:
                 judge_id=str(getattr(self.judge.backend, "model_id", "")),
                 judge_provider_id=self.judge_provider_id,
                 source_provider_id=source_provider_id,
+                contributing_provider_ids=proposal_provider_ids,
             )
             if not isinstance(judged, Mapping):
                 raise RuntimeError("ComposedHeavyJudge returned invalid result")
