@@ -106,6 +106,20 @@ def test_gate_two_requires_evidence_before_release():
         release(valid_result(), fail)
 
 
+def test_gate_two_rejects_verdict_policy_mismatch():
+    result = valid_result()
+    result["judge_verdict"]["policy_hash"] = "sha256:wrong-policy"
+    with pytest.raises(ReleaseIntegrityError, match="policy_hash mismatch"):
+        release(result, acknowledged)
+
+
+def test_gate_two_rejects_verdict_task_mismatch():
+    result = valid_result()
+    result["judge_verdict"]["task_id"] = "other-task"
+    with pytest.raises(ReleaseIntegrityError, match="task_id mismatch"):
+        release(result, acknowledged)
+
+
 def test_gate_two_rejects_stale_candidate_verdict():
     result = valid_result("changed after review")
     result["judge_verdict"]["candidate_hash"] = "sha3-512:stale"
