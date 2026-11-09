@@ -121,7 +121,7 @@ def test_gate_two_rejects_provider_self_judging():
 
 
 def test_gate_two_rejects_unacknowledged_evidence():
-    with pytest.raises(ReleaseIntegrityError, match="no verifiable append receipt"):
+    with pytest.raises(ReleaseIntegrityError, match="no signed append acknowledgment"):
         release(valid_result(), lambda _event: None)
 
 
