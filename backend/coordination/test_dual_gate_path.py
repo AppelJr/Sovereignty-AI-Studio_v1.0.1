@@ -1,181 +1,64 @@
 from __future__ import annotations
 
 import hashlib
-
 import pytest
 
 from backend.coordination.authorization_proof import issue_gate_authorization_proof
-from sovereign_core.heavy_judge import HeavyJudge
-from sovereign_core.judge_composition import ComposedHeavyJudge
-from sovereign_core.smart_provider_router import SmartProviderRouter, EscrowPending
+from backend.coordination.dual_gate_path import (
+    DualGateDenied, ReleaseIntegrityError, authorize_before_route, verify_before_release,
+)
 
+KEY=b"dual-gate-test-key"
+def proof(task="task-1",owner="owner",scope=("repo/",)):
+    return issue_gate_authorization_proof(proof_id="proof-1",owner_id=owner,task_id=task,scope=scope,
+        decision="OWNER_AUTHORIZED",policy_hash="sha256:policy",issued_at=100,expires_at=500,secret=KEY)
+def claims():
+    return authorize_before_route(proof(),verification_key=KEY,task_id="task-1",owner_id="owner",
+                                  required_scope=("repo/",),now=200)
+def candidate_result(output="approved"):
+    digest="sha3-512:"+hashlib.sha3_512(output.encode()).hexdigest()
+    return {"status":"PASS","output":output,"output_hash":digest,
+            "judge_verdict":{"action":"PASS","task_id":"task-1","candidate_hash":digest,
+                             "output_hash":digest,"policy_hash":"sha256:policy","judge_id":"independent"}}
+def ack(event):
+    return {"status":"APPENDED","verified":True,"event_hash":event["event_hash"],
+            "task_id":event["task_id"],"output_hash":event["output_hash"],
+            "ledger_event_hash":"ledger-sha256:test","signature":"fixture-signature"}
 
-KEY = b"router-composition-test-key"
-
-
-class Backend:
-    model_id = "fixture-judge"
-
-    def __init__(self, action: str = "PASS"):
-        self.action = action
-
-    def evaluate(self, candidate: str, context: str):
-        return {"action": self.action, "reason": "test fixture", "model_id": self.model_id, "memory_loaded": False, "network_accessed": False}
-
-
-class State:
-    max_tokens = 4096
-    token_count = 0
-
-
-class TokenManager:
-    config = {"providers": {"xai": {"base_max_tokens": 4096}}}
-
-    def __init__(self):
-        self.states = {"xai": State()}
-
-    def start_session(self, provider):
-        self.states[provider] = State()
-
-    def consume_tokens(self, provider, tokens):
-        return {"output": "Rayleigh scattering explains the blue sky.", "provider": provider}
-
-
-def gate_proof(decision="OWNER_AUTHORIZED"):
-    return issue_gate_authorization_proof(
-        proof_id="router-composed-proof",
-        owner_id="owner",
-        task_id="task-1",
-        scope=("repo/",),
-        decision=decision,
-        policy_hash="sha256:test-policy",
-        issued_at=100,
-        expires_at=500,
-        secret=KEY,
-    )
-
-
-def council(action="PASS"):
-    votes = {"grok": "PASS", "gpt_codex": "PASS", "claude": "PASS"}
-    if action != "PASS":
-        votes["grok"] = action
-    return {"action": action, "votes": votes}
-
-
-def make_router(model_action="PASS", council_action="PASS", events=None):
-    audit = events if events is not None else []
-    behavioral = HeavyJudge(evidence_sink=audit.append)
-    judge = ComposedHeavyJudge(
-        backend=Backend(model_action),
-        behavioral_judge=behavioral,
-        evidence_sink=audit.append,
-    )
-    router = SmartProviderRouter(
-        TokenManager(),
-        council_adapter=lambda _payload: council(council_action),
-        judge=judge,
-    )
-    return router, audit
-
-
-def invoke(router, *, proof=None, evidence=None):
-    return router.consume_with_routing(
-        12,
-        "Explain the sky.",
-        context="general",
-        authorization_proof=proof or gate_proof(),
-        verification_key=KEY,
-        task_id="task-1",
-        owner_id="owner",
-        required_scope=("repo/",),
-        evidence_sink=evidence or (lambda _event: None),
-        now=200,
-    )
-
-
-def test_router_releases_only_after_composed_judge_and_both_gates():
-    router, events = make_router()
-    result = invoke(router, evidence=events.append)
-    assert result["status"] == "PASS"
-    assert result["used_judge"] is True
-    assert result["output_hash"] == (
-        "sha3-512:" + hashlib.sha3_512(result["output"].encode("utf-8")).hexdigest()
-    )
-    assert any(event.get("what") == "COMPOSED_JUDGE_VERDICT" for event in events)
-    assert events[-1]["what"] == "OUTENV_RELEASE_AUTHORIZED"
-
-
-@pytest.mark.parametrize("model_action", ["REWRITE", "COUNCIL", "YANK"])
-def test_composed_judge_escalation_never_releases_output(model_action):
-    router, events = make_router(model_action=model_action)
-    result = invoke(router, evidence=events.append)
-    assert result["status"] == "ESCROW_PENDING_REVIEW"
-    assert "output" not in result
-    assert events[-1]["what"] == "ESCROW_PENDING_REVIEW"
-
-
-def test_behavioral_yank_overrides_model_pass():
-    router, events = make_router()
-    judge = router.judge
-    result = judge.review("The password=secret value is exposed.")
-    assert result["verdict"]["action"] == "YANK"
-    assert result["final_output"] is None
-    assert events[-1]["what"] == "COMPOSED_JUDGE_VERDICT"
-
-
-def test_invalid_gate_proof_blocks_provider_execution():
-    router, _events = make_router()
-    with pytest.raises(PermissionError):
-        invoke(router, proof="invalid.proof")
-
-
-def test_missing_council_lane_blocks_release():
-    router, _events = make_router()
-    router.council_adapter = lambda _payload: {
-        "action": "PASS",
-        "votes": {"grok": "PASS"},
-    }
-    with pytest.raises(RuntimeError, match="three lanes"):
-        invoke(router)
-
-
-def test_router_rejects_legacy_non_composed_judge():
-    with pytest.raises(TypeError, match="ComposedHeavyJudge"):
-        SmartProviderRouter(
-            TokenManager(),
-            council_adapter=lambda _payload: council(),
-            judge=HeavyJudge(),
-        )
-
-
-def test_release_evidence_failure_blocks_output():
-    router, _events = make_router()
-
-    def broken(_event):
-        raise OSError("evidence store unavailable")
-
-    with pytest.raises(RuntimeError, match="release evidence"):
-        invoke(router, evidence=broken)
-
-
-def test_provider_identity_cannot_match_judge_identity():
-    with pytest.raises(ValueError, match="independent"):
-        SmartProviderRouter(
-            TokenManager(),
-            council_adapter=lambda _payload: council(),
-            judge=ComposedHeavyJudge(
-                backend=Backend(),
-                behavioral_judge=HeavyJudge(),
-                evidence_sink=lambda _event: None,
-            ),
-            judge_identity="fixture-judge",
-            provider_id="fixture-judge",
-        )
-
-
-"""
-Focused coverage for the fail-closed independent judge, verdict binding, and evidence receipt checks.
-"""
-
-
-
+def test_gate_one_binds_owner_task_and_scope():
+    assert claims().proof_id == "proof-1"
+def test_gate_one_rejects_wrong_owner():
+    with pytest.raises(DualGateDenied,match="owner identity"):
+        authorize_before_route(proof(),verification_key=KEY,task_id="task-1",owner_id="other",
+                               required_scope=("repo/",),now=200)
+def test_gate_two_rejects_non_pass():
+    with pytest.raises(DualGateDenied,match="only Heavy Judge PASS"):
+        verify_before_release(claims(),{"status":"ESCROW_PENDING_REVIEW"},expected_task_id="task-1",evidence_sink=ack)
+def test_gate_two_rejects_digest_mismatch():
+    result=candidate_result(); result["output_hash"]="sha3-512:bad"
+    with pytest.raises(ReleaseIntegrityError,match="digest mismatch"):
+        verify_before_release(claims(),result,expected_task_id="task-1",evidence_sink=ack)
+def test_gate_two_requires_full_verdict_binding():
+    result=candidate_result(); result["judge_verdict"]={"action":"PASS"}
+    with pytest.raises(ReleaseIntegrityError,match="required bindings"):
+        verify_before_release(claims(),result,expected_task_id="task-1",evidence_sink=ack)
+def test_gate_two_rejects_task_policy_and_candidate_mismatch():
+    for key,value,match in (("task_id","other","task_id mismatch"),("policy_hash","sha256:other","policy hash mismatch"),("candidate_hash","sha3-512:bad","hash does not match")):
+        result=candidate_result(); result["judge_verdict"][key]=value
+        with pytest.raises(ReleaseIntegrityError,match=match):
+            verify_before_release(claims(),result,expected_task_id="task-1",evidence_sink=ack)
+def test_gate_two_requires_verifiable_receipt():
+    def no_signature(event):
+        return {"status":"APPENDED","verified":True,"event_hash":event["event_hash"],
+                "task_id":event["task_id"],"output_hash":event["output_hash"]}
+    with pytest.raises(ReleaseIntegrityError,match="signed SCAR"):
+        verify_before_release(claims(),candidate_result(),expected_task_id="task-1",evidence_sink=no_signature)
+def test_gate_two_rejects_receipt_for_different_event():
+    def wrong(event):
+        result=ack(event); result["event_hash"]="sha3-512:wrong"; return result
+    with pytest.raises(ReleaseIntegrityError,match="event_hash mismatch"):
+        verify_before_release(claims(),candidate_result(),expected_task_id="task-1",evidence_sink=wrong)
+def test_gate_two_append_exception_fails_closed():
+    def fail(_event): raise OSError("ledger unavailable")
+    with pytest.raises(ReleaseIntegrityError,match="append failed"):
+        verify_before_release(claims(),candidate_result(),expected_task_id="task-1",evidence_sink=fail)

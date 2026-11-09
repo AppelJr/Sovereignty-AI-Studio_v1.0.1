@@ -1,176 +1,197 @@
-"""Two-gate enforcement: authorization before routing, integrity before release."""
+"""Compose an advisory model judge with the deterministic HeavyJudge gate.
+
+The model backend may escalate, but cannot downgrade the behavioral gate or
+itself grant authority. The outer Gate and release evidence boundary remain
+separate. Verdicts bind task, policy, judge identity, and exact candidate digest.
+"""
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 import hashlib
-from typing import Any, Callable, Mapping
+import os
+from typing import Any, Callable, Literal, Mapping, Protocol, Sequence
 
-from backend.coordination.authorization_proof import (
-    GateAuthorizationProof,
-    verify_gate_authorization_proof,
-)
+Action = Literal["PASS", "REWRITE", "YANK", "COUNCIL"]
+ACTIONS = frozenset({"PASS", "REWRITE", "YANK", "COUNCIL"})
+SEVERITY = {"PASS": 0, "REWRITE": 1, "COUNCIL": 2, "YANK": 3}
 
+class JudgeCompositionError(RuntimeError):
+    """Base exception for the fail-closed composed judge."""
 
-class DualGateDenied(PermissionError):
-    """Request denied at the authorization or release boundary."""
+class BackendConfigurationError(JudgeCompositionError):
+    """Judge backend configuration is missing or invalid."""
 
+class BackendUnavailable(JudgeCompositionError):
+    """Judge backend cannot provide a valid review."""
 
-class ReleaseIntegrityError(RuntimeError):
-    """Output failed post-execution integrity validation."""
+class EvidenceUnavailable(JudgeCompositionError):
+    """Required judge evidence could not be written."""
 
+class ModelReviewBackend(Protocol):
+    model_id: str
+    def evaluate(self, candidate: str, context: str) -> Mapping[str, Any]: ...
+
+BackendBuilder = Callable[[str], ModelReviewBackend]
+EvidenceSink = Callable[[dict[str, Any]], Any]
 
 @dataclass(frozen=True, slots=True)
-class DualGateReceipt:
-    task_id: str
-    authorization_proof_id: str
-    authorization_policy_hash: str
-    output_hash: str
-    output: str
-    release_status: str
+class ModelReview:
+    model_id: str
+    action: Action
+    reason: str
 
 
-def _require_verifiable_evidence(event: dict[str, Any], ack: Any) -> None:
-    """Evidence append must return a signed/hashed acknowledgment."""
-    if not isinstance(ack, Mapping):
-        raise ReleaseIntegrityError(
-            "mandatory release evidence append did not return a verifiable receipt"
-        )
-    if str(ack.get("status", "")).upper() not in {"APPENDED", "OK", "SUCCESS"}:
-        raise ReleaseIntegrityError(
-            "mandatory release evidence append did not return a successful receipt"
-        )
-    ack_hash = ack.get("event_hash") or ack.get("hash") or ack.get("receipt_hash")
-    if not ack_hash:
-        raise ReleaseIntegrityError(
-            "mandatory release evidence append did not return event_hash in the receipt"
-        )
-    if str(ack_hash) != str(event.get("event_hash")):
-        raise ReleaseIntegrityError(
-            "mandatory release evidence append receipt hash does not match the release event"
-        )
-
-
-def authorize_before_route(
-    proof: str,
-    *,
-    verification_key: bytes,
-    task_id: str,
-    owner_id: str,
-    required_scope: tuple[str, ...],
-    now: int | None = None,
-) -> GateAuthorizationProof:
-    """Gate 1. Verify cryptographic proof and bind it to owner/task/scope."""
+def build_judge(backend_builder: BackendBuilder, *, environ: Mapping[str, str] | None = None) -> ModelReviewBackend:
+    if not callable(backend_builder):
+        raise BackendConfigurationError("judge backend builder is unbound")
+    env = os.environ if environ is None else environ
+    model_name = str(env.get("HEAVYJUDGE_MODEL", "")).strip()
+    if not model_name:
+        raise BackendConfigurationError("HEAVYJUDGE_MODEL is required")
+    if str(env.get("LOCAL_LLM", "")).strip().lower() in {"1", "true", "yes", "on"}:
+        raise BackendConfigurationError("LOCAL_LLM override is prohibited")
     try:
-        claims = verify_gate_authorization_proof(
-            proof,
-            secret=verification_key,
-            now=now,
-            expected_task_id=task_id,
-            required_scope=required_scope,
-        )
-    except (ValueError, TypeError) as exc:
-        raise DualGateDenied("pre-route Gate authorization failed") from exc
-    if claims.owner_id != owner_id:
-        raise DualGateDenied("pre-route owner identity mismatch")
-    if not claims.allows_decision("ALLOW", "APPROVED", "OWNER_AUTHORIZED",
-                                  "DELEGATED_AUTHORIZED", "OWNER_OVERRIDE"):
-        raise DualGateDenied("pre-route Gate decision is not an allow")
-    return claims
-
-
-def verify_before_release(
-    proof: GateAuthorizationProof,
-    execution_result: Mapping[str, Any],
-    *,
-    expected_task_id: str,
-    evidence_sink: Callable[[dict[str, Any]], Any],
-    memory_loaded: bool = False,
-    network_accessed: bool = False,
-) -> DualGateReceipt:
-    """Gate 2. Validate PASS, payload digest, and append evidence before release."""
-    if proof.task_id != expected_task_id:
-        raise DualGateDenied("release task does not match authorized task")
-    if str(execution_result.get("status", "")).upper() != "PASS":
-        raise DualGateDenied("only Heavy Judge PASS may reach OUTENV")
-    output = execution_result.get("output")
-    if not isinstance(output, str) or not output:
-        raise ReleaseIntegrityError("PASS result has no output")
-    digest = "sha3-512:" + hashlib.sha3_512(output.encode("utf-8")).hexdigest()
-    if execution_result.get("output_hash") != digest:
-        raise ReleaseIntegrityError("OUTENV digest mismatch")
-    judge_verdict = execution_result.get("judge_verdict")
-    if isinstance(judge_verdict, Mapping):
-        verdict_hash = judge_verdict.get("output_hash")
-        if verdict_hash is not None and str(verdict_hash) != digest:
-            raise ReleaseIntegrityError("judge verdict hash does not match the output digest")
-        verdict_action = str(judge_verdict.get("action", "")).upper()
-        if verdict_action and verdict_action != "PASS":
-            raise DualGateDenied("judge verdict is not a PASS authorization for release")
-    receipt = DualGateReceipt(
-        task_id=expected_task_id,
-        authorization_proof_id=proof.proof_id,
-        authorization_policy_hash=proof.policy_hash,
-        output_hash=digest,
-        output=output,
-        release_status="PASS",
-    )
-    event = {
-        "who": "DualGatePath",
-        "what": "OUTENV_RELEASE_AUTHORIZED",
-        "when": datetime.now(timezone.utc).isoformat(),
-        "where": "Sovereignty-AI-Studio_v1.0.1",
-        "why": "Gate proof and Heavy Judge output integrity verified",
-        "how": "pre-route Gate proof + post-judge SHA3-512 verification",
-        "authorization": proof.proof_id,
-        "memory_loaded": bool(memory_loaded),
-        "network_accessed": bool(network_accessed),
-        "files_changed": [],
-        "result": "PASS",
-        "task_id": expected_task_id,
-        "policy_hash": proof.policy_hash,
-        "output_hash": digest,
-        "event_hash": digest,
-    }
-    try:
-        ack = evidence_sink(event)
+        backend = backend_builder(model_name)
     except Exception as exc:
-        raise ReleaseIntegrityError("mandatory release evidence append failed") from exc
-    _require_verifiable_evidence(event, ack)
-    return receipt
+        raise BackendUnavailable("judge backend construction failed") from exc
+    if not callable(getattr(backend, "evaluate", None)):
+        raise BackendUnavailable("backend must implement evaluate(candidate, context)")
+    model_id = getattr(backend, "model_id", model_name)
+    if not isinstance(model_id, str) or not model_id.strip():
+        raise BackendUnavailable("backend model_id is missing")
+    return backend
 
 
-def run_dual_gated(
-    *,
-    proof: str,
-    verification_key: bytes,
-    task_id: str,
-    owner_id: str,
-    required_scope: tuple[str, ...],
-    route_and_judge: Callable[[GateAuthorizationProof], Mapping[str, Any]],
-    evidence_sink: Callable[[dict[str, Any]], Any],
-    now: int | None = None,
-    memory_loaded: bool = False,
-    network_accessed: bool = False,
-) -> DualGateReceipt:
-    """Execute only after Gate 1; release only after Gate 2 and durable evidence."""
-    claims = authorize_before_route(
-        proof, verification_key=verification_key, task_id=task_id,
-        owner_id=owner_id, required_scope=required_scope, now=now,
-    )
-    result = route_and_judge(claims)
-    return verify_before_release(
-        claims, result, expected_task_id=task_id, evidence_sink=evidence_sink,
-        memory_loaded=memory_loaded, network_accessed=network_accessed,
-    )
+class ComposedHeavyJudge:
+    """Independent judge composition; most restrictive advisory/gate result wins."""
+    def __init__(self, *, backend: ModelReviewBackend, behavioral_judge: Any,
+                 evidence_sink: EvidenceSink, judge_id: str | None = None,
+                 provider_ids: Sequence[str] | None = None) -> None:
+        if not callable(getattr(backend, "evaluate", None)):
+            raise TypeError("a bound model review backend is mandatory")
+        if not callable(getattr(behavioral_judge, "review", None)):
+            raise TypeError("behavioral_judge.review is mandatory")
+        if not callable(evidence_sink):
+            raise TypeError("mandatory evidence_sink is required")
+        backend_id = str(getattr(backend, "model_id", "")).strip()
+        if not backend_id:
+            raise TypeError("judge backend model_id is required")
+        self.backend = backend
+        self.behavioral_judge = behavioral_judge
+        self.evidence_sink = evidence_sink
+        self.judge_id = str(judge_id or backend_id).strip()
+        if not self.judge_id:
+            raise ValueError("judge_id is required")
+        self._provider_ids = {str(item).strip().casefold() for item in (provider_ids or ()) if str(item).strip()}
+        self.assert_independent(provider_ids or ())
+
+    def assert_independent(self, provider_ids: Sequence[str]) -> None:
+        """Reject backend or configured judge identity overlap with generating lanes."""
+        identities = {str(item).strip().casefold() for item in provider_ids if str(item).strip()}
+        identities |= self._provider_ids
+        identities |= {str(getattr(self.backend, "model_id", "")).strip().casefold()}
+        if self.judge_id.casefold() in identities:
+            raise ValueError("judge identity must be independent of the provider identities")
+
+    @staticmethod
+    def _action(value: Any) -> Action:
+        action = str(value).upper()
+        if action not in ACTIONS:
+            raise ValueError("unsupported judge action")
+        return action  # type: ignore[return-value]
+
+    def _record(self, event: dict[str, Any]) -> None:
+        try:
+            self.evidence_sink(event)
+        except Exception as exc:
+            raise EvidenceUnavailable("composed judge evidence append failed") from exc
+
+    def review(self, original_output: str, context: str = "general", force_judge: bool = False,
+               token_manager: Any = None, *, council_result: Mapping[str, Any] | None = None,
+               task_id: str | None = None, policy_hash: str | None = None,
+               candidate_hash: str | None = None, judge_id: str | None = None) -> dict[str, Any]:
+        del force_judge, token_manager
+        if not isinstance(original_output, str) or not original_output.strip():
+            raise ValueError("candidate output must be non-empty")
+        if not task_id or not policy_hash:
+            raise ValueError("task_id and policy_hash are required for an auditable judge verdict")
+        digest = "sha3-512:" + hashlib.sha3_512(original_output.encode("utf-8")).hexdigest()
+        if candidate_hash != digest:
+            raise ValueError("candidate hash must match the exact output being judged")
+        selected_judge_id = str(judge_id or self.judge_id).strip()
+        if selected_judge_id != self.judge_id:
+            raise ValueError("requested judge identity does not match the configured independent judge")
+        self.assert_independent(())
+        timestamp = datetime.now(timezone.utc).isoformat()
+        backend_id = str(getattr(self.backend, "model_id", "unknown"))
+        try:
+            raw = self.backend.evaluate(original_output, str(context))
+            if not isinstance(raw, Mapping):
+                raise BackendUnavailable("model review must be a mapping")
+            returned_id = str(raw.get("model_id", backend_id))
+            if returned_id != backend_id:
+                raise BackendUnavailable("judge backend identity changed during review")
+            model_action = self._action(raw.get("action"))
+            model_reason = str(raw.get("reason", "model review"))
+            memory_loaded = raw.get("memory_loaded")
+            network_accessed = raw.get("network_accessed")
+            if not isinstance(memory_loaded, bool) or not isinstance(network_accessed, bool):
+                raise BackendUnavailable("backend must report boolean memory_loaded and network_accessed")
+        except Exception as exc:
+            self._record({"who":"ComposedHeavyJudge","what":"JUDGE_BACKEND_FAILURE","when":timestamp,
+                          "where":"sovereign_core.judge_composition","why":"judge backend unavailable or malformed",
+                          "how":"fail closed","authorization":"not_authorized_by_judge",
+                          "memory_loaded":"UNKNOWN","network_accessed":"UNKNOWN","files_changed":[],
+                          "result":"YANK","task_id":task_id,"policy_hash":policy_hash,
+                          "candidate_hash":digest,"judge_id":self.judge_id,"error_type":type(exc).__name__})
+            verdict = {"timestamp":timestamp,"risk_score":1.0,"action":"YANK","output_hash":digest,
+                       "candidate_hash":digest,"signature":None,"context":str(context),"judge_model":backend_id,
+                       "judge_id":self.judge_id,"task_id":task_id,"policy_hash":policy_hash,
+                       "reason":"judge backend unavailable"}
+            return {"final_output":None,"verdict":verdict,"model_review":{"action":"YANK"}}
+
+        try:
+            behavioral = self.behavioral_judge.review(original_output=original_output, context=str(context),
+                                                       force_judge=True, council_result=council_result)
+            if not isinstance(behavioral, Mapping) or not isinstance(behavioral.get("verdict"), Mapping):
+                raise ValueError("behavioral verdict missing")
+            behavioral_verdict = behavioral["verdict"]
+            behavioral_action = self._action(behavioral_verdict.get("action"))
+            risk_score = float(behavioral_verdict.get("risk_score", 1.0))
+            if not 0 <= risk_score <= 1:
+                raise ValueError("risk score outside [0, 1]")
+        except Exception as exc:
+            behavioral_action, risk_score = "YANK", 1.0
+            behavioral_verdict = {"action":"YANK","risk_score":1.0,"reason":type(exc).__name__}
+        action = max((model_action, behavioral_action), key=lambda item: SEVERITY[item])
+        final_output = behavioral.get("final_output") if action == "PASS" else None
+        if action == "PASS" and final_output != original_output:
+            action, final_output = "YANK", None
+        verdict = {"timestamp":timestamp,"risk_score":risk_score,"action":action,
+                   "output_hash":digest,"candidate_hash":digest,"signature":None,"context":str(context),
+                   "judge_model":backend_id,"judge_id":self.judge_id,"task_id":task_id,
+                   "policy_hash":policy_hash,"reason":f"model={model_action}:{model_reason}; behavioral={behavioral_action}"}
+        self._record({"who":"ComposedHeavyJudge","what":"COMPOSED_JUDGE_VERDICT","when":timestamp,
+                      "where":"sovereign_core.judge_composition","why":verdict["reason"],
+                      "how":"model advisory + deterministic behavioral gate; restrictive action wins",
+                      "authorization":"Gate authorization remains external","memory_loaded":memory_loaded,
+                      "network_accessed":network_accessed,"files_changed":[],"result":action,
+                      "output_hash":digest,"candidate_hash":digest,"judge_id":self.judge_id,
+                      "task_id":task_id,"policy_hash":policy_hash})
+        return {"final_output":final_output if action == "PASS" else None,"verdict":verdict,
+                "model_review":asdict(ModelReview(backend_id,model_action,model_reason)),
+                "behavioral_verdict":dict(behavioral_verdict),"memory_loaded":memory_loaded,
+                "network_accessed":network_accessed}
 
 
-__all__ = [
-    "DualGateDenied",
-    "DualGateReceipt",
-    "ReleaseIntegrityError",
-    "authorize_before_route",
-    "run_dual_gated",
-    "verify_before_release",
-]
+def compose_judge(*, backend_builder: BackendBuilder, behavioral_judge: Any, evidence_sink: EvidenceSink,
+                  environ: Mapping[str, str] | None = None, judge_id: str | None = None,
+                  provider_ids: Sequence[str] | None = None) -> ComposedHeavyJudge:
+    backend = build_judge(backend_builder, environ=environ)
+    return ComposedHeavyJudge(backend=backend,behavioral_judge=behavioral_judge,evidence_sink=evidence_sink,
+                              judge_id=judge_id,provider_ids=provider_ids)
 
+
+__all__ = ["Action","ACTIONS","BackendConfigurationError","BackendUnavailable","ComposedHeavyJudge",
+           "EvidenceUnavailable","JudgeCompositionError","ModelReview","build_judge","compose_judge"]
