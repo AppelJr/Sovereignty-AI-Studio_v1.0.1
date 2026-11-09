@@ -80,9 +80,16 @@ def _digest(value: Any) -> str:
 
 
 class Parallel12Coordinator:
-    def __init__(self, adapters: Mapping[str, Callable[..., Awaitable[Mapping[str, Any]]]]) -> None:
+    def __init__(
+        self,
+        adapters: Mapping[str, Callable[..., Awaitable[Mapping[str, Any]]]],
+        authorization_verifier: Callable[[Any, str], bool],
+    ) -> None:
+        if not callable(authorization_verifier):
+            raise TypeError("cryptographic authorization verifier is required")
         self.registry = load_registry()
         self.adapters = dict(adapters)
+        self.authorization_verifier = authorization_verifier
         self.completed_stages: set[str] = set()
 
     async def run_stage(
@@ -97,6 +104,8 @@ class Parallel12Coordinator:
         validate_preflight(preflight_evidence)
         if not callable(getattr(authorization, "is_valid_for", None)) or authorization.is_valid_for(task_id) is not True:
             raise PermissionError("valid task-bound GateAuthorization required")
+        if self.authorization_verifier(authorization, task_id) is not True:
+            raise PermissionError("GateAuthorization cryptographic verification failed")
         stage = next((item for item in self.registry["stages"] if item["id"] == stage_id), None)
         if stage is None:
             raise ValueError("unknown integration stage")
