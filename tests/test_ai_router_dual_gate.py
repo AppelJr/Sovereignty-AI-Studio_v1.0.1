@@ -75,7 +75,7 @@ def proof(*, task_id: str = TASK, owner_id: str = OWNER, scope=SCOPE):
 
 
 def make_router(providers, *, action="PASS", evidence=None, memory_loaded=False,
-                judge_network_accessed=False, judge_provider_id="openai",
+                judge_network_accessed=False, judge_provider_id="sovereign-local-judge",
                 council_adapter=None):
     judge_events = []
     judge = ComposedHeavyJudge(
@@ -111,8 +111,13 @@ def make_router(providers, *, action="PASS", evidence=None, memory_loaded=False,
             lambda payload: {
                 "action": "PASS",
                 "candidate": payload["candidate"],
-                "source_provider_id": payload["source_provider_id"],
+                "source_provider_id": "council:aggregate",
                 "votes": {"grok": "PASS", "gpt_codex": "PASS", "claude": "PASS"},
+                "proposals": {
+                    "grok": {"provider_id": "xai", "candidate": payload["candidate"], "vote": "PASS"},
+                    "gpt_codex": {"provider_id": "openai", "candidate": payload["candidate"], "vote": "PASS"},
+                    "claude": {"provider_id": "anthropic", "candidate": payload["candidate"], "vote": "PASS"},
+                },
             }
         ),
         judge_provider_id=judge_provider_id,
@@ -214,8 +219,13 @@ def test_async_router_requires_council_before_judge():
             calls.append(payload) or {
                 "action": "PASS",
                 "candidate": "Council-approved candidate.",
-                "source_provider_id": "xai",
+                "source_provider_id": "council:aggregate",
                 "votes": {"grok": "PASS", "gpt_codex": "PASS", "claude": "PASS"},
+                "proposals": {
+                    "grok": {"provider_id": "xai", "candidate": payload["candidate"], "vote": "PASS"},
+                    "gpt_codex": {"provider_id": "openai", "candidate": payload["candidate"], "vote": "PASS"},
+                    "claude": {"provider_id": "anthropic", "candidate": payload["candidate"], "vote": "PASS"},
+                },
             }
         ),
     )
