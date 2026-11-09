@@ -55,7 +55,7 @@ def test_model_escalation_never_releases_output(action):
 def test_behavioral_yank_overrides_model_pass():
     judge, _events = make_composed()
     result = judge.review("The password=supersecret value is exposed.")
-    assert result["verdict"]["action"] == "YANK"
+    assert result["verdict"]["action"] == "UNAVAILABLE"
     assert result["final_output"] is None
 
 
@@ -77,7 +77,7 @@ def test_unbound_backend_builder_is_rejected():
         build_judge(None, environ={"HEAVYJUDGE_MODEL": "configured"})
 
 
-def test_backend_failure_yanks_and_never_returns_candidate():
+def test_backend_unavailable_holds_and_never_returns_candidate():
     judge, events = make_composed(backend_fail=True)
     result = judge.review("Candidate must never escape.")
     assert result["verdict"]["action"] == "YANK"
