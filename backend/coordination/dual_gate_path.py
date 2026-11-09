@@ -163,17 +163,18 @@ def verify_before_release(
     except Exception as exc:
         raise ReleaseIntegrityError("mandatory release evidence append failed") from exc
     if not isinstance(append_receipt, EvidenceAppendReceipt):
-        raise ReleaseIntegrityError("release evidence sink returned no verifiable append receipt")
+        raise ReleaseIntegrityError("release evidence sink returned no signed append acknowledgment")
     if (
         append_receipt.event_type != event["what"]
         or append_receipt.task_id != expected_task_id
-        or not append_receipt.event_id
+        or not isinstance(append_receipt.event_id, str)
+        or not append_receipt.event_id.strip()
         or not isinstance(append_receipt.event_hash, str)
         or len(append_receipt.event_hash) != 64
         or any(char not in "0123456789abcdef" for char in append_receipt.event_hash.lower())
         or not isinstance(append_receipt.signature, str)
         or not append_receipt.signature.strip()
-        or not isinstance(append_receipt.sequence, int)
+        or type(append_receipt.sequence) is not int
         or append_receipt.sequence < 0
     ):
         raise ReleaseIntegrityError("release evidence append receipt binding mismatch")
