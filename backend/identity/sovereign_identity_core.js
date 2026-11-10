@@ -29,6 +29,7 @@ const STATUS = Object.freeze({
   REVOKED: 'REVOKED'
 });
 const PROTOCOLS = new Set(['SAML2', 'OIDC', 'SCIM2']);
+const ANCHOR_PURPOSE = Object.freeze({ SAML2: 'SAML2_SIGNING', OIDC: 'OIDC_JWKS', SCIM2: 'SCIM2_PROVISIONING' });
 const ZERO_HASH = '0'.repeat(64);
 
 function fail(reason, extra = {}) {
@@ -115,7 +116,7 @@ function createSovereignIdentityCore(options = {}) {
     if (!result || result.decision !== 'ALLOW' || result.actor !== ownerSubjectId) {
       return fail('GATE_ONE_DENIED');
     }
-    return { decision: 'ALLOW' };
+    return { decision: 'ALLOW', authorization_id: result.authorization_id || null };
   }
   function commit(next, event) {
     try {
@@ -179,6 +180,7 @@ function createSovereignIdentityCore(options = {}) {
       principal_type: fields.principal_type,
       result: 'ALLOW',
       authorization: 'GATE_ONE_ALLOW',
+      authorization_id: auth.authorization_id,
       memory_loaded: false,
       network_accessed: false,
       files_changed: ['identity_registry']
@@ -361,7 +363,7 @@ function createSovereignIdentityCore(options = {}) {
       status: STATUS.ACTIVE,
       version: next.trust_anchors.length + 1,
       predecessor_anchor_id: anchor.predecessor_anchor_id || null,
-      approved_by_owner_proof_id: anchor.owner_proof_id || null
+      approved_by_owner_proof_id: auth.authorization_id
     });
     next.version += 1;
     return commit(next, {
@@ -377,7 +379,7 @@ function createSovereignIdentityCore(options = {}) {
     });
   }
 
-  function addFederationAlias(alias) {
+  function addFederationAlias(alias, ownerProof) {
     if (!alias || !PROTOCOLS.has(alias.protocol) ||
         typeof alias.partner_id !== 'string' || !alias.partner_id ||
         typeof alias.issuer !== 'string' || !alias.issuer ||
@@ -386,9 +388,11 @@ function createSovereignIdentityCore(options = {}) {
       recordFailure('FEDERATION_ALIAS_ADD', 'INVALID_FEDERATION_ALIAS');
       return fail('INVALID_FEDERATION_ALIAS');
     }
+    const auth = gate(ownerProof, 'identity.federation_alias.manage', 'FEDERATION_ALIAS_ADD');
+    if (auth.decision !== 'ALLOW') return auth;
     const anchor = state.trust_anchors.find(a =>
       a.issuer === alias.issuer && a.status === STATUS.ACTIVE &&
-      a.purpose === (alias.protocol === 'SAML2' ? 'SAML2_SIGNING' : 'OIDC_JWKS') &&
+      a.purpose === ANCHOR_PURPOSE[alias.protocol] &&
       a.not_before <= now() && a.not_after > now()
     );
     if (!anchor) {
@@ -422,7 +426,8 @@ function createSovereignIdentityCore(options = {}) {
       protocol: alias.protocol,
       issuer: alias.issuer,
       result: 'ALLOW',
-      authorization: 'TRUSTED_ALIAS_ONLY',
+      authorization: 'GATE_ONE_ALLOW',
+      authorization_id: auth.authorization_id,
       memory_loaded: false,
       network_accessed: false,
       files_changed: ['federation_alias_registry']
@@ -487,6 +492,7 @@ function createSovereignIdentityCore(options = {}) {
 module.exports = {
   PRINCIPAL,
   STATUS,
+  ANCHOR_PURPOSE,
   createSovereignIdentityCore,
   fingerprint
 };
