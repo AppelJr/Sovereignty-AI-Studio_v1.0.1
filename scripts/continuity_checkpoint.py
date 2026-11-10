@@ -47,7 +47,7 @@ def verify(path:Path,roadmap_path:Path=DEFAULT_ROADMAP)->dict[str,Any]:
  if not rows and roadmap_path.is_file():
   seeds=json.loads(roadmap_path.read_text()).get("checkpoints",[])
   if seeds and seeds[0].get("digest")==checkpoint_digest(seeds[0]):
-   cp=seeds[0];return {"status":"PASS","count":1,"latest_checkpoint":cp["id"],"latest_digest":cp["digest"],"integrity_verified":True,"source":"roadmap_seed_not_yet_persisted_to_local_ledger"}
+   cp=seeds[0];return {"status":"UNPERSISTED_SEED","count":1,"latest_checkpoint":cp["id"],"latest_digest":cp["digest"],"integrity_verified":True,"resume_allowed":False,"source":"roadmap_seed_not_yet_persisted_to_local_ledger"}
  return {"status":"PASS" if rows else "EMPTY","count":len(rows),"latest_checkpoint":rows[-1]["checkpoint"]["id"] if rows else None,"latest_digest":rows[-1]["digest"] if rows else None,"integrity_verified":bool(rows)}
 def create(path:Path,roadmap_path:Path,cid:str,next_action:str,completed:list[str],blockers:list[str])->dict[str,Any]:
  if not ID_RE.fullmatch(cid): raise ContinuityError("invalid checkpoint ID")
@@ -86,6 +86,6 @@ def main()->int:
    if not a.id: raise ContinuityError("create requires --id")
    result=create(a.ledger,a.roadmap,a.id,a.next_action,a.completed,a.blocker)
   else: result=verify(a.ledger,a.roadmap)
-  print(json.dumps(result,indent=2,sort_keys=True));return 0 if result.get("status") in ("PASS","EMPTY") else 1
+  print(json.dumps(result,indent=2,sort_keys=True));return 0 if result.get("status") == "PASS" else 1
  except (ContinuityError,OSError,ValueError,json.JSONDecodeError) as exc: print(f"BLOCKED: {exc}",file=sys.stderr);return 2
 if __name__=="__main__": raise SystemExit(main())
