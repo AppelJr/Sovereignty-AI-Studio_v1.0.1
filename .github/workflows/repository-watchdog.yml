@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: repository-watchdog-${{ github.ref }}
+  group: repository-watchdog-\${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -24,28 +24,28 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          FULL_SHA="${{ github.sha }}"
-          printf 'WATCHDOG_STATUS=STARTED\\n'
-          printf 'WATCHDOG_EVENT=%s\\n' "${{ github.event_name }}"
-          printf 'WATCHDOG_RUN_ID=%s\\n' "${{ github.run_id }}"
-          printf 'FULL_SHA=%s\\n' "${FULL_SHA}"
-          printf 'HEAD_SHA_LEN=%s\\n' "${#FULL_SHA}"
-          if [[ ! "${FULL_SHA}" =~ ^[0-9a-f]{40}$ ]]; then
-            printf 'WATCHDOG_ERROR=INVALID_COMMIT_SHA\\n' >&2
+          FULL_SHA="\${{ github.sha }}"
+          printf 'WATCHDOG_STATUS=STARTED\n'
+          printf 'WATCHDOG_EVENT=%s\n' "\${{ github.event_name }}"
+          printf 'WATCHDOG_RUN_ID=%s\n' "\${{ github.run_id }}"
+          printf 'FULL_SHA=%s\n' "\${FULL_SHA}"
+          printf 'HEAD_SHA_LEN=%s\n' "\${#FULL_SHA}"
+          if [[ ! "\${FULL_SHA}" =~ ^[0-9a-f]{40}$ ]]; then
+            printf 'WATCHDOG_ERROR=INVALID_COMMIT_SHA\n' >&2
             exit 1
           fi
-          printf 'HATCH=OPEN\\n'
-          printf 'PAYLOAD_ENTERED=true\\n'
+          printf 'HATCH=OPEN\n'
+          printf 'PAYLOAD_ENTERED=true\n'
       - name: Checkout without external action
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: \${{ github.token }}
         shell: bash
         run: |
           set -Eeuo pipefail
           git init .
-          git remote add origin "https://github.com/${{ github.repository }}.git"
-          auth="$(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 | tr -d '\\n')"
-          git -c http.extraheader="AUTHORIZATION: basic ${auth}" fetch --no-tags --depth=1 origin "${{ github.sha }}"
+          git remote add origin "https://github.com/\${{ github.repository }}.git"
+          auth="$(printf 'x-access-token:%s' "\${GH_TOKEN}" | base64 | tr -d '\n')"
+          git -c http.extraheader="AUTHORIZATION: basic \${auth}" fetch --no-tags --depth=1 origin "\${{ github.sha }}"
           git checkout --detach FETCH_HEAD
           git config --unset-all http.extraheader 2>/dev/null || true
       - name: Verify workflow inventory
@@ -53,9 +53,9 @@ jobs:
         run: |
           set -Eeuo pipefail
           required_workflows=(ci.yml ci-sovereign.yml python-ci.yml Quart.yml)
-          for required in "${required_workflows[@]}"; do
+          for required in "\${required_workflows[@]}"; do
             test -f ".github/workflows/$required"
-            printf 'WORKFLOW_PRESENT=%s\\n' "$required"
+            printf 'WORKFLOW_PRESENT=%s\n' "$required"
           done
       - name: Verify local runner contracts
         shell: bash
@@ -74,8 +74,8 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          printf 'WATCHDOG_STATUS=PASS\\n'
-          printf 'FULL_SHA=%s\\n' "${{ github.sha }}"
-          printf 'HATCH=OPEN\\n'
-          printf 'PAYLOAD_ENTERED=true\\n'
-          printf 'WATCHDOG_RESULT=VISIBLE_LOCAL_RUNNER_CONTRACTS_VERIFIED\\n'
+          printf 'WATCHDOG_STATUS=PASS\n'
+          printf 'FULL_SHA=%s\n' "\${{ github.sha }}"
+          printf 'HATCH=OPEN\n'
+          printf 'PAYLOAD_ENTERED=true\n'
+          printf 'WATCHDOG_RESULT=VISIBLE_LOCAL_RUNNER_CONTRACTS_VERIFIED\n'
