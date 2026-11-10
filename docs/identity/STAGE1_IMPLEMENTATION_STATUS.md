@@ -36,15 +36,15 @@ Execution evidence: NOT RUN IN this environment
 - Add bounded pending-enrollment limits, cleanup/expiry, and explicit challenge replay evidence.
 - Add principal suspension/revocation lifecycle and trust-anchor revocation/rotation state transitions.
 - Bind protocol assertion validation to the registered trust-anchor fingerprint; current resolver assumes validated protocol metadata.
-- Review the existing Authority Gate permission-omission defect separately; this branch does not silently rewrite the legacy adapter/gate.
+- Closed the existing Authority Gate participant permission-omission path: participant actions now require an exact action-matching capability; missing, mismatched, and wildcard-only permissions deny. Regression tests are included.
 - Add schema validation and independent security review.
 
 ## Verification
 
 - Source review: performed against Collaboration branch files.
-- New test execution: NOT RUN.
+- New test execution: pending GitHub Actions on the current branch tip.
 - Existing test suite: NOT RUN.
-- CI: NOT RUN.
+- CI: pending GitHub Actions on the current branch tip.
 - Production deployment: BLOCKED.
 
 Do not represent this branch as production-ready or as having passed the fifteen-case acceptance gate.
