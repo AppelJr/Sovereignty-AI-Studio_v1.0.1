@@ -15,6 +15,24 @@ def canonical_bytes(value:Any)->bytes:
  return json.dumps(value,sort_keys=True,separators=(",",":"),ensure_ascii=False).encode()
 def checkpoint_digest(cp:dict[str,Any])->str:
  return "sha3-512:"+hashlib.sha3_512(canonical_bytes({k:v for k,v in cp.items() if k!="digest"})).hexdigest()
+def validate_checkpoint_chain(checkpoints:list[dict[str,Any]])->list[dict[str,Any]]:
+ if not isinstance(checkpoints,list) or not checkpoints:
+  raise ContinuityError("roadmap checkpoint chain is empty")
+ rows=[]
+ for index,cp in enumerate(checkpoints):
+  if not isinstance(cp,dict) or not isinstance(cp.get("id"),str) or not ID_RE.fullmatch(cp["id"]):
+   raise ContinuityError(f"invalid roadmap checkpoint ID at index {index}")
+  if cp.get("sequence")!=index or cp.get("digest_algorithm")!="sha3-512":
+   raise ContinuityError(f"invalid roadmap checkpoint sequence or digest algorithm at index {index}")
+  if cp.get("signature_status") not in ("UNSIGNED","SIGNED_UNVERIFIED","SIGNED_VERIFIED"):
+   raise ContinuityError(f"invalid roadmap checkpoint signature status at index {index}")
+  if cp.get("digest")!=checkpoint_digest(cp):
+   raise ContinuityError(f"roadmap checkpoint digest mismatch at index {index}")
+  prev=rows[-1]["checkpoint"] if rows else None
+  if cp.get("previous_checkpoint_id")!=(prev["id"] if prev else None) or cp.get("previous_digest")!=(prev["digest"] if prev else None):
+   raise ContinuityError(f"roadmap checkpoint predecessor mismatch at index {index}")
+  rows.append({"checkpoint":cp,"digest":cp["digest"]})
+ return rows
 def safe_parent(path:Path)->None:
  if not STATE_ROOT.is_absolute() or STATE_ROOT in (Path("/"), Path.home()) or ".." in STATE_ROOT.parts:
   raise ContinuityError("unsafe SOVEREIGN_STATE_ROOT")
@@ -48,8 +66,9 @@ def verify(path:Path,roadmap_path:Path=DEFAULT_ROADMAP)->dict[str,Any]:
  rows=read_ledger(path)
  if not rows and roadmap_path.is_file():
   seeds=json.loads(roadmap_path.read_text()).get("checkpoints",[])
-  if seeds and seeds[0].get("digest")==checkpoint_digest(seeds[0]):
-   cp=seeds[0];return {"status":"UNPERSISTED_SEED","count":1,"latest_checkpoint":cp["id"],"latest_digest":cp["digest"],"integrity_verified":True,"resume_allowed":False,"resume_blocker":"SIGNATURE_VERIFIER_NOT_CONFIGURED","signature_verification":"NOT_RUN","source":"roadmap_seed_not_yet_persisted_to_local_ledger"}
+  if seeds:
+   seed_rows=validate_checkpoint_chain(seeds);cp=seed_rows[-1]["checkpoint"]
+   return {"status":"UNPERSISTED_SEED","count":len(seed_rows),"latest_checkpoint":cp["id"],"latest_digest":cp["digest"],"integrity_verified":True,"resume_allowed":False,"resume_blocker":"SIGNATURE_VERIFIER_NOT_CONFIGURED","signature_verification":"NOT_RUN","source":"roadmap_checkpoint_chain_not_yet_persisted_to_local_ledger"}
  latest=rows[-1]["checkpoint"] if rows else None
  return {"status":"PASS" if rows else "EMPTY","count":len(rows),"latest_checkpoint":latest["id"] if latest else None,
          "latest_digest":rows[-1]["digest"] if rows else None,"integrity_verified":bool(rows),
@@ -68,10 +87,11 @@ def create(path:Path,roadmap_path:Path,cid:str,next_action:str,completed:list[st
  with os.fdopen(fd,"r+") as lock:
   fcntl.flock(lock.fileno(),fcntl.LOCK_EX);rows=read_ledger(path)
   if not rows:
-   seeds=roadmap.get("checkpoints",[])
-   if not seeds or seeds[0].get("digest")!=checkpoint_digest(seeds[0]): raise ContinuityError("roadmap seed checkpoint missing or digest-invalid")
-   seed=seeds[0];fd=os.open(path,os.O_WRONLY|os.O_APPEND|os.O_CREAT|getattr(os,"O_NOFOLLOW",0),0o600)
-   with os.fdopen(fd,"ab") as out: out.write(canonical_bytes({"checkpoint":seed,"digest":seed["digest"]})+b"\n");out.flush();os.fsync(out.fileno())
+   seed_rows=validate_checkpoint_chain(roadmap.get("checkpoints",[]))
+   fd=os.open(path,os.O_WRONLY|os.O_APPEND|os.O_CREAT|getattr(os,"O_NOFOLLOW",0),0o600)
+   with os.fdopen(fd,"ab") as out:
+    for seed_row in seed_rows: out.write(canonical_bytes(seed_row)+b"\n")
+    out.flush();os.fsync(out.fileno())
    rows=read_ledger(path)
   prev=rows[-1]["checkpoint"]
   if any(x["checkpoint"]["id"]==cid for x in rows): raise ContinuityError("checkpoint ID already exists")
