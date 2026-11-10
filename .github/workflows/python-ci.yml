@@ -40,6 +40,12 @@ jobs:
           python3 -m pip install pytest httpx
           python3 -m pytest -q tests/unit/test_offline_tool_dispatcher.py
 
+      - name: Run MCP authority denial matrix and SCAR admission tests
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m pytest -q tests/test_mcp_authority_boundary.py tests/test_gateone_mcp_policy.py
+
       - name: Run focused HeavyJudge and dual-gate tests
         shell: bash
         run: |
