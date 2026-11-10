@@ -64,8 +64,32 @@ export NO_PROXY="*"
 export no_proxy="*"
 export SG_RUNTIME_OWNER="DevAssist420SGHv119.html"
 export SOVEREIGN_PYTHON_EXECUTABLE="${SOVEREIGN_PYTHON_EXECUTABLE:-$PYTHON_BIN}"
-export SOVEREIGN_STATE_PATH="${SOVEREIGN_STATE_PATH:-$ROOT_DIR/state/canonical.json}"
-export SCAR_PATH="${SCAR_PATH:-$ROOT_DIR/AUDIT/devassist-device.jsonl}"
+: "${HOME:?HOME is required for the sovereign state root}"
+export SOVEREIGN_STATE_ROOT="${SOVEREIGN_STATE_ROOT:-$HOME/Admin/On Device Memory Storage}"
+"$PYTHON_BIN" - "$HOME" "$SOVEREIGN_STATE_ROOT" <<'PY'
+from pathlib import Path
+import sys
+
+home = Path(sys.argv[1]).resolve()
+root = Path(sys.argv[2]).expanduser()
+if not root.is_absolute() or ".." in root.parts:
+    raise SystemExit("Refusing relative or traversal SOVEREIGN_STATE_ROOT.")
+for ancestor in (root, *root.parents):
+    if ancestor.exists() and ancestor.is_symlink():
+        raise SystemExit("Refusing symlink in SOVEREIGN_STATE_ROOT.")
+resolved = root.resolve()
+if resolved in (Path("/"), home):
+    raise SystemExit("Refusing unsafe SOVEREIGN_STATE_ROOT.")
+PY
+umask 077
+mkdir -p -- "$SOVEREIGN_STATE_ROOT/state" "$SOVEREIGN_STATE_ROOT/audit"
+for state_dir in "$SOVEREIGN_STATE_ROOT/state" "$SOVEREIGN_STATE_ROOT/audit"; do
+  [[ -d "$state_dir" && ! -L "$state_dir" ]] || { echo "Unsafe sovereign state directory: $state_dir" >&2; exit 1; }
+  chmod 700 "$state_dir"
+done
+export SOVEREIGN_STATE_PATH="${SOVEREIGN_STATE_PATH:-$SOVEREIGN_STATE_ROOT/state/canonical.json}"
+export SCAR_PATH="${SCAR_PATH:-$SOVEREIGN_STATE_ROOT/audit/devassist-device.jsonl}"
+export SOVEREIGNTY_CONTINUITY_LEDGER="${SOVEREIGNTY_CONTINUITY_LEDGER:-$SOVEREIGN_STATE_ROOT/Sovereignty AI/continuity/checkpoints.jsonl}"
 export CORS_ORIGIN="${CORS_ORIGIN:-http://127.0.0.1:$DASHBOARD_PORT}"
 pids=()
 cleanup() {
