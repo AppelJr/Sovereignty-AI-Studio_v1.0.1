@@ -128,8 +128,33 @@ jobs:
           docker build --tag "$TAG" .
           echo "IMAGE_TAG=$TAG" >> "$GITHUB_ENV"
 
+      # Publishing is owner-gated and production-only. PRs and Collaboration pushes never publish.
+      - name: Verify production release authorization manifest
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.SOVEREIGN_RELEASE_PUBLISH == 'true'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          roadmap = json.loads(Path("roadmap/sovereignty-production-roadmap.json").read_text())
+          release = roadmap.get("release", {})
+          if release.get("status") != "PRODUCTION":
+              raise SystemExit("BLOCKED: release status is not PRODUCTION")
+          if release.get("promotion_authorized") is not True:
+              raise SystemExit("BLOCKED: promotion_authorized is not true")
+          if not isinstance(release.get("owner_acceptance_ref"), str) or not release["owner_acceptance_ref"].strip():
+              raise SystemExit("BLOCKED: owner acceptance reference is missing")
+          if any(gate.get("mandatory") and gate.get("status") != "PASS" for gate in roadmap.get("production_gates", [])):
+              raise SystemExit("BLOCKED: mandatory production gate is not PASS")
+          if any(workstream.get("status") != "PASS" for workstream in roadmap.get("workstreams", [])):
+              raise SystemExit("BLOCKED: workstream is not PASS")
+          print("PASS: release manifest satisfies structural owner-gate requirements")
+          PY
+
       - name: Publish image
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.SOVEREIGN_RELEASE_PUBLISH == 'true'
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
