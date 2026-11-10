@@ -64,6 +64,6 @@
        "workstreams":{"items":{"properties":{"status":{"const":"PASS"}}}},
        "release":{"properties":{"promotion_authorized":{"const":true},"owner_acceptance_ref":{"type":"string","minLength":1}}}}}},
     {"if":{"properties":{"release":{"properties":{"promotion_authorized":{"const":true}}}},"required":["release"]},
-     "then":{"properties":{"release":{"required":["owner_acceptance_ref"]}}}}
+     "then":{"properties":{"release":{"properties":{"owner_acceptance_ref":{"type":"string","minLength":1}},"required":["owner_acceptance_ref"]}}}}
   ]
 }
