@@ -198,10 +198,19 @@ check('SCAR transaction failure aborts registry mutation', () => {
   assert.equal(core.getSnapshot().principals.length, before);
   failCommit = false;
 });
-check('device revocation requires owner proof and invalidates proof', () => {
+check('device revocation requires owner proof and revokes device principal', () => {
   assert.equal(core.revokeDevice('device:iphone', null).reason, 'OWNER_PROOF_REQUIRED');
   assert.equal(core.revokeDevice('device:iphone', ownerProof).decision, 'ALLOW');
+  assert.equal(core.getSnapshot().principals.find(p => p.subject_id === 'device:iphone').status, STATUS.REVOKED);
   assert.equal(core.verifyDeviceProof('device:iphone', 'owner:root', 'session-nonce', sign('session-nonce')).reason, 'DEVICE_NOT_ACTIVE');
+});
+check('owner root cannot be suspended or revoked', () => {
+  assert.equal(core.setPrincipalStatus('owner:root', STATUS.REVOKED, ownerProof).reason, 'PRINCIPAL_NOT_MUTABLE');
+});
+check('non-owner principal can be suspended by Gate.One-approved owner', () => {
+  assert.equal(core.setPrincipalStatus('service:router', STATUS.SUSPENDED, null).reason, 'OWNER_PROOF_REQUIRED');
+  assert.equal(core.setPrincipalStatus('service:router', STATUS.SUSPENDED, ownerProof).decision, 'ALLOW');
+  assert.equal(core.getSnapshot().principals.find(p => p.subject_id === 'service:router').status, STATUS.SUSPENDED);
 });
 check('all committed mutations have attributable SCAR events', () => {
   assert.ok(events.length >= 8);
