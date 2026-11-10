@@ -44,7 +44,10 @@ async function main() {
     assert.equal(result.inference.state, 'UNAVAILABLE');
     assert.equal(result.inference.ready, undefined);
     assert.equal(result.readiness.ready, false);
+    assert.equal(result.governed_pipeline.state, 'UNWIRED');
+    assert.equal(result.governed_pipeline.output_authorized, false);
     assert.ok(result.readiness.blockers.includes('LOCAL_MODEL_UNAVAILABLE'));
+    assert.ok(result.readiness.blockers.includes('GOVERNED_CHAIN_NOT_CONNECTED'));
     console.log('PASS: DevAssist420 does not report ready when local inference is unavailable');
   } finally {
     await new Promise(resolve => wss.close(resolve));
