@@ -96,7 +96,7 @@ def main()->int:
  try:
   if a.command=="create":
    if not a.id: raise ContinuityError("create requires --id")
-   result={"status":"CREATED",**create(a.ledger,a.roadmap,a.id,a.next_action,a.completed,a.blocker,a.add_pending,a.resolve_blocker)}
+   result={"status":"CREATED","resume_allowed":False,**create(a.ledger,a.roadmap,a.id,a.next_action,a.completed,a.blocker,a.add_pending,a.resolve_blocker)}
   else: result=verify(a.ledger,a.roadmap)
   print(json.dumps(result,indent=2,sort_keys=True));return 0 if result.get("status") in ("PASS","CREATED") else 1
  except (ContinuityError,OSError,ValueError,json.JSONDecodeError) as exc: print(f"BLOCKED: {exc}",file=sys.stderr);return 2
