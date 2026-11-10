@@ -42,6 +42,22 @@ class ContinuityTests(unittest.TestCase):
   self.assertEqual(report["signature_status"],"UNSIGNED")
   self.assertFalse(report["resume_allowed"])
 
+
+ def test_verify_cli_exits_nonzero_for_unpersisted_seed(self):
+  original=sys.argv
+  try:
+   sys.argv=["continuity_checkpoint.py","verify","--roadmap",str(self.rp),"--ledger",str(self.ledger)]
+   self.assertEqual(module.main(),1)
+  finally: sys.argv=original
+
+ def test_create_cli_succeeds_without_authorizing_resume(self):
+  original=sys.argv
+  try:
+   sys.argv=["continuity_checkpoint.py","create","--id","CONTINUITY-002","--roadmap",str(self.rp),"--ledger",str(self.ledger)]
+   self.assertEqual(module.main(),0)
+  finally: sys.argv=original
+  self.assertFalse(module.verify(self.ledger,self.rp)["resume_allowed"])
+
  def test_tamper_rejected(self):
   module.create(self.ledger,self.rp,"CONTINUITY-002","Run tests",[],[]);rows=self.ledger.read_text().splitlines();item=json.loads(rows[-1]);item["checkpoint"]["next_action"]="tampered";rows[-1]=json.dumps(item);self.ledger.write_text("\n".join(rows)+"\n")
   with self.assertRaisesRegex(module.ContinuityError,"digest mismatch"): module.verify(self.ledger,self.rp)
