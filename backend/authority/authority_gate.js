@@ -28,7 +28,8 @@ const ROOT_ACTIONS = Object.freeze([
   'revoke_root',
   'replace_owner',
   'disable_fail_closed',
-  'bypass_policy'
+  'bypass_policy',
+  'mutate_policy'
 ]);
 
 /**
