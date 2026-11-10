@@ -397,7 +397,8 @@ async function status() {
   try { scar = pipeline(canonical.state && canonical.state.owner_id || 'system').scar.verifyChain(); } catch { scar = { ok: false, reason: 'SCAR_UNAVAILABLE' }; }
   try { policy = loadPolicy(); } catch (error) { policy = null; }
   const inference = python.inference || { configured: false, loaded: false, ready: false, providers: {} };
-  const ready = python.online && canonical.allowed && !!scar && scar.ok && !!policy && inference.ready === true;
+  const governedPipeline = { state: 'UNWIRED', ready: false, output_authorized: false };
+  const ready = python.online && canonical.allowed && !!scar && scar.ok && !!policy && inference.ready === true && governedPipeline.ready === true;
   return {
     status: ready ? 'ready' : 'degraded',
     service: 'DevAssist420',
@@ -410,12 +411,14 @@ async function status() {
       loaded: inference.loaded === true,
       providers: inference.providers || {}
     },
+    governed_pipeline: governedPipeline,
     provider_policy: { state: policy ? 'VALID' : 'BLOCKED', version: policy && policy.policy_version || null, authority: 'server' },
     scar: { state: scar && scar.ok ? 'VALID' : 'BROKEN', reason: scar && scar.reason },
     readiness: { ready, blockers: [
       ...(!canonical.allowed ? [canonical.reason || 'CANONICAL_STATE_BLOCKED'] : []),
       ...(!python.online ? [python.detail || 'PYTHON_WEBSOCKET_OFFLINE'] : []),
       ...(python.online && !inference.ready ? [inference.configured ? 'LOCAL_MODEL_NOT_LOADED' : 'LOCAL_MODEL_UNAVAILABLE'] : []),
+      ...(!governedPipeline.ready ? ['GOVERNED_CHAIN_NOT_CONNECTED'] : []),
       ...(!scar || !scar.ok ? ['SCAR_CHAIN_INVALID'] : []),
       ...(!policy ? ['PROVIDER_POLICY_INVALID'] : [])
     ] },
