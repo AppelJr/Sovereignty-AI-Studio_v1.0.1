@@ -111,6 +111,8 @@ class BridgeServer:
         self.clients: set = set()
         self._server = None
         self._stopping = False
+        self._sovereign_bridge = None
+        self._inference_lock = asyncio.Lock()
 
         # Memory
         MemoryStore, MemoryHydrator = _try_import_memory()
@@ -163,17 +165,47 @@ class BridgeServer:
     # AI routing
     # ------------------------------------------------------------------
 
-    async def _chat_sovereign(self, msg: str, sys_prompt: str, agent: str = "sovereign") -> str:
-        """Use the configured local providers; failure is terminal, with no HTTP fallback."""
-        try:
+    def _get_sovereign_bridge(self):
+        """Create one provider registry per server; retain loaded models across requests."""
+        if self._sovereign_bridge is None:
             from ai_core.sovereign_bridge import SovereignBridge
+            self._sovereign_bridge = SovereignBridge()
+        return self._sovereign_bridge
 
-            sovereign = SovereignBridge()
+    def _inference_health(self) -> dict:
+        """Report configured and loaded model state without triggering model loads."""
+        try:
+            providers = self._get_sovereign_bridge().health()
+            configured = any(item.get("ok") for item in providers.values())
+            loaded = any(item.get("ok") and item.get("loaded") for item in providers.values())
+            return {
+                "configured": configured,
+                "loaded": loaded,
+                "ready": loaded,
+                "providers": providers,
+            }
+        except Exception as exc:  # noqa: BLE001
+            return {
+                "configured": False,
+                "loaded": False,
+                "ready": False,
+                "providers": {},
+                "error": type(exc).__name__,
+            }
+
+    async def _chat_sovereign(self, msg: str, sys_prompt: str, agent: str = "sovereign") -> str:
+        """Use one cached local provider registry; failure is terminal, with no HTTP fallback."""
+        try:
             messages = []
             if sys_prompt:
                 messages.append({"role": "system", "content": sys_prompt})
             messages.append({"role": "user", "content": msg})
-            return sovereign.chat(messages, context={"agent": agent})
+            async with self._inference_lock:
+                return await asyncio.to_thread(
+                    self._get_sovereign_bridge().chat,
+                    messages,
+                    context={"agent": agent},
+                )
         except Exception as exc:  # noqa: BLE001
             # Do not retry through a second endpoint or change transport implicitly.
             log.error(
@@ -432,6 +464,7 @@ class BridgeServer:
                         "tokens": self.tokens.status() if self.tokens else None,
                         "bus": self.bus.status() if self.bus else None,
                         "bridge_watcher": self.bridge_watcher.status() if self.bridge_watcher else None,
+                        "inference": self._inference_health(),
                         "ts": int(time.time() * 1000),
                     }
                     await self.send(ws, status)
