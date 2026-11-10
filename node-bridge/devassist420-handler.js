@@ -95,12 +95,12 @@ function probePythonWebSocket(timeoutMs = 2000) {
     };
     const timer = setTimeout(() => finish(false, 'PYTHON_WS_TIMEOUT'), timeoutMs);
     ws.once('open', () => ws.send(JSON.stringify({ type: 'status' })));
-    ws.once('message', raw => {
+    ws.on('message', raw => {
+      if (settled) return;
       try {
         const message = JSON.parse(String(raw));
-        if (message.type !== 'status_response') {
-          return finish(false, 'PYTHON_STATUS_RESPONSE_INVALID');
-        }
+        // Ignore the bridge's initial handshake_ack and wait for the requested status_response.
+        if (message.type !== 'status_response') return;
         finish(true, 'status_received', message.inference || {
           configured: false, loaded: false, ready: false, providers: {}
         });
