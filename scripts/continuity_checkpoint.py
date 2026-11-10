@@ -16,6 +16,8 @@ def canonical_bytes(value:Any)->bytes:
 def checkpoint_digest(cp:dict[str,Any])->str:
  return "sha3-512:"+hashlib.sha3_512(canonical_bytes({k:v for k,v in cp.items() if k!="digest"})).hexdigest()
 def safe_parent(path:Path)->None:
+ if not STATE_ROOT.is_absolute() or STATE_ROOT in (Path("/"), Path.home()) or ".." in STATE_ROOT.parts:
+  raise ContinuityError("unsafe SOVEREIGN_STATE_ROOT")
  if not path.is_absolute() or path == Path("/") or path.parent == path:
   raise ContinuityError("unsafe ledger path")
  for ancestor in (path.parent, *path.parent.parents):
