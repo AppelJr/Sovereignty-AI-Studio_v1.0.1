@@ -21,7 +21,6 @@ import os
 import pathlib
 import sys
 import time
-import urllib.request
 
 try:
     from websockets.asyncio.server import serve
@@ -169,46 +168,23 @@ class BridgeServer:
     # ------------------------------------------------------------------
 
     async def _chat_sovereign(self, msg: str, sys_prompt: str, agent: str = "sovereign") -> str:
-        """Route to the local sovereign AI bridge — no external SaaS."""
+        """Use the configured local providers; failure is terminal, with no HTTP fallback."""
         try:
             from ai_core.sovereign_bridge import SovereignBridge
 
-            bridge = SovereignBridge()
+            sovereign = SovereignBridge()
             messages = []
             if sys_prompt:
                 messages.append({"role": "system", "content": sys_prompt})
             messages.append({"role": "user", "content": msg})
-            return bridge.chat(messages)
-        except Exception as e:  # noqa: BLE001
-            log.warning("Sovereign bridge failed, falling back to HTTP: %s", e)
-
-        # HTTP fallback to the sovereign API endpoint
-        try:
-            messages = [{"role": "user", "content": msg}]
-            if sys_prompt:
-                messages.insert(0, {"role": "system", "content": sys_prompt})
-            body = json.dumps({
-                "messages": messages,
-                "max_tokens": 2048,
-                "context": {"agent": agent},
-            }).encode()
-            req = urllib.request.Request(
-                f"{SOVEREIGN_API_URL}/chat",
-                data=body,
-                headers={"Content-Type": "application/json"},
-                method="POST",
+            return sovereign.chat(messages, context={"agent": agent})
+        except Exception as exc:  # noqa: BLE001
+            # Do not retry through a second endpoint or change transport implicitly.
+            log.error(
+                "Local sovereign inference unavailable; no fallback attempted (%s)",
+                type(exc).__name__,
             )
-            with urllib.request.urlopen(req, timeout=30) as r:
-                data = json.loads(r.read())
-                return (
-                    data.get("text")
-                    or data.get("response")
-                    or (data.get("choices", [{}])[0].get("message", {}).get("content", ""))
-                    or "[no response]"
-                )
-        except Exception as e:  # noqa: BLE001
-            log.error("Sovereign API error: %s", e)
-            return f"[Sovereign bridge error: {e}]"
+            return f"[Sovereign bridge error: {type(exc).__name__}]"
 
     async def ai_chat(self, ws, msg: str, agent: str, context: str, system: str = "", session: str = "default"):
         sys_prompt = system or (
