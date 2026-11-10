@@ -46,8 +46,6 @@ services:
       SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY in deployment environment}
       SOVEREIGN_MODEL_PATH: ${SOVEREIGN_MODEL_PATH:-/models/sovereign.gguf}
       SOVEREIGN_ONNX_PATH: ${SOVEREIGN_ONNX_PATH:-/models/sovereign.onnx}
-      SOVEREIGN_API_URL: http://node-bridge:9899/api/ai
-      SOVEREIGN_API_ALLOW_INTERNAL_SERVICES: "1"
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:9898}
       LOG_DIR: /app/logs
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
@@ -166,7 +164,7 @@ services:
   nginx:
     image: nginx:alpine
     restart: unless-stopped
-    ports: ["443:443"]
+    ports: ["127.0.0.1:9443:443", "127.0.0.1:9880:80"]
     volumes:
       - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ${TLS_CERT:?Set TLS_CERT in deployment environment}:/etc/nginx/ssl/cert.pem:ro
