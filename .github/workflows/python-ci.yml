@@ -44,7 +44,7 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          python3 -m pytest -q tests/test_bridge_server.py
+          python3 -m pytest -q tests/test_bridge_server.py tests/test_sovereign_api_provider.py
 
       - name: Run production continuity schema and checkpoint tests
         shell: bash
