@@ -33,6 +33,8 @@ class ContinuityTests(unittest.TestCase):
  def test_production_requires_gates_and_owner_ref(self):
   schema=json.loads((ROOT/"schemas/sovereignty-production-continuity.schema.json").read_text());candidate=json.loads(json.dumps(self.roadmap));candidate["release"]["status"]="PRODUCTION"
   self.assertTrue(list(Draft202012Validator(schema,format_checker=FormatChecker()).iter_errors(candidate)))
-  candidate["release"]["promotion_authorized"]=True;candidate["release"].pop("owner_acceptance_ref",None)
+  candidate["release"]["promotion_authorized"]=True;candidate["release"]["owner_acceptance_ref"]=None
+  self.assertTrue(list(Draft202012Validator(schema,format_checker=FormatChecker()).iter_errors(candidate)))
+  candidate["release"].pop("owner_acceptance_ref",None)
   self.assertTrue(list(Draft202012Validator(schema,format_checker=FormatChecker()).iter_errors(candidate)))
 if __name__=="__main__": unittest.main()
