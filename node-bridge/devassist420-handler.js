@@ -338,15 +338,39 @@ async function execute(body, proof) {
   }
   authorizations.delete(body.capability_id);
   const p = verifiedPipeline(session.identity_id);
-  try {
-    const response = await infer(request);
-    const evidence = recordVerified(p, { participant: session.identity_id, action: request.action, result: 'ALLOW', details: { route: 'local', transport: PYTHON_WS_URL, response_hash: response.hash || null, request_id: request.request_id, session_id: session.session_id } });
-    if (!evidence || evidence.ok !== true) return { state: 'DENY', reason: 'SCAR_PERSISTENCE_FAILED', agreement: AGREEMENT };
-    return { state: 'EXECUTED', response: response.text || '', agent: response.agent || 'devassist420', hash: response.hash || null, ts: response.ts || Date.now(), evidence, agreement: AGREEMENT };
-  } catch (error) {
-    const evidence = recordVerified(p, { participant: session.identity_id, action: request.action, result: 'FAIL', details: { route: 'local', error: error.message, request_id: request.request_id, session_id: session.session_id } });
-    return { state: 'FAIL', reason: 'LOCAL_INFERENCE_UNAVAILABLE', detail: error.message, evidence, agreement: AGREEMENT };
+  // A local model response is only a candidate. This device route has no
+  // connected three-lane Council, Heavy Judge, or release verifier, so it
+  // must not return candidate text or record an authorized ALLOW.
+  const evidence = recordVerified(p, {
+    participant: session.identity_id,
+    action: request.action,
+    result: 'YANK',
+    details: {
+      route: 'local-candidate-withheld',
+      reason: 'GOVERNED_CHAIN_NOT_CONNECTED',
+      request_id: request.request_id,
+      session_id: session.session_id,
+      council_state: 'NOT_CONNECTED',
+      heavy_judge_state: 'NOT_CONNECTED',
+      release_verifier_state: 'NOT_CONNECTED',
+      output_authorized: false
+    }
+  });
+  if (!evidence || evidence.ok !== true) {
+    return { state: 'DENY', reason: 'SCAR_PERSISTENCE_FAILED', output_authorized: false, agreement: AGREEMENT };
   }
+  return {
+    state: 'YANK',
+    status: 'ESCROW_PENDING_REVIEW',
+    action: 'YANK',
+    reason: 'GOVERNED_CHAIN_NOT_CONNECTED',
+    response: null,
+    output_authorized: false,
+    escrow_required: true,
+    request_id: request.request_id,
+    evidence,
+    agreement: AGREEMENT
+  };
 }
 
 async function handle(body, proof) {
