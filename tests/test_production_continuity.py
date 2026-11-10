@@ -58,6 +58,21 @@ class ContinuityTests(unittest.TestCase):
   finally: sys.argv=original
   self.assertFalse(module.verify(self.ledger,self.rp)["resume_allowed"])
 
+
+ def test_signature_status_claim_never_authorizes_resume(self):
+  module.create(self.ledger,self.rp,"CONTINUITY-002","Resume only after verification",[],[])
+  rows=self.ledger.read_text().splitlines()
+  item=json.loads(rows[-1])
+  item["checkpoint"]["signature_status"]="SIGNED_VERIFIED"
+  item["checkpoint"]["digest"]=module.checkpoint_digest(item["checkpoint"])
+  item["digest"]=item["checkpoint"]["digest"]
+  rows[-1]=module.canonical_bytes(item).decode("utf-8")
+  self.ledger.write_text("\\n".join(rows)+"\\n")
+  report=module.verify(self.ledger,self.rp)
+  self.assertEqual(report["signature_status"],"SIGNED_VERIFIED")
+  self.assertEqual(report["signature_verification"],"NOT_RUN")
+  self.assertFalse(report["resume_allowed"])
+
  def test_tamper_rejected(self):
   module.create(self.ledger,self.rp,"CONTINUITY-002","Run tests",[],[]);rows=self.ledger.read_text().splitlines();item=json.loads(rows[-1]);item["checkpoint"]["next_action"]="tampered";rows[-1]=json.dumps(item);self.ledger.write_text("\n".join(rows)+"\n")
   with self.assertRaisesRegex(module.ContinuityError,"digest mismatch"): module.verify(self.ledger,self.rp)
