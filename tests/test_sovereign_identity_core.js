@@ -101,10 +101,12 @@ check('valid device signature still requires owner approval', () => {
   const challenge = core.getSnapshot().devices[0];
   assert.equal(core.approveDeviceEnrollment(challenge.challenge_id, sign(challenge.nonce), null).reason, 'OWNER_PROOF_REQUIRED');
 });
-check('owner approval activates device only after proof', () => {
+check('owner approval activates device only after proof and consumes challenge', () => {
   const challenge = core.getSnapshot().devices[0];
   assert.equal(core.approveDeviceEnrollment(challenge.challenge_id, sign(challenge.nonce), ownerProof).decision, 'ALLOW');
   assert.equal(core.getSnapshot().devices[0].enrollment_status, STATUS.ACTIVE);
+  assert.ok(core.getSnapshot().principals.some(p => p.subject_id === 'device:iphone' && p.principal_type === PRINCIPAL.DEVICE));
+  assert.equal(core.approveDeviceEnrollment(challenge.challenge_id, sign(challenge.nonce), ownerProof).reason, 'CHALLENGE_UNKNOWN_OR_CONSUMED');
 });
 check('device proof verifies and is owner-bound', () => {
   assert.equal(core.verifyDeviceProof('device:iphone', 'owner:root', 'session-nonce', sign('session-nonce')).decision, 'IDENTITY_VERIFIED');
@@ -129,6 +131,12 @@ check('federated alias cannot map to owner root', () => {
     external_subject: 'sub:admin', canonical_subject_id: 'owner:root'
   }, ownerProof).reason, 'OWNER_OR_UNKNOWN_TARGET');
 });
+check('federation alias mutation requires Gate.One owner approval', () => {
+  assert.equal(core.addFederationAlias({
+    partner_id: 'partner:idp', protocol: 'OIDC', issuer: anchor.issuer,
+    external_subject: 'sub:unapproved', canonical_subject_id: 'human:alice'
+  }).reason, 'OWNER_PROOF_REQUIRED');
+});
 check('federation alias maps only to an existing non-owner principal', () => {
   assert.equal(core.addFederationAlias({
     partner_id: 'partner:idp', protocol: 'OIDC', issuer: anchor.issuer,
@@ -149,9 +157,13 @@ check('OAuth access token is not accepted as identity proof', () => {
 });
 check('SCIM event cannot create owner authority', () => {
   assert.equal(core.resolveFederatedIdentity({
-    protocol: 'SCIM2', issuer: anchor.issuer, external_subject: 'sub:alice',
+    protocol: 'SCIM2', issuer: 'https://scim.example', external_subject: 'sub:alice',
     claims: { groups: ['owner', 'admin'] }
   }).reason, 'FEDERATION_ALIAS_NOT_FOUND');
+  assert.equal(core.addFederationAlias({
+    partner_id: 'partner:idp', protocol: 'SCIM2', issuer: 'https://scim.example',
+    external_subject: 'sub:alice', canonical_subject_id: 'owner:root'
+  }, ownerProof).reason, 'OWNER_OR_UNKNOWN_TARGET');
 });
 check('untrusted issuer cannot resolve', () => {
   assert.equal(core.resolveFederatedIdentity({
