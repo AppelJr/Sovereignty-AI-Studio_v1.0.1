@@ -22,6 +22,26 @@ class ContinuityTests(unittest.TestCase):
   cp=module.create(self.ledger,self.rp,"CONTINUITY-002","Run tests",[],[])["checkpoint"]
   self.assertEqual(cp["sequence"],1);self.assertEqual(cp["previous_checkpoint_id"],"SOVEREIGNTY-CONTINUITY-001")
   self.assertEqual(module.verify(self.ledger,self.rp)["count"],2)
+
+ def test_progress_and_blockers_carry_forward(self):
+  seed=self.roadmap["checkpoints"][0]
+  seed["pending"]=["task-a","task-b"]
+  seed["digest"]=module.checkpoint_digest(seed)
+  self.rp.write_text(json.dumps(self.roadmap))
+  first=module.create(self.ledger,self.rp,"CONTINUITY-002","Continue task-b",["task-a"],["MODEL_MISSING"],["task-c"],[])["checkpoint"]
+  self.assertEqual(first["completed"],["task-a"])
+  self.assertEqual(first["pending"],["task-b","task-c"])
+  self.assertEqual(first["blockers"],["MODEL_MISSING"])
+  self.assertEqual(first["status"],"BLOCKED")
+  second=module.create(self.ledger,self.rp,"CONTINUITY-003","Verify next task",["task-b"],[],[],["MODEL_MISSING"])["checkpoint"]
+  self.assertEqual(second["completed"],["task-a","task-b"])
+  self.assertEqual(second["pending"],["task-c"])
+  self.assertEqual(second["blockers"],[])
+  self.assertEqual(second["status"],"ACTIVE")
+  report=module.verify(self.ledger,self.rp)
+  self.assertEqual(report["signature_status"],"UNSIGNED")
+  self.assertFalse(report["resume_allowed"])
+
  def test_tamper_rejected(self):
   module.create(self.ledger,self.rp,"CONTINUITY-002","Run tests",[],[]);rows=self.ledger.read_text().splitlines();item=json.loads(rows[-1]);item["checkpoint"]["next_action"]="tampered";rows[-1]=json.dumps(item);self.ledger.write_text("\n".join(rows)+"\n")
   with self.assertRaisesRegex(module.ContinuityError,"digest mismatch"): module.verify(self.ledger,self.rp)
