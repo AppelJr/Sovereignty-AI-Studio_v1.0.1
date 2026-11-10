@@ -33,6 +33,7 @@ const core = createSovereignIdentityCore({
 const ownerProof = 'owner-proof-valid';
 const human = { subject_id: 'human:alice', principal_type: PRINCIPAL.HUMAN };
 const service = { subject_id: 'service:router', principal_type: PRINCIPAL.SERVICE };
+const partner = { subject_id: 'partner:idp', principal_type: PRINCIPAL.FEDERATION_PARTNER };
 const { publicKey, privateKey } = crypto.generateKeyPairSync('ed25519');
 const publicPem = publicKey.export({ type: 'spki', format: 'pem' }).toString();
 const sign = value => crypto.sign(null, Buffer.from(value), privateKey).toString('base64url');
@@ -77,6 +78,11 @@ check('owner can register a non-owner human principal', () => {
 check('owner can register a service principal', () => {
   assert.equal(core.registerPrincipal(service, ownerProof).decision, 'ALLOW');
 });
+check('owner activates human and federation partner principals explicitly', () => {
+  assert.equal(core.activatePrincipal('human:alice', ownerProof).decision, 'ALLOW');
+  assert.equal(core.registerPrincipal(partner, ownerProof).decision, 'ALLOW');
+  assert.equal(core.activatePrincipal('partner:idp', ownerProof).decision, 'ALLOW');
+});
 check('owner enrollment challenge is pending until owner approval', () => {
   const challenge = core.createEnrollmentChallenge({
     device_id: 'device:iphone',
@@ -109,6 +115,13 @@ check('trust-anchor rotation requires owner proof', () => {
 });
 check('owner can register an OIDC trust anchor', () => {
   assert.equal(core.addTrustAnchor(anchor, ownerProof).decision, 'ALLOW');
+});
+check('SCIM provisioning uses its own trust-anchor purpose', () => {
+  assert.equal(core.addTrustAnchor({
+    anchor_id: 'anchor:scim:1', purpose: 'SCIM2_PROVISIONING', issuer: 'https://scim.example',
+    key_fingerprint: 'b'.repeat(64), algorithm: 'TLS_CLIENT_IDENTITY',
+    not_before: 1_700_000_000_000, not_after: 1_900_000_000_000
+  }, ownerProof).decision, 'ALLOW');
 });
 check('federated alias cannot map to owner root', () => {
   assert.equal(core.addFederationAlias({
