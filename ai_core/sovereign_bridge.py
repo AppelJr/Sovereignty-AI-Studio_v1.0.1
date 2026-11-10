@@ -14,10 +14,10 @@ from typing import Any, Dict, Generator, List, Optional
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Provider registry (ordered; never falls back to external SaaS)
+# Provider registry. Default order is local-only; API transport requires explicit configuration.
 # ---------------------------------------------------------------------------
 _DEFAULT_ORDER = os.getenv(
-    "SOVEREIGN_PROVIDER_ORDER", "local_gguf,local_onnx,sovereign_api"
+    "SOVEREIGN_PROVIDER_ORDER", "local_gguf,local_onnx"
 ).split(",")
 
 
