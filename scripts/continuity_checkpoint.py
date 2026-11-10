@@ -7,7 +7,8 @@ from pathlib import Path
 from typing import Any
 ROOT=Path(__file__).resolve().parents[1]
 DEFAULT_ROADMAP=ROOT/"roadmap/sovereignty-production-roadmap.json"
-DEFAULT_LEDGER=Path(os.environ.get("SOVEREIGNTY_CONTINUITY_LEDGER","~/.sovereignty/continuity/checkpoints.jsonl")).expanduser()
+STATE_ROOT=Path(os.environ.get("SOVEREIGN_STATE_ROOT") or (Path.home()/"Admin"/"On Device Memory Storage")).expanduser()
+DEFAULT_LEDGER=Path(os.environ.get("SOVEREIGNTY_CONTINUITY_LEDGER") or str(STATE_ROOT/"Sovereignty AI"/"continuity"/"checkpoints.jsonl")).expanduser()
 ID_RE=re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,95}$")
 class ContinuityError(RuntimeError): pass
 def canonical_bytes(value:Any)->bytes:
@@ -15,7 +16,11 @@ def canonical_bytes(value:Any)->bytes:
 def checkpoint_digest(cp:dict[str,Any])->str:
  return "sha3-512:"+hashlib.sha3_512(canonical_bytes({k:v for k,v in cp.items() if k!="digest"})).hexdigest()
 def safe_parent(path:Path)->None:
- if path.parent.exists() and path.parent.is_symlink(): raise ContinuityError("refusing symlink checkpoint directory")
+ if not path.is_absolute() or path == Path("/") or path.parent == path:
+  raise ContinuityError("unsafe ledger path")
+ for ancestor in (path.parent, *path.parent.parents):
+  if ancestor.exists() and ancestor.is_symlink():
+   raise ContinuityError("refusing symlink checkpoint directory")
  path.parent.mkdir(parents=True,exist_ok=True,mode=0o700)
  if path.is_symlink(): raise ContinuityError("refusing symlink ledger")
  if not path.parent.is_dir(): raise ContinuityError("ledger parent must be a real directory")
