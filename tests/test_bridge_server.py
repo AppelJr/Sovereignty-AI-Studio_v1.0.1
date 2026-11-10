@@ -66,41 +66,24 @@ async def test_broadcast_ai_response_excludes_origin():
 
 
 @pytest.mark.asyncio
-async def test_ai_chat_returns_sovereign_bridge_response(monkeypatch):
-    """ai_chat should return a response routed through the sovereign bridge."""
+async def test_ai_chat_withholds_output_until_governed_chain_is_connected(monkeypatch):
     srv = bridge.BridgeServer()
     ws = WSTransport()
 
-    async def real_sovereign(msg: str, sys_prompt: str, agent: str = "sovereign") -> str:
-        return "sovereign-response"
+    async def forbidden_candidate_generation(*_args, **_kwargs):
+        raise AssertionError("ungoverned candidate generation must not run")
 
-    monkeypatch.setattr(srv, "_chat_sovereign", real_sovereign)
-
+    monkeypatch.setattr(srv, "_chat_sovereign", forbidden_candidate_generation)
     await srv.ai_chat(ws, msg="hi", agent="sovereign", context="c1")
 
     assert len(ws.sent) == 1
     payload = ws.sent[0]
-    assert payload["type"] == "ai_response"
-    assert payload["agent"] == "sovereign"
-    assert payload["text"] == "sovereign-response"
-
-
-@pytest.mark.asyncio
-async def test_ai_chat_routes_through_sovereign_bridge(monkeypatch):
-    """ai_chat should always route through _chat_sovereign regardless of agent name."""
-    srv = bridge.BridgeServer()
-    ws = WSTransport()
-
-    async def real_sovereign(msg: str, sys_prompt: str, agent: str = "sovereign") -> str:
-        assert msg == "route this"
-        assert "sovereign" in sys_prompt.lower()
-        return "from-sovereign"
-
-    monkeypatch.setattr(srv, "_chat_sovereign", real_sovereign)
-
-    await srv.ai_chat(ws, msg="route this", agent="any-agent", context="ctx")
-
-    assert ws.sent[0]["text"] == "from-sovereign"
+    assert payload["type"] == "ai_error"
+    assert payload["state"] == "YANK"
+    assert payload["action"] == "YANK"
+    assert payload["error"] == "GOVERNED_CHAIN_NOT_CONNECTED"
+    assert payload["output_authorized"] is False
+    assert payload["escrow_required"] is True
 
 
 @pytest.mark.asyncio
