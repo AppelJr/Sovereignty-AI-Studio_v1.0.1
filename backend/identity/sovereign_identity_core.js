@@ -70,30 +70,41 @@ function emptyState(ownerSubjectId) {
   };
 }
 
+function bootstrapOwnerRoot(options = {}) {
+  const { ownerSubjectId, ownerProof, storage, verifyOwnerBootstrap, now = () => Date.now() } = options;
+  if (typeof ownerSubjectId !== 'string' || !ownerSubjectId.trim()) return fail('OWNER_SUBJECT_REQUIRED');
+  if (!storage || typeof storage.load !== 'function' || typeof storage.commit !== 'function' || typeof verifyOwnerBootstrap !== 'function') {
+    return fail('BOOTSTRAP_VERIFIER_OR_STORAGE_REQUIRED');
+  }
+  if (storage.load()) return fail('OWNER_ROOT_ALREADY_INITIALIZED');
+  let verified;
+  try { verified = verifyOwnerBootstrap({ owner_subject_id: ownerSubjectId, owner_proof: ownerProof }); } catch { return fail('OWNER_BOOTSTRAP_VERIFICATION_FAILED'); }
+  if (!verified || verified.decision !== 'ALLOW' || verified.actor !== ownerSubjectId) return fail('OWNER_BOOTSTRAP_VERIFICATION_FAILED');
+  const state = emptyState(ownerSubjectId);
+  const event = {
+    event_id: crypto.randomUUID(), action: 'IDENTITY_OWNER_ROOT_BOOTSTRAPPED',
+    actor: ownerSubjectId, subject_id: ownerSubjectId, result: 'INITIALIZED',
+    timestamp: now(), authorization: 'OWNER_BOOTSTRAP_VERIFIED',
+    authorization_id: verified.authorization_id || null,
+    memory_loaded: false, network_accessed: false, files_changed: ['identity_registry']
+  };
+  try {
+    const result = storage.commit(clone(state), event);
+    return result && result.ok === true ? { decision: 'ALLOW', result: 'INITIALIZED', event_id: event.event_id } : fail('SCAR_TRANSACTION_FAILED');
+  } catch { return fail('SCAR_TRANSACTION_FAILED'); }
+}
+
 function createSovereignIdentityCore(options = {}) {
-  const { ownerSubjectId, storage, authorizeMutation, now = () => Date.now(), nonce = () => crypto.randomBytes(32).toString('base64url') } = options;
+  const { ownerSubjectId, storage, authorizeMutation, verifyFederationAssertion, now = () => Date.now(), nonce = () => crypto.randomBytes(32).toString('base64url') } = options;
   if (typeof ownerSubjectId !== 'string' || !ownerSubjectId.trim()) throw new TypeError('ownerSubjectId required');
   if (!storage || typeof storage.load !== 'function' || typeof storage.commit !== 'function') {
     throw new TypeError('transactional storage.load/commit adapter required');
   }
   if (typeof authorizeMutation !== 'function') throw new TypeError('Gate.One authorizeMutation adapter required');
 
-  let state = storage.load();
-  if (!state) {
-    state = emptyState(ownerSubjectId);
-    const seeded = storage.commit(clone(state), {
-      event_id: crypto.randomUUID(),
-      action: 'IDENTITY_OWNER_ROOT_BOOTSTRAPPED',
-      actor: 'LOCAL_BOOTSTRAP',
-      subject_id: ownerSubjectId,
-      result: 'INITIALIZED',
-      timestamp: now(),
-      memory_loaded: false,
-      network_accessed: false,
-      files_changed: ['identity_registry']
-    });
-    if (!seeded || seeded.ok !== true) throw new Error('owner root bootstrap evidence transaction failed');
-  }
+  const stateFromStorage = storage.load();
+  if (!stateFromStorage) throw new Error('owner root is not initialized; verified bootstrap ceremony required');
+  let state = stateFromStorage;
   if (state.owner_subject_id !== ownerSubjectId ||
       !Array.isArray(state.principals) ||
       state.principals.filter(p => p.principal_type === PRINCIPAL.OWNER).length !== 1 ||
@@ -488,22 +499,55 @@ function createSovereignIdentityCore(options = {}) {
       return fail('ACCESS_TOKEN_NOT_IDENTITY');
     }
     if (!PROTOCOLS.has(assertion.protocol)) return fail('UNSUPPORTED_OR_UNTRUSTED_PROTOCOL');
+    if (typeof verifyFederationAssertion !== 'function') {
+      recordFailure('FEDERATION_RESOLVE', 'ASSERTION_VALIDATOR_UNAVAILABLE');
+      return fail('ASSERTION_VALIDATOR_UNAVAILABLE');
+    }
+    let verified;
+    try { verified = verifyFederationAssertion(assertion, clone(state.trust_anchors)); } catch {
+      recordFailure('FEDERATION_RESOLVE', 'ASSERTION_VALIDATION_FAILED');
+      return fail('ASSERTION_VALIDATION_FAILED');
+    }
+    if (!verified || verified.verified !== true ||
+        verified.protocol !== assertion.protocol ||
+        typeof verified.issuer !== 'string' ||
+        typeof verified.external_subject !== 'string' ||
+        typeof verified.trust_anchor_id !== 'string') {
+      recordFailure('FEDERATION_RESOLVE', 'ASSERTION_VALIDATION_FAILED');
+      return fail('ASSERTION_VALIDATION_FAILED');
+    }
+    const anchor = state.trust_anchors.find(a =>
+      a.anchor_id === verified.trust_anchor_id &&
+      a.issuer === verified.issuer &&
+      a.purpose === ANCHOR_PURPOSE[verified.protocol] &&
+      a.status === STATUS.ACTIVE &&
+      a.not_before <= now() && a.not_after > now()
+    );
+    if (!anchor) {
+      recordFailure('FEDERATION_RESOLVE', 'TRUST_ANCHOR_INVALID');
+      return fail('TRUST_ANCHOR_INVALID');
+    }
     const alias = state.federation_aliases.find(a =>
-      a.protocol === assertion.protocol &&
-      a.issuer === assertion.issuer &&
-      a.external_subject === assertion.external_subject &&
+      a.protocol === verified.protocol &&
+      a.issuer === verified.issuer &&
+      a.external_subject === verified.external_subject &&
       a.mapping_status === STATUS.ACTIVE
     );
     if (!alias) {
       recordFailure('FEDERATION_RESOLVE', 'FEDERATION_ALIAS_NOT_FOUND');
       return fail('FEDERATION_ALIAS_NOT_FOUND');
     }
+    const partner = principal(alias.partner_id);
+    if (!partner || partner.status !== STATUS.ACTIVE || partner.principal_type !== PRINCIPAL.FEDERATION_PARTNER) {
+      recordFailure('FEDERATION_RESOLVE', 'FEDERATION_PARTNER_NOT_ACTIVE');
+      return fail('FEDERATION_PARTNER_NOT_ACTIVE');
+    }
     const target = principal(alias.canonical_subject_id);
     if (!target || target.status !== STATUS.ACTIVE || target.principal_type === PRINCIPAL.OWNER) {
       recordFailure('FEDERATION_RESOLVE', 'FEDERATED_TARGET_INVALID');
       return fail('FEDERATED_TARGET_INVALID');
     }
-    // Ignore owner/admin/root/group/role claims. Identity resolution never authorizes.
+    // Identity resolution never authorizes; Gate.One evaluates the result independently.
     return {
       decision: 'IDENTITY_VERIFIED',
       subject_id: target.subject_id,
@@ -511,7 +555,8 @@ function createSovereignIdentityCore(options = {}) {
       federation: {
         partner_id: alias.partner_id,
         protocol: alias.protocol,
-        issuer: alias.issuer
+        issuer: alias.issuer,
+        trust_anchor_id: anchor.anchor_id
       },
       authorization: 'NOT_EVALUATED',
       gate_one_required: true
@@ -542,6 +587,7 @@ module.exports = {
   PRINCIPAL,
   STATUS,
   ANCHOR_PURPOSE,
+  bootstrapOwnerRoot,
   createSovereignIdentityCore,
   fingerprint
 };
