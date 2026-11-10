@@ -205,7 +205,7 @@ function createSovereignIdentityCore(options = {}) {
 
   function activatePrincipal(subjectId, ownerProof) {
     const existing = principal(subjectId);
-    if (!existing || existing.status !== STATUS.PENDING) return fail('PRINCIPAL_NOT_PENDING');
+    if (!existing || ![STATUS.PENDING, STATUS.SUSPENDED].includes(existing.status)) return fail('PRINCIPAL_NOT_ACTIVATABLE');
     const auth = gate(ownerProof, 'identity.principal.activate', 'PRINCIPAL_ACTIVATE');
     if (auth.decision !== 'ALLOW') return auth;
     const next = clone(state);
@@ -224,6 +224,39 @@ function createSovereignIdentityCore(options = {}) {
       memory_loaded: false,
       network_accessed: false,
       files_changed: ['identity_registry']
+    });
+  }
+
+  function setPrincipalStatus(subjectId, nextStatus, ownerProof) {
+    if (![STATUS.SUSPENDED, STATUS.REVOKED].includes(nextStatus)) return fail('INVALID_PRINCIPAL_STATUS_TRANSITION');
+    const existing = principal(subjectId);
+    if (!existing || existing.principal_type === PRINCIPAL.OWNER || existing.status === STATUS.REVOKED) {
+      return fail('PRINCIPAL_NOT_MUTABLE');
+    }
+    const auth = gate(ownerProof, 'identity.principal.status', 'PRINCIPAL_STATUS_CHANGE');
+    if (auth.decision !== 'ALLOW') return auth;
+    const next = clone(state);
+    const target = next.principals.find(p => p.subject_id === subjectId);
+    target.status = nextStatus;
+    target.updated_at = now();
+    target.registry_version = state.version + 1;
+    if (target.principal_type === PRINCIPAL.FEDERATION_PARTNER && nextStatus !== STATUS.ACTIVE) {
+      for (const alias of next.federation_aliases) {
+        if (alias.partner_id === subjectId) alias.mapping_status = STATUS.SUSPENDED;
+      }
+    }
+    next.version += 1;
+    return commit(next, {
+      action: 'PRINCIPAL_STATUS_CHANGED',
+      subject_id: subjectId,
+      principal_type: target.principal_type,
+      status: nextStatus,
+      result: 'ALLOW',
+      authorization: 'GATE_ONE_ALLOW',
+      authorization_id: auth.authorization_id,
+      memory_loaded: false,
+      network_accessed: false,
+      files_changed: ['identity_registry', 'federation_alias_registry']
     });
   }
 
@@ -372,6 +405,12 @@ function createSovereignIdentityCore(options = {}) {
     const target = next.devices.find(d => d.device_id === deviceId);
     target.status = STATUS.REVOKED;
     target.enrollment_status = STATUS.REVOKED;
+    const devicePrincipal = next.principals.find(p => p.subject_id === deviceId && p.principal_type === PRINCIPAL.DEVICE);
+    if (devicePrincipal) {
+      devicePrincipal.status = STATUS.REVOKED;
+      devicePrincipal.updated_at = now();
+      devicePrincipal.registry_version = state.version + 1;
+    }
     target.revoked_at = now();
     target.nonce = null;
     next.version += 1;
@@ -406,6 +445,10 @@ function createSovereignIdentityCore(options = {}) {
       return fail('ROTATION_PREDECESSOR_INVALID');
     }
     const next = clone(state);
+    if (anchor.predecessor_anchor_id) {
+      const predecessor = next.trust_anchors.find(a => a.anchor_id === anchor.predecessor_anchor_id);
+      predecessor.status = STATUS.REVOKED;
+    }
     next.trust_anchors.push({
       anchor_id: anchor.anchor_id,
       purpose: anchor.purpose,
@@ -421,7 +464,7 @@ function createSovereignIdentityCore(options = {}) {
     });
     next.version += 1;
     return commit(next, {
-      action: 'TRUST_ANCHOR_ADDED',
+      action: anchor.predecessor_anchor_id ? 'TRUST_ANCHOR_ROTATED' : 'TRUST_ANCHOR_ADDED',
       trust_anchor_id: anchor.anchor_id,
       issuer: anchor.issuer,
       key_fingerprint: anchor.key_fingerprint.toLowerCase(),
@@ -572,6 +615,7 @@ function createSovereignIdentityCore(options = {}) {
     STATUS,
     registerPrincipal,
     activatePrincipal,
+    setPrincipalStatus,
     createEnrollmentChallenge,
     approveDeviceEnrollment,
     verifyDeviceProof,
