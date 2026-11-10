@@ -8,7 +8,6 @@ from ai_core.providers.sovereign_api import SovereignAPIProvider
     [
         "http://localhost:9898/api/ai",
         "http://127.0.0.1:9899/api/ai",
-        "http://[::1]:9897/api/ai",
         "http://backend:8002/api/ai",
         "http://node-bridge:9899/api/ai",
         "http://gateway:9001/api/ai",
@@ -26,6 +25,7 @@ def test_local_stack_api_urls_are_allowed(url):
         "https://api.anthropic.com/v1",
         "https://api.x.ai/v1",
         "http://192.0.2.10:9899/api/ai",
+        "http://127.0.0.1:9897/api/ai",
         "http://localhost:9899/api/ai?redirect=https://example.com",
         "http://user:password@localhost:9899/api/ai",
         "file:///etc/passwd",
