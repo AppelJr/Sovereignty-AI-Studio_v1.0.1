@@ -60,6 +60,7 @@ def main() -> int:
         '"$ROOT_DIR/Unified_Server.js"', "127.0.0.1",
         "SOVEREIGN_STATE_ROOT", "Admin/On Device Memory Storage",
         "/api/devassist/status", "CONTROL_PLANE=ONLINE", "INFERENCE=",
+        "CHECKPOINT_STATUS=", "CHECKPOINT_RESUME_ALLOWED=",
     )
     for token in required_tokens:
         if token not in launcher:
