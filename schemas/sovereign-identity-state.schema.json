@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sovereignty.local/schemas/sovereign-identity-state.schema.json",
+  "title": "Sovereignty Identity Core persisted state",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "owner_subject_id",
+    "principals",
+    "devices",
+    "trust_anchors",
+    "federation_aliases"
+  ],
+  "properties": {
+    "version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "owner_subject_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "principals": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "subject_id",
+          "principal_type",
+          "status",
+          "created_at",
+          "updated_at",
+          "owner_root_ref",
+          "assurance_level",
+          "attributes_hash",
+          "registry_version"
+        ],
+        "properties": {
+          "subject_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "principal_type": {
+            "enum": [
+              "OWNER",
+              "HUMAN",
+              "DEVICE",
+              "SERVICE",
+              "FEDERATION_PARTNER"
+            ]
+          },
+          "status": {
+            "enum": [
+              "PENDING",
+              "ACTIVE",
+              "SUSPENDED",
+              "REVOKED"
+            ]
+          },
+          "created_at": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "updated_at": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "owner_root_ref": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "assurance_level": {
+            "type": "string",
+            "minLength": 1
+          },
+          "attributes_hash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "registry_version": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
+    },
+    "devices": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "trust_anchors": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "federation_aliases": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "used_nonces": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}
