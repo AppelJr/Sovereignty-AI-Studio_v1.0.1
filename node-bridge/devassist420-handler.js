@@ -303,28 +303,6 @@ async function executeLocalTool(body, proof) {
   });
 }
 
-function infer(request) {
-  return new Promise((resolve, reject) => {
-    const ws = new WebSocket(PYTHON_WS_URL);
-    let done = false;
-    const finish = (fn, value) => { if (!done) { done = true; clearTimeout(timer); try { ws.close(); } catch {} fn(value); } };
-    const timer = setTimeout(() => finish(reject, new Error('PYTHON_BRIDGE_TIMEOUT')), 45000);
-    ws.once('open', () => ws.send(JSON.stringify({
-      type: 'ai_chat', agent: 'devassist420', message: request.text,
-      context: 'Sovereignty AI Studio / DevAssist420', session: request.session_id,
-      system: 'You are the authorized local Sovereignty AI assistant. Be accurate. Never fabricate access, actions, files, model identity, or evidence.'
-    })));
-    ws.on('message', raw => {
-      try {
-        const msg = JSON.parse(String(raw));
-        if (msg.type === 'ai_response') finish(resolve, msg);
-        else if (msg.type === 'ai_error') finish(reject, new Error(msg.error || 'LOCAL_INFERENCE_FAILED'));
-      } catch (error) { finish(reject, error); }
-    });
-    ws.once('error', error => finish(reject, error));
-  });
-}
-
 async function execute(body, proof) {
   const canonical = loadCanonicalState(STATE_PATH);
   const session = authenticate(proof, canonical, 'ai.inference');
