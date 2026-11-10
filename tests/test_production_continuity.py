@@ -25,6 +25,7 @@ class ContinuityTests(unittest.TestCase):
 
  def test_progress_and_blockers_carry_forward(self):
   seed=self.roadmap["checkpoints"][0]
+  seed["completed"]=[]
   seed["pending"]=["task-a","task-b"]
   seed["digest"]=module.checkpoint_digest(seed)
   self.rp.write_text(json.dumps(self.roadmap))
@@ -67,7 +68,7 @@ class ContinuityTests(unittest.TestCase):
   item["checkpoint"]["digest"]=module.checkpoint_digest(item["checkpoint"])
   item["digest"]=item["checkpoint"]["digest"]
   rows[-1]=module.canonical_bytes(item).decode("utf-8")
-  self.ledger.write_text("\\n".join(rows)+"\\n")
+  self.ledger.write_text("\n".join(rows)+"\n")
   report=module.verify(self.ledger,self.rp)
   self.assertEqual(report["signature_status"],"SIGNED_VERIFIED")
   self.assertEqual(report["signature_verification"],"NOT_RUN")
