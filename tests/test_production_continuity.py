@@ -75,6 +75,24 @@ class ContinuityTests(unittest.TestCase):
   self.assertEqual(report["signature_verification"],"NOT_RUN")
   self.assertFalse(report["resume_allowed"])
 
+
+ def test_create_imports_complete_roadmap_checkpoint_chain(self):
+  seed=self.roadmap["checkpoints"][0]
+  seed["completed"]=[]
+  seed["pending"]=["task-a"]
+  seed["blockers"]=[]
+  seed["digest"]=module.checkpoint_digest(seed)
+  second={"id":"ROADMAP-CHECKPOINT-002","sequence":1,"created_at":"2026-11-09T00:00:00+00:00","status":"ACTIVE","completed":["task-a"],"pending":[],"blockers":[],"verified_evidence":["fixture"],"next_action":"Continue verified work","digest_algorithm":"sha3-512","previous_checkpoint_id":seed["id"],"previous_digest":seed["digest"],"signature_status":"UNSIGNED"}
+  second["digest"]=module.checkpoint_digest(second)
+  self.roadmap["checkpoints"].append(second)
+  self.roadmap["continuity"]["current_checkpoint"]=second["id"]
+  self.rp.write_text(json.dumps(self.roadmap))
+  module.create(self.ledger,self.rp,"CONTINUITY-003","Continue after imported history",[],[])
+  rows=module.read_ledger(self.ledger)
+  self.assertEqual(len(rows),3)
+  self.assertEqual(rows[1]["checkpoint"]["id"],"ROADMAP-CHECKPOINT-002")
+  self.assertEqual(rows[2]["checkpoint"]["previous_checkpoint_id"],"ROADMAP-CHECKPOINT-002")
+
  def test_tamper_rejected(self):
   module.create(self.ledger,self.rp,"CONTINUITY-002","Run tests",[],[]);rows=self.ledger.read_text().splitlines();item=json.loads(rows[-1]);item["checkpoint"]["next_action"]="tampered";rows[-1]=json.dumps(item);self.ledger.write_text("\n".join(rows)+"\n")
   with self.assertRaisesRegex(module.ContinuityError,"digest mismatch"): module.verify(self.ledger,self.rp)
