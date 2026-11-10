@@ -141,4 +141,4 @@ def test_default_sovereign_provider_order_is_local_only(monkeypatch):
 
     monkeypatch.delenv("SOVEREIGN_PROVIDER_ORDER", raising=False)
     importlib.reload(sovereign_module)
-    assert sovereign_module._DEFAULT_ORDER == ["local_gguf", "local_onnx"]
+    assert sovereign_module._DEFAULT_ORDER == ["local_gguf"]
