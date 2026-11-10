@@ -82,11 +82,15 @@ function createSovereignIdentityCore(options = {}) {
   if (!state) {
     state = emptyState(ownerSubjectId);
     const seeded = storage.commit(clone(state), {
-      event_type: 'IDENTITY_OWNER_ROOT_BOOTSTRAPPED',
+      event_id: crypto.randomUUID(),
+      action: 'IDENTITY_OWNER_ROOT_BOOTSTRAPPED',
       actor: 'LOCAL_BOOTSTRAP',
       subject_id: ownerSubjectId,
       result: 'INITIALIZED',
-      timestamp: now()
+      timestamp: now(),
+      memory_loaded: false,
+      network_accessed: false,
+      files_changed: ['identity_registry']
     });
     if (!seeded || seeded.ok !== true) throw new Error('owner root bootstrap evidence transaction failed');
   }
@@ -152,6 +156,7 @@ function createSovereignIdentityCore(options = {}) {
 
   function registerPrincipal(fields, ownerProof) {
     if (!fields || typeof fields.subject_id !== 'string' || !fields.subject_id.trim() ||
+        (fields.attributes_hash !== undefined && !/^[a-f0-9]{64}$/i.test(fields.attributes_hash)) ||
         !Object.values(PRINCIPAL).includes(fields.principal_type) ||
         fields.principal_type === PRINCIPAL.OWNER ||
         fields.principal_type === PRINCIPAL.DEVICE) {
@@ -216,12 +221,15 @@ function createSovereignIdentityCore(options = {}) {
         typeof input.public_key !== 'string' || !input.public_key ||
         input.owner_subject_id !== ownerSubjectId ||
         !Array.isArray(input.requested_capabilities) ||
-        input.requested_capabilities.some(x => typeof x !== 'string' || !x)) {
+        input.requested_capabilities.length > 32 ||
+        input.requested_capabilities.some(x => typeof x !== 'string' || !x || x.length > 128)) {
       recordFailure('DEVICE_ENROLLMENT_CHALLENGE', 'INVALID_ENROLLMENT_REQUEST');
       return fail('INVALID_ENROLLMENT_REQUEST');
     }
     let keyFingerprint;
     try { keyFingerprint = fingerprint(input.public_key); } catch { return fail('INVALID_DEVICE_PUBLIC_KEY'); }
+    if (principal(input.device_id) ||
+        state.devices.filter(d => d.enrollment_status === STATUS.PENDING && d.expires_at > now()).length >= 32) return fail('DEVICE_ENROLLMENT_LIMIT_OR_SUBJECT_EXISTS');
     if (state.devices.some(d => d.device_id === input.device_id) ||
         state.devices.some(d => d.public_key_fingerprint === keyFingerprint)) return fail('DEVICE_ALREADY_REGISTERED');
     const challenge = {
