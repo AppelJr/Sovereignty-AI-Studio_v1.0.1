@@ -95,8 +95,17 @@ def main() -> int:
         if token not in compose:
             fail(f"Docker ingress must be loopback-bound: missing {token}")
     docker_workflow = (ROOT / ".github" / "workflows" / "docker-publish.yml").read_text(encoding="utf-8")
-    if "packages: write" in docker_workflow or "docker push" in docker_workflow or "ghcr.io" in docker_workflow:
+    if "packages: write" in docker_workflow or "docker push" in docker_workflow:
         fail("local-only Docker CI must not publish images or request package write permission")
+    # Parse image registry hosts instead of substring matching so a benign
+    # string containing "ghcr.io" cannot false-positive the check.
+    for line in docker_workflow.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("image:"):
+            ref = stripped.split(":", 1)[1].strip().strip("'\"")
+            registry = ref.split("/")[0] if "/" in ref else ""
+            if registry == "ghcr.io" or registry.endswith(".ghcr.io"):
+                fail("local-only Docker CI must not reference GHCR images")
 
     handler = (ROOT / "node-bridge" / "devassist420-handler.js").read_text(encoding="utf-8")
     for token in ("GOVERNED_CHAIN_NOT_CONNECTED", "output_authorized: false", "governedPipeline.ready === true"):
