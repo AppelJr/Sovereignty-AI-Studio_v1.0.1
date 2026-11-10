@@ -37,6 +37,8 @@ def read_ledger(path:Path)->list[dict[str,Any]]:
    except json.JSONDecodeError as exc: raise ContinuityError(f"malformed ledger line {n}") from exc
    cp=item.get("checkpoint") if isinstance(item,dict) else None
    if not isinstance(cp,dict) or item.get("digest")!=checkpoint_digest(cp) or cp.get("digest")!=item.get("digest"): raise ContinuityError(f"checkpoint digest mismatch at line {n}")
+   if cp.get("digest_algorithm")!="sha3-512": raise ContinuityError(f"unsupported checkpoint digest algorithm at line {n}")
+   if cp.get("signature_status") not in ("UNSIGNED","SIGNED_UNVERIFIED","SIGNED_VERIFIED"): raise ContinuityError(f"invalid checkpoint signature status at line {n}")
    if cp.get("sequence")!=len(rows): raise ContinuityError(f"checkpoint sequence discontinuity at line {n}")
    prev=rows[-1]["checkpoint"] if rows else None
    if cp.get("previous_checkpoint_id")!=(prev["id"] if prev else None) or cp.get("previous_digest")!=(prev["digest"] if prev else None): raise ContinuityError(f"checkpoint predecessor mismatch at line {n}")
@@ -48,7 +50,11 @@ def verify(path:Path,roadmap_path:Path=DEFAULT_ROADMAP)->dict[str,Any]:
   seeds=json.loads(roadmap_path.read_text()).get("checkpoints",[])
   if seeds and seeds[0].get("digest")==checkpoint_digest(seeds[0]):
    cp=seeds[0];return {"status":"UNPERSISTED_SEED","count":1,"latest_checkpoint":cp["id"],"latest_digest":cp["digest"],"integrity_verified":True,"resume_allowed":False,"source":"roadmap_seed_not_yet_persisted_to_local_ledger"}
- return {"status":"PASS" if rows else "EMPTY","count":len(rows),"latest_checkpoint":rows[-1]["checkpoint"]["id"] if rows else None,"latest_digest":rows[-1]["digest"] if rows else None,"integrity_verified":bool(rows)}
+ latest=rows[-1]["checkpoint"] if rows else None
+ return {"status":"PASS" if rows else "EMPTY","count":len(rows),"latest_checkpoint":latest["id"] if latest else None,
+         "latest_digest":rows[-1]["digest"] if rows else None,"integrity_verified":bool(rows),
+         "signature_status":latest.get("signature_status") if latest else "UNSIGNED",
+         "resume_allowed":bool(latest and latest.get("signature_status")=="SIGNED_VERIFIED")}
 def create(path:Path,roadmap_path:Path,cid:str,next_action:str,completed:list[str],blockers:list[str])->dict[str,Any]:
  if not ID_RE.fullmatch(cid): raise ContinuityError("invalid checkpoint ID")
  if not next_action.strip(): raise ContinuityError("next_action must not be empty")
@@ -68,7 +74,7 @@ def create(path:Path,roadmap_path:Path,cid:str,next_action:str,completed:list[st
    rows=read_ledger(path)
   prev=rows[-1]["checkpoint"]
   if any(x["checkpoint"]["id"]==cid for x in rows): raise ContinuityError("checkpoint ID already exists")
-  cp={"id":cid,"sequence":len(rows),"created_at":datetime.now(timezone.utc).isoformat(),"status":"ACTIVE","completed":completed,"pending":list(roadmap["continuity"]["pending_work"]),"blockers":blockers,"verified_evidence":[],"next_action":next_action,"digest_algorithm":"sha3-512","previous_checkpoint_id":prev["id"],"previous_digest":prev["digest"],"signature_status":"UNSIGNED"}
+  cp={"id":cid,"sequence":len(rows),"created_at":datetime.now(timezone.utc).isoformat(),"status":"ACTIVE","completed":completed,"pending":list(previous.get("pending",roadmap["continuity"]["pending_work"])),"blockers":blockers,"verified_evidence":[],"next_action":next_action,"digest_algorithm":"sha3-512","previous_checkpoint_id":prev["id"],"previous_digest":prev["digest"],"signature_status":"UNSIGNED"}
   cp["digest"]=checkpoint_digest(cp);entry={"checkpoint":cp,"digest":cp["digest"]}
   fd=os.open(path,os.O_WRONLY|os.O_APPEND|os.O_CREAT|getattr(os,"O_NOFOLLOW",0),0o600)
   with os.fdopen(fd,"ab") as out: out.write(canonical_bytes(entry)+b"\n");out.flush();os.fsync(out.fileno())
