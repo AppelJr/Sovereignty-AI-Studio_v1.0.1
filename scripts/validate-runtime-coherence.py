@@ -12,6 +12,8 @@ PORTS = {
     "python_bridge": 9897, "dashboard": 9898, "unified_server": 9899,
     "keycloak_http": 8080, "keycloak_https": 8443,
     "redis_internal": 6379, "postgres_internal": 5432,
+    "production_ingress_https": 9443, "development_http": 9880,
+    "production_ingress_bind": "127.0.0.1",
 }
 
 
@@ -56,6 +58,8 @@ def main() -> int:
         "${PORT_UNIFIED:-${NODE_BRIDGE_PORT:-9899}}",
         '"$ROOT_DIR/python3_bridge.py"', '"$ROOT_DIR/server_9898.js"',
         '"$ROOT_DIR/Unified_Server.js"', "127.0.0.1",
+        "SOVEREIGN_STATE_ROOT", "Admin/On Device Memory Storage",
+        "/api/devassist/status", "CONTROL_PLANE=ONLINE", "INFERENCE=",
     )
     for token in required_tokens:
         if token not in launcher:
@@ -84,6 +88,14 @@ def main() -> int:
         fail("dashboard API proxy must use a fixed loopback upstream")
     if "9899" not in unified_server or "node-bridge/server" not in unified_server:
         fail("Unified Server must own port 9899 and reuse the Node bridge implementation")
+
+    compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+    for token in ('127.0.0.1:9443:443', '127.0.0.1:9880:80', '127.0.0.1:9899:9899'):
+        if token not in compose:
+            fail(f"Docker ingress must be loopback-bound: missing {token}")
+    docker_workflow = (ROOT / ".github" / "workflows" / "docker-publish.yml").read_text(encoding="utf-8")
+    if "packages: write" in docker_workflow or "docker push" in docker_workflow or "ghcr.io" in docker_workflow:
+        fail("local-only Docker CI must not publish images or request package write permission")
 
     dashboard = (ROOT / canonical["dashboard"]).read_text(encoding="utf-8", errors="ignore")
     if "trimmed for brevity" in dashboard.lower():
