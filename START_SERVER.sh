@@ -106,14 +106,21 @@ pids+=("$!")
 PORT="$DASHBOARD_PORT" PORT_UNIFIED="$UNIFIED_PORT" DASHBOARD_HOST=127.0.0.1 "$NODE_BIN" "$ROOT_DIR/server_9898.js" &
 pids+=("$!")
 # Do not print a green runtime status until all service health contracts answer.
-"$PYTHON_BIN" - "$PY_PORT" "$DASHBOARD_PORT" "$UNIFIED_PORT" <<'PY'
+"$PYTHON_BIN" - "$PY_PORT" "$DASHBOARD_PORT" "$UNIFIED_PORT" "$ROOT_DIR" "$SOVEREIGNTY_CONTINUITY_LEDGER" <<'PY'
 import json
+import subprocess
 import sys
 import time
 import urllib.error
 import urllib.request
+from datetime import datetime, timezone
+from pathlib import Path
 
-python_port, dashboard_port, unified_port = map(int, sys.argv[1:])
+python_port, dashboard_port, unified_port = map(int, sys.argv[1:4])
+root_dir = Path(sys.argv[4])
+ledger_path = Path(sys.argv[5])
+roadmap_path = root_dir / "roadmap" / "sovereignty-production-roadmap.json"
+checkpoint_script = root_dir / "scripts" / "continuity_checkpoint.py"
 
 def read_json(url):
     with urllib.request.build_opener(urllib.request.ProxyHandler({})).open(url, timeout=2) as response:
@@ -150,8 +157,50 @@ print(f"DASHBOARD_HTTP={dashboard_status}")
 print(f"DEVASSIST_STATUS={str(devassist.get('status', 'UNKNOWN')).upper()}")
 print(f"INFERENCE={str(inference.get('state', 'UNKNOWN')).upper()}")
 print(f"DEVASSIST_READY={bool(readiness.get('ready'))}")
-blockers = readiness.get("blockers") or []
+blockers = list(readiness.get("blockers") or [])
+if "SIGNATURE_VERIFIER_NOT_CONFIGURED" not in blockers:
+    blockers.append("SIGNATURE_VERIFIER_NOT_CONFIGURED")
+
+verify_command = [
+    sys.executable, str(checkpoint_script), "verify",
+    "--roadmap", str(roadmap_path), "--ledger", str(ledger_path)
+]
+verified = subprocess.run(verify_command, capture_output=True, text=True, check=False)
+try:
+    checkpoint_report = json.loads(verified.stdout)
+except (ValueError, TypeError):
+    raise SystemExit("BLOCKED: continuity checkpoint verification produced no valid JSON")
+
+checkpoint_status = checkpoint_report.get("status")
+if checkpoint_status == "UNPERSISTED_SEED":
+    checkpoint_id = "SOVEREIGNTY-BOOTSTRAP-" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    create_command = [
+        sys.executable, str(checkpoint_script), "create",
+        "--id", checkpoint_id,
+        "--next-action", "Connect the governed runtime and verify owner/device trust anchors before resuming.",
+        "--roadmap", str(roadmap_path), "--ledger", str(ledger_path)
+    ]
+    for blocker in blockers:
+        create_command.extend(["--blocker", str(blocker)])
+    created = subprocess.run(create_command, capture_output=True, text=True, check=False)
+    if created.returncode != 0:
+        raise SystemExit("BLOCKED: initial continuity checkpoint could not be persisted")
+    verified = subprocess.run(verify_command, capture_output=True, text=True, check=False)
+    try:
+        checkpoint_report = json.loads(verified.stdout)
+    except (ValueError, TypeError):
+        raise SystemExit("BLOCKED: persisted continuity checkpoint could not be verified")
+    if verified.returncode != 0 or checkpoint_report.get("status") != "PASS":
+        raise SystemExit("BLOCKED: persisted continuity ledger failed verification")
+    checkpoint_status = "CREATED_AND_VERIFIED"
+elif checkpoint_status == "PASS" and verified.returncode == 0:
+    checkpoint_status = "VERIFIED"
+else:
+    raise SystemExit(f"BLOCKED: continuity checkpoint state is {checkpoint_status or 'UNKNOWN'}")
+
 print("BLOCKERS=" + (",".join(str(item) for item in blockers) if blockers else "NONE"))
+print(f"CHECKPOINT_STATUS={checkpoint_status}")
+print(f"CHECKPOINT_RESUME_ALLOWED={bool(checkpoint_report.get('resume_allowed'))}")
 PY
 
 echo "Canonical Sovereignty AI Studio control plane is online."
