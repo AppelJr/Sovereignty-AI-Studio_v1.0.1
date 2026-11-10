@@ -24,12 +24,16 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
+          FULL_SHA="${{ github.sha }}"
           printf 'WATCHDOG_STATUS=STARTED\n'
           printf 'WATCHDOG_EVENT=%s\n' "${{ github.event_name }}"
           printf 'WATCHDOG_RUN_ID=%s\n' "${{ github.run_id }}"
-          printf 'FULL_SHA=%s\n' "${{ github.sha }}"
-          printf 'HEAD_SHA_LEN=%s\n' "${#{github.sha}}"
-          test "${#{github.sha}}" -eq 40
+          printf 'FULL_SHA=%s\n' "${FULL_SHA}"
+          printf 'HEAD_SHA_LEN=%s\n' "${#FULL_SHA}"
+          if [[ ! "${FULL_SHA}" =~ ^[0-9a-f]{40}$ ]]; then
+            printf 'WATCHDOG_ERROR=INVALID_COMMIT_SHA\n' >&2
+            exit 1
+          fi
           printf 'HATCH=OPEN\n'
           printf 'PAYLOAD_ENTERED=true\n'
       - name: Checkout without external action
@@ -61,8 +65,8 @@ jobs:
             if grep -Eq 'runs-on:' ".github/workflows/$workflow"; then
               echo "runs-on contract present in $workflow"
             else
-              echo "missing runs-on in $workflow"
-              exit 0
+              echo "missing runs-on in $workflow" >&2
+              exit 1
             fi
           done
           echo 'RUNNER_CONTRACTS=PASS'
