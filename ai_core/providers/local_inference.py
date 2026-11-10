@@ -6,6 +6,7 @@ No Ollama wrapper. No external API calls.
 
 from __future__ import annotations
 
+import importlib.util
 import logging
 import os
 from typing import Any, Dict, Generator, List, Optional
@@ -98,11 +99,14 @@ class GGUFProvider(_BaseLocalProvider):
                 yield text
 
     def health(self) -> Dict[str, Any]:
-        available = bool(self._model_path and os.path.exists(self._model_path))
+        model_exists = bool(self._model_path and os.path.isfile(self._model_path))
+        runtime_available = importlib.util.find_spec("llama_cpp") is not None
         return {
-            "ok": available,
+            "ok": model_exists and runtime_available,
             "provider": "local_gguf",
             "model_path": self._model_path,
+            "model_exists": model_exists,
+            "runtime_available": runtime_available,
             "loaded": self._llm is not None,
         }
 
@@ -169,12 +173,14 @@ class ONNXProvider(_BaseLocalProvider):
         )
 
     def health(self) -> Dict[str, Any]:
-        available = bool(self._onnx_path and os.path.exists(self._onnx_path))
+        model_exists = bool(self._onnx_path and os.path.isfile(self._onnx_path))
         return {
-            "ok": available,
+            "ok": False,
             "provider": "local_onnx",
             "onnx_path": self._onnx_path,
+            "model_exists": model_exists,
             "loaded": self._session is not None,
+            "reason": "chat_not_implemented",
         }
 
 
