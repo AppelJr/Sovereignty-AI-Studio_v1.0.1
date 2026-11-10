@@ -12,6 +12,12 @@ class ContinuityTests(unittest.TestCase):
   self.rp=self.root/"roadmap.json";self.rp.write_text(json.dumps(self.roadmap));self.ledger=self.root/"private"/"checkpoints.jsonl"
  def tearDown(self): self.tmp.cleanup()
  def test_seed_digest(self): self.assertEqual(self.roadmap["checkpoints"][0]["digest"],module.checkpoint_digest(self.roadmap["checkpoints"][0]))
+
+ def test_unpersisted_seed_is_not_a_pass(self):
+  report=module.verify(self.ledger,self.rp)
+  self.assertEqual(report["status"],"UNPERSISTED_SEED")
+  self.assertFalse(report["resume_allowed"])
+
  def test_append_link_and_verify(self):
   cp=module.create(self.ledger,self.rp,"CONTINUITY-002","Run tests",[],[])["checkpoint"]
   self.assertEqual(cp["sequence"],1);self.assertEqual(cp["previous_checkpoint_id"],"SOVEREIGNTY-CONTINUITY-001")
