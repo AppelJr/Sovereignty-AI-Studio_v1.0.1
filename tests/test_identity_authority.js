@@ -149,6 +149,35 @@ check('participant missing permission → PERMISSION_DENIED', () => {
   assert.strictEqual(r.threat, false);
 });
 
+check('participant action without required_permission → DENY', () => {
+  const idRes = registry.resolve(canonicalOk, participant.identity_id);
+  const r = checkAuthority(canonicalOk, idRes, 'advise');
+  assert.strictEqual(r.allowed, false);
+  assert.strictEqual(r.reason, AUTHORITY_REASON.PERMISSION_DENIED);
+});
+
+check('participant mismatched capability cannot authorize action → DENY', () => {
+  const idRes = registry.resolve(canonicalOk, participant.identity_id);
+  const r = checkAuthority(canonicalOk, idRes, 'write_vault', {
+    required_permission: 'advise'
+  });
+  assert.strictEqual(r.allowed, false);
+  assert.strictEqual(r.reason, AUTHORITY_REASON.PERMISSION_DENIED);
+});
+
+check('participant wildcard permission cannot authorize action → DENY', () => {
+  const wildcard = Object.freeze({
+    ...participant,
+    identity_id: 'part_wildcard',
+    permission_set: Object.freeze(['*'])
+  });
+  const r = checkAuthority(canonicalOk, { allowed: true, identity: wildcard }, 'delete_vault', {
+    required_permission: 'delete_vault'
+  });
+  assert.strictEqual(r.allowed, false);
+  assert.strictEqual(r.reason, AUTHORITY_REASON.PERMISSION_DENIED);
+});
+
 // ---------------------------------------------------------------------------
 // NEGATIVE: owner mismatch with canonical state → DENY
 // ---------------------------------------------------------------------------
