@@ -21,4 +21,4 @@ The ledger defaults to `$HOME/Admin/On Device Memory Storage/Sovereignty AI/cont
 ## Trust boundary
 Checkpoint digest is SHA3-512 over canonical JSON with the `digest` field omitted. It establishes integrity linkage only. New records are `UNSIGNED`. A digest is not a signature, owner identity proof, TPM quote, trusted timestamp or authorization token. Resume authorization must separately validate signed person/device/request/policy evidence against provisioned trust anchors.
 
-The writer records explicitly supplied completed items; it does not update roadmap workstreams or release gates. No automatic merge, production promotion, provider fallback or service startup is performed.
+Before the seed is appended to the local ledger, `verify` reports `UNPERSISTED_SEED` and exits non-zero; an empty ledger is not a PASS. The first `create` operation persists the digest-verified seed before appending the next checkpoint. The writer records explicitly supplied completed items; it does not update roadmap workstreams or release gates. No automatic merge, production promotion, provider fallback or service startup is performed.
