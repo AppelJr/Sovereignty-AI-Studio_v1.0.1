@@ -37,4 +37,14 @@ class ContinuityTests(unittest.TestCase):
   self.assertTrue(list(Draft202012Validator(schema,format_checker=FormatChecker()).iter_errors(candidate)))
   candidate["release"].pop("owner_acceptance_ref",None)
   self.assertTrue(list(Draft202012Validator(schema,format_checker=FormatChecker()).iter_errors(candidate)))
+
+ def test_unsafe_state_root_rejected(self):
+  original=module.STATE_ROOT
+  try:
+   module.STATE_ROOT=Path("/")
+   with self.assertRaisesRegex(module.ContinuityError,"unsafe SOVEREIGN_STATE_ROOT"):
+    module.create(self.ledger,self.rp,"CONTINUITY-002","Run tests",[],[])
+  finally:
+   module.STATE_ROOT=original
+
 if __name__=="__main__": unittest.main()
