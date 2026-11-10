@@ -381,7 +381,7 @@ function createSovereignIdentityCore(options = {}) {
     if (!anchor || typeof anchor.anchor_id !== 'string' || !anchor.anchor_id ||
         typeof anchor.issuer !== 'string' || !anchor.issuer ||
         typeof anchor.key_fingerprint !== 'string' || !/^[a-f0-9]{64}$/i.test(anchor.key_fingerprint) ||
-        !['SAML2_SIGNING', 'OIDC_JWKS'].includes(anchor.purpose) ||
+        !['SAML2_SIGNING', 'OIDC_JWKS', 'SCIM2_PROVISIONING'].includes(anchor.purpose) ||
         !Number.isFinite(anchor.not_before) || !Number.isFinite(anchor.not_after) ||
         anchor.not_after <= anchor.not_before) {
       recordFailure('TRUST_ANCHOR_ADD', 'INVALID_TRUST_ANCHOR');
