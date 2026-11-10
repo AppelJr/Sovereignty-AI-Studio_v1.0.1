@@ -98,6 +98,8 @@ class SovereignMCPServer:
         mode: str | None = None,
         identity_context: IdentityContext | None = None,
         policy: dict[str, Any] | None = None,
+        capability_grants: dict[str, CapabilityRecord] | None = None,
+        audit_sink: Any | None = None,
     ) -> None:
         requested_workspace = workspace or Path(os.environ.get("SG_MCP_WORKSPACE", REPOSITORY_ROOT))
         self.workspace = requested_workspace.resolve()
@@ -106,8 +108,10 @@ class SovereignMCPServer:
         # Environment variables are configuration only. They are never accepted
         # as proof of identity or authority.
         self.identity_context = identity_context
+        # Trusted host injection only; MCP request arguments cannot mint grants.
+        self.capability_grants = dict(capability_grants or {})
         self.policy = policy if policy is not None else self._load_policy()
-        self.authority = MCPAuthorityAdapter(self.policy)
+        self.authority = MCPAuthorityAdapter(self.policy, audit=audit_sink)
 
     @staticmethod
     def _load_policy() -> dict[str, Any]:
@@ -159,15 +163,16 @@ class SovereignMCPServer:
             return self._error(request_id, -32602, "Tool name must be a string and arguments an object")
 
         identity = self.identity_context or IdentityContext(
-            identity_id="",
-            authenticated=False,
-            attestation={},
+            identity_id="", authenticated=False, attestation={}
         )
+        grant = self.capability_grants.get(name)
+        if grant is None:
+            grant = CapabilityRecord(name, False, "", "", "", "")
         operation = name
         op_request = OperationRequest(
             request_id=str(request_id) if request_id is not None else "",
             identity=identity,
-            capability=CapabilityRecord(capability_id=name, active=True),
+            capability=grant,
             operation=operation,
             mode=self.mode,
             workspace=str(self.workspace),
