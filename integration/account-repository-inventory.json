@@ -1,0 +1,486 @@
+{
+  "schema_version": "1.0.0",
+  "owner": "AppelJr",
+  "repository_count": 68,
+  "source": "Authenticated GitHub repository listing",
+  "captured_at": "2026-11-10T03:55:00Z",
+  "policy": "Discovery inventory only. Presence does not imply trust, integration, execution permission, or production readiness.",
+  "repositories": [
+    {
+      "name": "Sovereign-grok-build",
+      "default_branch": "main",
+      "archived": false,
+      "adapter_status": "NOT_VERIFIED",
+      "execution_authorized": false
+    },
+    {
+      "name": "Grok-4.7-ChatGPT-6.1-Claude-5.5-Skeleton",
+      "default_branch": "main",
+      "archived": false,
+      "adapter_status": "NOT_VERIFIED",
+      "execution_authorized": false
+    },
+    {
+      "name": "Sovereignty-AI-Studio_v1.0.1",
+      "default_branch": "Collaboration",
+      "archived": false,
+      "adapter_status": "NOT_VERIFIED",
+      "execution_authorized": false
+    },
+    {
+      "name": "mldsa-native",
+      "default_branch": "main",
+      "archived": false,
+      "adapter_status": "NOT_VERIFIED",
+      "execution_authorized": false
+    },
+    {
+      "name": "Sovereignty-AI-Gate",
+      "default_branch": "main",
+      "archived": false,
+      "adapter_status": "NOT_VERIFIED",
+      "execution_authorized": false
+    },
+    {
+      "name": "Sovereign-piper1-gpl",
+      "default_branch": "main",
+      "archived": false,
+      "adapter_status": "NOT_VERIFIED",
+      "execution_authorized": false
+    },
+    {
+      "name": "RustPython",
+      "default_branch": "main",
+      "archived": false,
+      "adapter_status": "NOT_VERIFIED",
+      "execution_authorized": false
+    },
+    {
+      "name": "grok-build",
+      "default_branch": "main",
+      "archived": false,
+      "adapter_status": "NOT_VERIFIED",
+      "execution_authorized": false
+    },
+    {
+      "name": "Git-Sovereign",
+      "default_branch": "main",
+      "archived": false,
+      "adapter_status": "NOT_VERIFIED",
+      "execution_authorized": false
+    },
+    {
+      "name": "TRANSFER-ALLOW",
+      "default_branch": "main",
+      "archived": false,
+      "adapter_status": "NOT_VERIFIED",
+      "execution_authorized": false
+    },
+    {
+      "name": "FamilyGuard",
+      "default_branch": "main",
+      "archived": false,
+      "adapter_status": "NOT_VERIFIED",
+      "execution_authorized": false
+    },
+    {
+      "name": "Q-Resist",
+      "default_branch": "main",
+      "archived": false,
+      "adapter_status": "NOT_VERIFIED",
+      "execution_authorized": false
+    },
+    {
+      "name": "BLAKE3-QResist",
+      "default_branch": "master",
+      "archived": false,
+      "adapter_status": "NOT_VERIFIED",
+      "execution_authorized": false
+    },
+    {
+      "name": "gateone",
+      "default_branch": "main",
+      "archived": false,
+      "adapter_status": "NOT_VERIFIED",
+      "execution_authorized": false
+    },
+    {
+      "name": "Admin_On-Device-Memory-Storage",
+      "default_branch": "main",
+      "archived": false,
+      "adapter_status": "NOT_VERIFIED",
+      "execution_authorized": false
+    },
+    {
+      "name": "Full-blocklist",
+      "default_branch": "main",
+      "archived": false,
+      "adapter_status": "NOT_VERIFIED",
+      "execution_authorized": false
+    },
+    {
+      "name": "Grok-4.6-ChatGPT-6-Claude-5.1-Skeleton",
+      "default_branch": "main",
+      "archived": true,
+      "adapter_status": "NOT_VERIFIED",
+      "execution_authorized": false
+    },
+    {
+      "name": "Heartbeat-Mirror",
+      "default_branch": "main",
+      "archived": false,
+      "adapter_status": "NOT_VERIFIED",
+      "execution_authorized": false
+    },
+    {
+      "name": "OpenAPI-Specification",
+      "default_branch": "main",
+      "archived": false,
+      "adapter_status": "NOT_VERIFIED",
+      "execution_authorized": false
+    },
+    {
+      "name": "RobloxInternal-roblox-engine-Fix",
+      "default_branch": "main",
+      "archived": false,
+      "adapter_status": "NOT_VERIFIED",
+      "execution_authorized": false
+    },
+    {
+      "name": "Sovereign-piper1-gpl-Voice",
+      "default_branch": "main",
+      "archived": false,
+      "adapter_status": "NOT_VERIFIED",
+      "execution_authorized": false
+    },
+    {
+      "name": "universal-fenced-block-skill",
+      "default_branch": "main",
+      "archived": false,
+      "adapter_status": "NOT_VERIFIED",
+      "execution_authorized": false
+    },
+    {
+      "name": "sovereign-prompt-file-manager",
+      "default_branch": "main",
+      "archived": false,
+      "adapter_status": "NOT_VERIFIED",
+      "execution_authorized": false
+    },
+    {
+      "name": "NeuralScene-iOS",
+      "default_branch": "main",
+      "archived": false,
+      "adapter_status": "NOT_VERIFIED",
+      "execution_authorized": false
+    },
+    {
+      "name": "nowsecure-sbom-action",
+      "default_branch": "main",
+      "archived": false,
+      "adapter_status": "NOT_VERIFIED",
+      "execution_authorized": false
+    },
+    {
+      "name": "DevAssist420",
+      "default_branch": "main",
+      "archived": false,
+      "adapter_status": "NOT_VERIFIED",
+      "execution_authorized": false
+    },
+    {
+      "name": "Sovereignty-AI-Gate_Q-Resist",
+      "default_branch": "main",
+      "archived": false,
+      "adapter_status": "NOT_VERIFIED",
+      "execution_authorized": false
+    },
+    {
+      "name": "Sovereignty-AI-Gate_Sovereignty-AI-Studio",
+      "default_branch": "main",
+      "archived": false,
+      "adapter_status": "NOT_VERIFIED",
+      "execution_authorized": false
+    },
+    {
+      "name": "Sovereignty-QuantumEEGNet",
+      "default_branch": "main",
+      "archived": false,
+      "adapter_status": "NOT_VERIFIED",
+      "execution_authorized": false
+    },
+    {
+      "name": "Sovereignty-Risk-Engine-Runtime-Assurance",
+      "default_branch": "main",
+      "archived": false,
+      "adapter_status": "NOT_VERIFIED",
+      "execution_authorized": false
+    },
+    {
+      "name": "Sovereignty-color-palette-generator",
+      "default_branch": "master",
+      "archived": false,
+      "adapter_status": "NOT_VERIFIED",
+      "execution_authorized": false
+    },
+    {
+      "name": "Sovereignty-yamg",
+      "default_branch": "master",
+      "archived": false,
+      "adapter_status": "NOT_VERIFIED",
+      "execution_authorized": false
+    },
+    {
+      "name": "Sovereignty_airplane-mode",
+      "default_branch": "main",
+      "archived": false,
+      "adapter_status": "NOT_VERIFIED",
+      "execution_authorized": false
+    },
+    {
+      "name": "Sovereignty_basic-memory",
+      "default_branch": "main",
+      "archived": false,
+      "adapter_status": "NOT_VERIFIED",
+      "execution_authorized": false
+    },
+    {
+      "name": "every-cloud-for-everyone",
+      "default_branch": "main",
+      "archived": false,
+      "adapter_status": "NOT_VERIFIED",
+      "execution_authorized": false
+    },
+    {
+      "name": "Genesis",
+      "default_branch": "main",
+      "archived": false,
+      "adapter_status": "NOT_VERIFIED",
+      "execution_authorized": false
+    },
+    {
+      "name": "metal-cpp",
+      "default_branch": "main",
+      "archived": false,
+      "adapter_status": "NOT_VERIFIED",
+      "execution_authorized": false
+    },
+    {
+      "name": "book",
+      "default_branch": "main",
+      "archived": false,
+      "adapter_status": "NOT_VERIFIED",
+      "execution_authorized": false
+    },
+    {
+      "name": "xAI-Fortress",
+      "default_branch": "main",
+      "archived": false,
+      "adapter_status": "NOT_VERIFIED",
+      "execution_authorized": false
+    },
+    {
+      "name": "x.AI-Fortress",
+      "default_branch": "main",
+      "archived": false,
+      "adapter_status": "NOT_VERIFIED",
+      "execution_authorized": false
+    },
+    {
+      "name": "ISO-UNC-AI",
+      "default_branch": "main",
+      "archived": false,
+      "adapter_status": "NOT_VERIFIED",
+      "execution_authorized": false
+    },
+    {
+      "name": "docs-alpha",
+      "default_branch": "main",
+      "archived": false,
+      "adapter_status": "NOT_VERIFIED",
+      "execution_authorized": false
+    },
+    {
+      "name": "docs-legacy",
+      "default_branch": "main",
+      "archived": false,
+      "adapter_status": "NOT_VERIFIED",
+      "execution_authorized": false
+    },
+    {
+      "name": "2026-markdown",
+      "default_branch": "main",
+      "archived": false,
+      "adapter_status": "NOT_VERIFIED",
+      "execution_authorized": false
+    },
+    {
+      "name": "JSONViewer",
+      "default_branch": "master",
+      "archived": false,
+      "adapter_status": "NOT_VERIFIED",
+      "execution_authorized": false
+    },
+    {
+      "name": "marketplace-fedramp-gov-data",
+      "default_branch": "main",
+      "archived": false,
+      "adapter_status": "NOT_VERIFIED",
+      "execution_authorized": false
+    },
+    {
+      "name": "schemas",
+      "default_branch": "main",
+      "archived": false,
+      "adapter_status": "NOT_VERIFIED",
+      "execution_authorized": false
+    },
+    {
+      "name": "2026",
+      "default_branch": "main",
+      "archived": false,
+      "adapter_status": "NOT_VERIFIED",
+      "execution_authorized": false
+    },
+    {
+      "name": "Marketplace-poc",
+      "default_branch": "main",
+      "archived": false,
+      "adapter_status": "NOT_VERIFIED",
+      "execution_authorized": false
+    },
+    {
+      "name": "keycloak",
+      "default_branch": "main",
+      "archived": false,
+      "adapter_status": "NOT_VERIFIED",
+      "execution_authorized": false
+    },
+    {
+      "name": "OSCAL",
+      "default_branch": "main",
+      "archived": false,
+      "adapter_status": "NOT_VERIFIED",
+      "execution_authorized": false
+    },
+    {
+      "name": "ruff",
+      "default_branch": "main",
+      "archived": false,
+      "adapter_status": "NOT_VERIFIED",
+      "execution_authorized": false
+    },
+    {
+      "name": "ciso-assistant-community",
+      "default_branch": "main",
+      "archived": false,
+      "adapter_status": "NOT_VERIFIED",
+      "execution_authorized": false
+    },
+    {
+      "name": "ish",
+      "default_branch": "master",
+      "archived": false,
+      "adapter_status": "NOT_VERIFIED",
+      "execution_authorized": false
+    },
+    {
+      "name": "UTM",
+      "default_branch": "main",
+      "archived": false,
+      "adapter_status": "NOT_VERIFIED",
+      "execution_authorized": false
+    },
+    {
+      "name": "container",
+      "default_branch": "main",
+      "archived": false,
+      "adapter_status": "NOT_VERIFIED",
+      "execution_authorized": false
+    },
+    {
+      "name": "password-manager-resources",
+      "default_branch": "main",
+      "archived": false,
+      "adapter_status": "NOT_VERIFIED",
+      "execution_authorized": false
+    },
+    {
+      "name": "swift-system",
+      "default_branch": "main",
+      "archived": false,
+      "adapter_status": "NOT_VERIFIED",
+      "execution_authorized": false
+    },
+    {
+      "name": "coreai-models",
+      "default_branch": "main",
+      "archived": false,
+      "adapter_status": "NOT_VERIFIED",
+      "execution_authorized": false
+    },
+    {
+      "name": "python-apple-fm-sdk",
+      "default_branch": "main",
+      "archived": false,
+      "adapter_status": "NOT_VERIFIED",
+      "execution_authorized": false
+    },
+    {
+      "name": "swift-tls",
+      "default_branch": "main",
+      "archived": false,
+      "adapter_status": "NOT_VERIFIED",
+      "execution_authorized": false
+    },
+    {
+      "name": "swift-crypto",
+      "default_branch": "main",
+      "archived": false,
+      "adapter_status": "NOT_VERIFIED",
+      "execution_authorized": false
+    },
+    {
+      "name": "apple-root-program",
+      "default_branch": "main",
+      "archived": false,
+      "adapter_status": "NOT_VERIFIED",
+      "execution_authorized": false
+    },
+    {
+      "name": "duckduckgo-privacy-extension",
+      "default_branch": "main",
+      "archived": false,
+      "adapter_status": "NOT_VERIFIED",
+      "execution_authorized": false
+    },
+    {
+      "name": "mlkem-native",
+      "default_branch": "main",
+      "archived": false,
+      "adapter_status": "NOT_VERIFIED",
+      "execution_authorized": false
+    },
+    {
+      "name": "slhdsa-c",
+      "default_branch": "main",
+      "archived": false,
+      "adapter_status": "NOT_VERIFIED",
+      "execution_authorized": false
+    },
+    {
+      "name": "mlkem-libjade",
+      "default_branch": "main",
+      "archived": false,
+      "adapter_status": "NOT_VERIFIED",
+      "execution_authorized": false
+    },
+    {
+      "name": "tsc",
+      "default_branch": "main",
+      "archived": false,
+      "adapter_status": "NOT_VERIFIED",
+      "execution_authorized": false
+    }
+  ]
+}
