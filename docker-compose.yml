@@ -67,14 +67,14 @@ services:
   node-bridge:
     build: ./node-bridge
     restart: unless-stopped
-    ports: ["9899:9899"]
+    ports: ["127.0.0.1:9899:9899"]
     environment:
       NODE_BRIDGE_PORT: "9899"
       BACKEND_URL: http://backend:8002
       WEATHER_URL: http://backend:8002
       GATEWAY_URL: http://gateway:9001
       SOVEREIGN_API_URL: http://backend:8002/api/ai
-      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://127.0.0.1:9898}
       RATE_LIMIT_RPM: ${RATE_LIMIT_RPM:-30}
     depends_on:
       backend: {condition: service_healthy}
@@ -88,7 +88,7 @@ services:
   keycloak:
     image: quay.io/keycloak/keycloak:24.0.5
     restart: unless-stopped
-    ports: ["8080:8443"]
+    ports: ["127.0.0.1:8080:8080", "127.0.0.1:8443:8443"]
     environment:
       KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?Set KEYCLOAK_ADMIN_PASSWORD in deployment environment}
