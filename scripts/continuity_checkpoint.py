@@ -17,7 +17,8 @@ def checkpoint_digest(cp:dict[str,Any])->str:
 def safe_parent(path:Path)->None:
  if path.parent.exists() and path.parent.is_symlink(): raise ContinuityError("refusing symlink checkpoint directory")
  path.parent.mkdir(parents=True,exist_ok=True,mode=0o700)
- if not path.parent.is_dir() or path.is_symlink(): raise ContinuityError("ledger must be a regular file in a real directory")
+ if path.is_symlink(): raise ContinuityError("refusing symlink ledger")
+ if not path.parent.is_dir(): raise ContinuityError("ledger parent must be a real directory")
 def read_ledger(path:Path)->list[dict[str,Any]]:
  if not path.exists(): return []
  if path.is_symlink() or not path.is_file(): raise ContinuityError("ledger path is not a regular file")
