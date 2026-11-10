@@ -119,3 +119,17 @@ async def test_stop_closes_clients_and_server():
     assert srv.clients == set()
     assert srv._server.closed is True
     assert srv._server.waited is True
+
+
+@pytest.mark.asyncio
+async def test_local_provider_failure_does_not_attempt_http_fallback(monkeypatch):
+    from ai_core import sovereign_bridge as sovereign_module
+
+    class FailingLocalBridge:
+        def chat(self, messages, **kwargs):
+            raise RuntimeError("local model unavailable")
+
+    monkeypatch.setattr(sovereign_module, "SovereignBridge", FailingLocalBridge)
+    srv = bridge.BridgeServer()
+    result = await srv._chat_sovereign("hello", "system", agent="devassist420")
+    assert result == "[Sovereign bridge error: RuntimeError]"
