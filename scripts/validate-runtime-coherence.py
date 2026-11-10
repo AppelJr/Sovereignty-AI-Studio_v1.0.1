@@ -97,6 +97,14 @@ def main() -> int:
     if "packages: write" in docker_workflow or "docker push" in docker_workflow or "ghcr.io" in docker_workflow:
         fail("local-only Docker CI must not publish images or request package write permission")
 
+    handler = (ROOT / "node-bridge" / "devassist420-handler.js").read_text(encoding="utf-8")
+    for token in ("GOVERNED_CHAIN_NOT_CONNECTED", "output_authorized: false", "governedPipeline.ready === true"):
+        if token not in handler:
+            fail(f"DevAssist420 output gate missing required token: {token}")
+    python_bridge = (ROOT / "bridge" / "server.py").read_text(encoding="utf-8")
+    if "GOVERNED_CHAIN_NOT_CONNECTED" not in python_bridge or '"state": "YANK"' not in python_bridge:
+        fail("direct Python WebSocket chat must YANK until the governed chain is connected")
+
     dashboard = (ROOT / canonical["dashboard"]).read_text(encoding="utf-8", errors="ignore")
     if "trimmed for brevity" in dashboard.lower():
         fail("canonical dashboard contains a truncated placeholder")
