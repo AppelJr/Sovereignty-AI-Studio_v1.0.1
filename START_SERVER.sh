@@ -60,6 +60,8 @@ export SG_ENABLE_REMOTE_NETWORK="0"
 export SG_ALLOW_BACKGROUND_POLLING="0"
 export SG_ENABLE_WEBSOCKET="${SG_ENABLE_WEBSOCKET:-0}"
 export SG_ENABLE_SSE="${SG_ENABLE_SSE:-0}"
+export NO_PROXY="*"
+export no_proxy="*"
 export SG_RUNTIME_OWNER="DevAssist420SGHv119.html"
 export SOVEREIGN_PYTHON_EXECUTABLE="${SOVEREIGN_PYTHON_EXECUTABLE:-$PYTHON_BIN}"
 export SOVEREIGN_STATE_PATH="${SOVEREIGN_STATE_PATH:-$ROOT_DIR/state/canonical.json}"
@@ -79,14 +81,64 @@ PORT_UNIFIED="$UNIFIED_PORT" NODE_BRIDGE_PORT="$UNIFIED_PORT" UNIFIED_HOST=127.0
 pids+=("$!")
 PORT="$DASHBOARD_PORT" PORT_UNIFIED="$UNIFIED_PORT" DASHBOARD_HOST=127.0.0.1 "$NODE_BIN" "$ROOT_DIR/server_9898.js" &
 pids+=("$!")
-echo "Canonical Sovereignty AI Studio runtime running:"
+# Do not print a green runtime status until all service health contracts answer.
+"$PYTHON_BIN" - "$PY_PORT" "$DASHBOARD_PORT" "$UNIFIED_PORT" <<'PY'
+import json
+import sys
+import time
+import urllib.error
+import urllib.request
+
+python_port, dashboard_port, unified_port = map(int, sys.argv[1:])
+
+def read_json(url):
+    with urllib.request.build_opener(urllib.request.ProxyHandler({})).open(url, timeout=2) as response:
+        if response.status != 200:
+            raise RuntimeError(f"HTTP {response.status}: {url}")
+        return json.loads(response.read().decode("utf-8"))
+
+def read_ok(url):
+    with urllib.request.build_opener(urllib.request.ProxyHandler({})).open(url, timeout=2) as response:
+        if response.status != 200:
+            raise RuntimeError(f"HTTP {response.status}: {url}")
+        return response.status
+
+last_error = None
+for attempt in range(30):
+    try:
+        python_health = read_json(f"http://127.0.0.1:{python_port}/api/health")
+        dashboard_status = read_ok(f"http://127.0.0.1:{dashboard_port}/")
+        devassist = read_json(f"http://127.0.0.1:{unified_port}/api/devassist/status")
+        break
+    except (OSError, RuntimeError, ValueError, urllib.error.URLError) as exc:
+        last_error = exc
+        if attempt == 29:
+            raise SystemExit(f"BLOCKED: local service health contract did not pass: {type(exc).__name__}")
+        time.sleep(1)
+else:
+    raise SystemExit(f"BLOCKED: local service health contract did not pass: {type(last_error).__name__}")
+
+inference = devassist.get("inference") or {}
+readiness = devassist.get("readiness") or {}
+print("CONTROL_PLANE=ONLINE")
+print(f"PYTHON_BRIDGE={python_health.get('status', 'UNKNOWN').upper()}")
+print(f"DASHBOARD_HTTP={dashboard_status}")
+print(f"DEVASSIST_STATUS={str(devassist.get('status', 'UNKNOWN')).upper()}")
+print(f"INFERENCE={str(inference.get('state', 'UNKNOWN')).upper()}")
+print(f"DEVASSIST_READY={bool(readiness.get('ready'))}")
+blockers = readiness.get("blockers") or []
+print("BLOCKERS=" + (",".join(str(item) for item in blockers) if blockers else "NONE"))
+PY
+
+echo "Canonical Sovereignty AI Studio control plane is online."
 echo "  Python:    ws://127.0.0.1:$PY_PORT"
 echo "  Dashboard: http://127.0.0.1:$DASHBOARD_PORT/"
 echo "  Unified:   http://127.0.0.1:$UNIFIED_PORT"
 echo "  UI WS:     ws://127.0.0.1:$DASHBOARD_PORT/ws/ui"
 echo "  DevAssist: http://127.0.0.1:$UNIFIED_PORT/api/devassist/status"
 echo "  mode:      $SG_DEVICE_MODE / $SG_NETWORK_MODE"
-echo "  diamond:   PASS (startup admitted)"
+echo "  diamond_core: PASS (contract gate executed)"
+echo "  inference:  status reported by the live local bridge; DEGRADED is not PASS"
 echo "Press Ctrl+C to stop."
 wait -n "${pids[@]}"
 exit $?
