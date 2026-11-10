@@ -50,7 +50,9 @@ class SovereignAPIProvider:
             port = parsed.port or (443 if parsed.scheme == "https" else 80)
         except ValueError as exc:
             raise ValueError("Invalid sovereign API URL") from exc
-        allowed_hosts = {"localhost", "127.0.0.1", "::1", "backend", "node-bridge", "gateway"}
+        allowed_hosts = {"localhost", "127.0.0.1", "::1"}
+        if os.getenv("SOVEREIGN_API_ALLOW_INTERNAL_SERVICES") == "1":
+            allowed_hosts.update({"backend", "node-bridge", "gateway"})
         allowed_ports = {80, 443, 8002, 9001, 9898, 9899}
         if (
             parsed.scheme not in {"http", "https"}
