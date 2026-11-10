@@ -187,6 +187,30 @@ function createSovereignIdentityCore(options = {}) {
     });
   }
 
+  function activatePrincipal(subjectId, ownerProof) {
+    const existing = principal(subjectId);
+    if (!existing || existing.status !== STATUS.PENDING) return fail('PRINCIPAL_NOT_PENDING');
+    const auth = gate(ownerProof, 'identity.principal.activate', 'PRINCIPAL_ACTIVATE');
+    if (auth.decision !== 'ALLOW') return auth;
+    const next = clone(state);
+    const target = next.principals.find(p => p.subject_id === subjectId);
+    target.status = STATUS.ACTIVE;
+    target.updated_at = now();
+    target.registry_version = state.version + 1;
+    next.version += 1;
+    return commit(next, {
+      action: 'PRINCIPAL_ACTIVATED',
+      subject_id: subjectId,
+      principal_type: target.principal_type,
+      result: 'ALLOW',
+      authorization: 'GATE_ONE_ALLOW',
+      authorization_id: auth.authorization_id,
+      memory_loaded: false,
+      network_accessed: false,
+      files_changed: ['identity_registry']
+    });
+  }
+
   function createEnrollmentChallenge(input) {
     if (!input || typeof input.device_id !== 'string' || !input.device_id ||
         typeof input.public_key !== 'string' || !input.public_key ||
@@ -264,6 +288,17 @@ function createSovereignIdentityCore(options = {}) {
     const target = next.devices.find(d => d.challenge_id === challengeId);
     target.enrollment_status = STATUS.ACTIVE;
     target.status = STATUS.ACTIVE;
+    next.principals.push({
+      subject_id: target.device_id,
+      principal_type: PRINCIPAL.DEVICE,
+      status: STATUS.ACTIVE,
+      created_at: now(),
+      updated_at: now(),
+      owner_root_ref: ownerSubjectId,
+      assurance_level: target.assurance_level,
+      attributes_hash: target.public_key_fingerprint,
+      registry_version: state.version + 1
+    });
     target.enrolled_at = now();
     target.nonce = null;
     target.challenge_id = null;
@@ -399,6 +434,11 @@ function createSovereignIdentityCore(options = {}) {
       recordFailure('FEDERATION_ALIAS_ADD', 'UNTRUSTED_ISSUER', { issuer: alias.issuer });
       return fail('UNTRUSTED_ISSUER');
     }
+    const partner = principal(alias.partner_id);
+    if (!partner || partner.status !== STATUS.ACTIVE || partner.principal_type !== PRINCIPAL.FEDERATION_PARTNER) {
+      recordFailure('FEDERATION_ALIAS_ADD', 'FEDERATION_PARTNER_NOT_ACTIVE', { partner_id: alias.partner_id });
+      return fail('FEDERATION_PARTNER_NOT_ACTIVE');
+    }
     const target = principal(alias.canonical_subject_id);
     if (!target || target.status !== STATUS.ACTIVE || target.principal_type === PRINCIPAL.OWNER) {
       recordFailure('FEDERATION_ALIAS_ADD', 'OWNER_OR_UNKNOWN_TARGET', { canonical_subject_id: alias.canonical_subject_id });
@@ -478,6 +518,7 @@ function createSovereignIdentityCore(options = {}) {
     PRINCIPAL,
     STATUS,
     registerPrincipal,
+    activatePrincipal,
     createEnrollmentChallenge,
     approveDeviceEnrollment,
     verifyDeviceProof,
