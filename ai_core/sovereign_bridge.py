@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 # Provider registry. Default order is local-only; API transport requires explicit configuration.
 # ---------------------------------------------------------------------------
 _DEFAULT_ORDER = os.getenv(
-    "SOVEREIGN_PROVIDER_ORDER", "local_gguf,local_onnx"
+    "SOVEREIGN_PROVIDER_ORDER", "local_gguf"
 ).split(",")
 
 
