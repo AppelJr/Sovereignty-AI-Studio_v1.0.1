@@ -142,3 +142,44 @@ def test_default_sovereign_provider_order_is_local_only(monkeypatch):
     monkeypatch.delenv("SOVEREIGN_PROVIDER_ORDER", raising=False)
     importlib.reload(sovereign_module)
     assert sovereign_module._DEFAULT_ORDER == ["local_gguf"]
+
+
+@pytest.mark.asyncio
+async def test_local_bridge_is_cached_and_inference_readiness_is_truthful(monkeypatch):
+    from ai_core import sovereign_bridge as sovereign_module
+
+    created = {"count": 0}
+
+    class CachedBridge:
+        def __init__(self):
+            created["count"] += 1
+            self.loaded = False
+
+        def health(self):
+            return {
+                "local_gguf": {
+                    "ok": True,
+                    "loaded": self.loaded,
+                    "provider": "local_gguf",
+                }
+            }
+
+        def chat(self, messages, **kwargs):
+            self.loaded = True
+            return "local-response"
+
+    monkeypatch.setattr(sovereign_module, "SovereignBridge", CachedBridge)
+    srv = bridge.BridgeServer()
+
+    before = srv._inference_health()
+    assert before["configured"] is True
+    assert before["loaded"] is False
+    assert before["ready"] is False
+
+    first = await srv._chat_sovereign("hello", "system")
+    second = await srv._chat_sovereign("again", "system")
+
+    assert first == "local-response"
+    assert second == "local-response"
+    assert created["count"] == 1
+    assert srv._inference_health()["ready"] is True
