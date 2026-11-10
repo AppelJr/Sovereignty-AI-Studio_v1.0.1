@@ -42,9 +42,9 @@ Execution evidence: NOT RUN IN this environment
 ## Verification
 
 - Source review: performed against Collaboration branch files.
-- New test execution: prior commit passed Node.js CI; latest bootstrap, validator, and lifecycle changes are awaiting a fresh CI run.
+- New test execution: PASS on commit f49f2484b17c439dea4152d0df9d2dfc3614c9c9. Node.js CI ran npm run check, npm test (including the new Identity Core and legacy Authority Gate regression suites), and Node bridge tests.
 - Existing test suite: NOT RUN.
-- CI: prior commit passed core Node.js and security checks; latest changes are awaiting a fresh CI run.
+- CI: PASS on commit f49f2484b17c439dea4152d0df9d2dfc3614c9c9 for Node.js CI, repository CI, native syntax/runtime gate, static security gate, Python CI, and Pylint. Other repository checks may still be pending.
 - Production deployment: BLOCKED.
 
 Do not represent this branch as production-ready or as having passed the fifteen-case acceptance gate.
