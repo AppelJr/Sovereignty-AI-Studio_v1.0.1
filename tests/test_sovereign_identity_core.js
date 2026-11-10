@@ -3,7 +3,7 @@
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const {
-  PRINCIPAL, STATUS, createSovereignIdentityCore, fingerprint
+  PRINCIPAL, STATUS, bootstrapOwnerRoot, createSovereignIdentityCore
 } = require('../backend/identity/sovereign_identity_core');
 
 let tick = 1_800_000_000_000;
@@ -23,10 +23,21 @@ const authorizeMutation = ({ owner_subject_id, owner_proof, capability }) => {
   if (owner_subject_id !== 'owner:root' || owner_proof !== 'owner-proof-valid') return { decision: 'DENY' };
   return { decision: 'ALLOW', actor: 'owner:root', capability };
 };
+const verifyOwnerBootstrap = ({ owner_subject_id, owner_proof }) =>
+  owner_subject_id === 'owner:root' && owner_proof === 'owner-proof-valid'
+    ? { decision: 'ALLOW', actor: 'owner:root', authorization_id: 'bootstrap-proof-001' }
+    : { decision: 'DENY' };
+assert.equal(bootstrapOwnerRoot({ ownerSubjectId: 'owner:root', ownerProof: 'forged', storage, verifyOwnerBootstrap }).decision, 'DENY');
+assert.equal(bootstrapOwnerRoot({ ownerSubjectId: 'owner:root', ownerProof: 'owner-proof-valid', storage, verifyOwnerBootstrap }).decision, 'ALLOW');
+const verifyFederationAssertion = assertion => assertion.signature_valid === true
+  ? { verified: true, protocol: assertion.protocol, issuer: assertion.issuer,
+      external_subject: assertion.external_subject, trust_anchor_id: assertion.trust_anchor_id }
+  : { verified: false };
 const core = createSovereignIdentityCore({
   ownerSubjectId: 'owner:root',
   storage,
   authorizeMutation,
+  verifyFederationAssertion,
   now: () => tick++,
   nonce: () => 'one-time-enrollment-nonce'
 });
@@ -146,6 +157,7 @@ check('federation alias maps only to an existing non-owner principal', () => {
 check('OIDC owner/admin claims do not elevate canonical identity', () => {
   const result = core.resolveFederatedIdentity({
     protocol: 'OIDC', issuer: anchor.issuer, external_subject: 'sub:alice',
+    signature_valid: true, trust_anchor_id: 'anchor:oidc:1',
     claims: { owner: true, admin: true, role: 'OWNER' }
   });
   assert.equal(result.decision, 'IDENTITY_VERIFIED');
@@ -158,6 +170,7 @@ check('OAuth access token is not accepted as identity proof', () => {
 check('SCIM event cannot create owner authority', () => {
   assert.equal(core.resolveFederatedIdentity({
     protocol: 'SCIM2', issuer: 'https://scim.example', external_subject: 'sub:alice',
+    signature_valid: true, trust_anchor_id: 'anchor:scim:1',
     claims: { groups: ['owner', 'admin'] }
   }).reason, 'FEDERATION_ALIAS_NOT_FOUND');
   assert.equal(core.addFederationAlias({
@@ -167,8 +180,9 @@ check('SCIM event cannot create owner authority', () => {
 });
 check('untrusted issuer cannot resolve', () => {
   assert.equal(core.resolveFederatedIdentity({
-    protocol: 'OIDC', issuer: 'https://evil.example', external_subject: 'sub:alice'
-  }).reason, 'FEDERATION_ALIAS_NOT_FOUND');
+    protocol: 'OIDC', issuer: 'https://evil.example', external_subject: 'sub:alice',
+    signature_valid: true, trust_anchor_id: 'anchor:oidc:1'
+  }).reason, 'TRUST_ANCHOR_INVALID');
 });
 check('duplicate external alias is denied', () => {
   assert.equal(core.addFederationAlias({
