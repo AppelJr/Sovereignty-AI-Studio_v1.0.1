@@ -214,66 +214,24 @@ class BridgeServer:
             )
             return f"[Sovereign bridge error: {type(exc).__name__}]"
 
-    async def ai_chat(self, ws, msg: str, agent: str, context: str, system: str = "", session: str = "default"):
-        sys_prompt = system or (
-            "You are a sovereign AI assistant running entirely on self-hosted infrastructure. "
-            "No data leaves the network. Be precise and production-ready. "
-            "Never fabricate data, and cite uncertainty when unsure."
-        )
-
-        # Persist user message to memory (best-effort: init if not yet done)
-        if self.hydrator:
-            try:
-                if self.memory:
-                    await self.memory.ensure_initialized()
-                await self.hydrator.persist_message(session, "user", msg, agent)
-            except Exception as e:
-                log.debug("Memory persist (user) skipped: %s", e)
-
-        reply = await self._chat_sovereign(msg, sys_prompt, agent)
-
-        # Provider failure is a failure, never a successful assistant response.
-        if reply.startswith("[Sovereign bridge error:"):
-            await self.send(ws, {
-                "type": "ai_error",
-                "agent": agent,
-                "error": reply,
-                "ts": int(time.time() * 1000),
-            })
-            return
-
-        # Persist AI reply to memory
-        if self.hydrator:
-            try:
-                await self.hydrator.persist_message(session, "assistant", reply, agent)
-            except Exception as e:
-                log.debug("Memory persist (assistant) skipped: %s", e)
-
-        log.info("%s response: %s...", agent, reply[:50])
-
-        response_payload = {
-            "type": "ai_response",
-            "agent": agent,
-            "text": reply,
-            "context": context,
-            "hash": sha256(reply),
-            "ts": int(time.time() * 1000),
-        }
-        await self.send(ws, response_payload)
-        await self.broadcast_ai_response(agent, reply, context, exclude=ws)
-
-        # Publish to event bus
-        if self.bus:
-            await self.bus.publish("ai_response", {
-                "agent": agent,
-                "text": reply,
-                "session": session,
-                "context": context,
-            })
-
-    # ------------------------------------------------------------------
-    # Message handlers
-    # ------------------------------------------------------------------
+    async def ai_chat(
+        self,
+        ws,
+        msg: str,
+        agent: str = "sovereign",
+        context: str = "",
+        system: str = "",
+        session: str = "default",
+    ) -> None:
+        """Withhold direct chat until the governed output chain is connected."""
+        await self.send(ws, {
+            "type": "ai_error",
+            "error": "GOVERNED_CHAIN_NOT_CONNECTED",
+            "state": "YANK",
+            "action": "YANK",
+            "output_authorized": False,
+            "escrow_required": True,
+        })
 
     async def _handle_memory_query(self, ws, message: dict) -> None:
         """Handle memory_query messages from clients."""
@@ -428,12 +386,11 @@ class BridgeServer:
                 mtype = message.get("type", "")
 
                 if mtype == "ai_chat":
-                    agent = message.get("agent", "claude")
-                    msg = message.get("message", "")
-                    context = message.get("context", "")
-                    system = message.get("system", "")
-                    session = message.get("session", "default")
-                    asyncio.create_task(self.ai_chat(ws, msg, agent, context, system, session))
+                    # Direct chat is not an authorized output path. Until the
+                    # governed Council/Judge/Release chain is bound, withhold.
+                    await self.ai_chat(ws, message.get("message", ""), message.get("agent", "sovereign"),
+                                        message.get("context", ""), message.get("system", ""),
+                                        message.get("session", "default"))
 
                 elif mtype == "memory_query":
                     asyncio.create_task(self._handle_memory_query(ws, message))
