@@ -11,8 +11,8 @@ permissions:
   contents: read
 
 concurrency:
-    group: "${repository-watchdog}-${{github.ref}}"
-    cancel-in-progress: false
+  group: repository-watchdog-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   watch:
