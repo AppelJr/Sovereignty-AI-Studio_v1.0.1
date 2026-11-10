@@ -133,3 +133,12 @@ async def test_local_provider_failure_does_not_attempt_http_fallback(monkeypatch
     srv = bridge.BridgeServer()
     result = await srv._chat_sovereign("hello", "system", agent="devassist420")
     assert result == "[Sovereign bridge error: RuntimeError]"
+
+
+def test_default_sovereign_provider_order_is_local_only(monkeypatch):
+    import importlib
+    from ai_core import sovereign_bridge as sovereign_module
+
+    monkeypatch.delenv("SOVEREIGN_PROVIDER_ORDER", raising=False)
+    importlib.reload(sovereign_module)
+    assert sovereign_module._DEFAULT_ORDER == ["local_gguf", "local_onnx"]
