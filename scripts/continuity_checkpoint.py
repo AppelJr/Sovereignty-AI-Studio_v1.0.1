@@ -55,7 +55,7 @@ def verify(path:Path,roadmap_path:Path=DEFAULT_ROADMAP)->dict[str,Any]:
          "latest_digest":rows[-1]["digest"] if rows else None,"integrity_verified":bool(rows),
          "signature_status":latest.get("signature_status") if latest else "UNSIGNED",
          "resume_allowed":bool(latest and latest.get("signature_status")=="SIGNED_VERIFIED")}
-def create(path:Path,roadmap_path:Path,cid:str,next_action:str,completed:list[str],blockers:list[str])->dict[str,Any]:
+def create(path:Path,roadmap_path:Path,cid:str,next_action:str,completed:list[str],blockers:list[str],pending_add:list[str]|None=None,resolve_blockers:list[str]|None=None)->dict[str,Any]:
  if not ID_RE.fullmatch(cid): raise ContinuityError("invalid checkpoint ID")
  if not next_action.strip(): raise ContinuityError("next_action must not be empty")
  if roadmap_path.is_symlink() or not roadmap_path.is_file(): raise ContinuityError("roadmap must be a regular file")
@@ -74,7 +74,13 @@ def create(path:Path,roadmap_path:Path,cid:str,next_action:str,completed:list[st
    rows=read_ledger(path)
   prev=rows[-1]["checkpoint"]
   if any(x["checkpoint"]["id"]==cid for x in rows): raise ContinuityError("checkpoint ID already exists")
-  cp={"id":cid,"sequence":len(rows),"created_at":datetime.now(timezone.utc).isoformat(),"status":"ACTIVE","completed":completed,"pending":list(previous.get("pending",roadmap["continuity"]["pending_work"])),"blockers":blockers,"verified_evidence":[],"next_action":next_action,"digest_algorithm":"sha3-512","previous_checkpoint_id":prev["id"],"previous_digest":prev["digest"],"signature_status":"UNSIGNED"}
+  completed_new=list(dict.fromkeys(completed))
+  completed_all=list(dict.fromkeys(list(prev.get("completed",[]))+completed_new))
+  pending_previous=list(prev.get("pending",roadmap["continuity"]["pending_work"]))
+  pending_all=list(dict.fromkeys([item for item in pending_previous if item not in completed_new]+list(pending_add or [])))
+  resolved=set(resolve_blockers or [])
+  blockers_all=list(dict.fromkeys([item for item in prev.get("blockers",[]) if item not in resolved]+list(blockers)))
+  cp={"id":cid,"sequence":len(rows),"created_at":datetime.now(timezone.utc).isoformat(),"status":"BLOCKED" if blockers_all else "ACTIVE","completed":completed_all,"pending":pending_all,"blockers":blockers_all,"verified_evidence":[],"next_action":next_action,"digest_algorithm":"sha3-512","previous_checkpoint_id":prev["id"],"previous_digest":prev["digest"],"signature_status":"UNSIGNED"}
   cp["digest"]=checkpoint_digest(cp);entry={"checkpoint":cp,"digest":cp["digest"]}
   fd=os.open(path,os.O_WRONLY|os.O_APPEND|os.O_CREAT|getattr(os,"O_NOFOLLOW",0),0o600)
   with os.fdopen(fd,"ab") as out: out.write(canonical_bytes(entry)+b"\n");out.flush();os.fsync(out.fileno())
@@ -85,12 +91,12 @@ def create(path:Path,roadmap_path:Path,cid:str,next_action:str,completed:list[st
 def main()->int:
  p=argparse.ArgumentParser(description=__doc__);p.add_argument("command",choices=["create","verify","status"]);p.add_argument("--id",default="")
  p.add_argument("--next-action",default="Verify the next unfinished work item against the canonical repository.")
- p.add_argument("--completed",action="append",default=[]);p.add_argument("--blocker",action="append",default=[])
+ p.add_argument("--completed",action="append",default=[]);p.add_argument("--blocker",action="append",default=[]);p.add_argument("--add-pending",action="append",default=[]);p.add_argument("--resolve-blocker",action="append",default=[])
  p.add_argument("--roadmap",type=Path,default=DEFAULT_ROADMAP);p.add_argument("--ledger",type=Path,default=DEFAULT_LEDGER);a=p.parse_args()
  try:
   if a.command=="create":
    if not a.id: raise ContinuityError("create requires --id")
-   result=create(a.ledger,a.roadmap,a.id,a.next_action,a.completed,a.blocker)
+   result=create(a.ledger,a.roadmap,a.id,a.next_action,a.completed,a.blocker,a.add_pending,a.resolve_blocker)
   else: result=verify(a.ledger,a.roadmap)
   print(json.dumps(result,indent=2,sort_keys=True));return 0 if result.get("status") == "PASS" else 1
  except (ContinuityError,OSError,ValueError,json.JSONDecodeError) as exc: print(f"BLOCKED: {exc}",file=sys.stderr);return 2
