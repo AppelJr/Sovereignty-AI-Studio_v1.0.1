@@ -63,8 +63,8 @@ check('owner proof required for registry mutation', () => {
 });
 check('Gate.One actor must be canonical owner', () => {
   const denied = createSovereignIdentityCore({
-    ownerSubjectId: 'owner:other', storage: {
-      load: () => ({ ...core.getSnapshot(), owner_subject_id: 'owner:other' }),
+    ownerSubjectId: 'owner:root', storage: {
+      load: () => core.getSnapshot(),
       commit: () => ({ ok: true })
     },
     authorizeMutation: () => ({ decision: 'ALLOW', actor: 'service:router' })
@@ -114,13 +114,13 @@ check('federated alias cannot map to owner root', () => {
   assert.equal(core.addFederationAlias({
     partner_id: 'partner:idp', protocol: 'OIDC', issuer: anchor.issuer,
     external_subject: 'sub:admin', canonical_subject_id: 'owner:root'
-  }).reason, 'OWNER_OR_UNKNOWN_TARGET');
+  }, ownerProof).reason, 'OWNER_OR_UNKNOWN_TARGET');
 });
 check('federation alias maps only to an existing non-owner principal', () => {
   assert.equal(core.addFederationAlias({
     partner_id: 'partner:idp', protocol: 'OIDC', issuer: anchor.issuer,
     external_subject: 'sub:alice', canonical_subject_id: 'human:alice'
-  }).decision, 'ALLOW');
+  }, ownerProof).decision, 'ALLOW');
 });
 check('OIDC owner/admin claims do not elevate canonical identity', () => {
   const result = core.resolveFederatedIdentity({
@@ -149,7 +149,7 @@ check('duplicate external alias is denied', () => {
   assert.equal(core.addFederationAlias({
     partner_id: 'partner:idp', protocol: 'OIDC', issuer: anchor.issuer,
     external_subject: 'sub:alice', canonical_subject_id: 'human:alice'
-  }).reason, 'FEDERATION_ALIAS_COLLISION');
+  }, ownerProof).reason, 'FEDERATION_ALIAS_COLLISION');
 });
 check('SCAR transaction failure aborts registry mutation', () => {
   failCommit = true;
