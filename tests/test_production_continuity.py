@@ -27,6 +27,7 @@ class ContinuityTests(unittest.TestCase):
   seed=self.roadmap["checkpoints"][0]
   seed["completed"]=[]
   seed["pending"]=["task-a","task-b"]
+  seed["blockers"]=[]
   seed["digest"]=module.checkpoint_digest(seed)
   self.rp.write_text(json.dumps(self.roadmap))
   first=module.create(self.ledger,self.rp,"CONTINUITY-002","Continue task-b",["task-a"],["MODEL_MISSING"],["task-c"],[])["checkpoint"]
