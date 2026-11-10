@@ -49,12 +49,13 @@ def verify(path:Path,roadmap_path:Path=DEFAULT_ROADMAP)->dict[str,Any]:
  if not rows and roadmap_path.is_file():
   seeds=json.loads(roadmap_path.read_text()).get("checkpoints",[])
   if seeds and seeds[0].get("digest")==checkpoint_digest(seeds[0]):
-   cp=seeds[0];return {"status":"UNPERSISTED_SEED","count":1,"latest_checkpoint":cp["id"],"latest_digest":cp["digest"],"integrity_verified":True,"resume_allowed":False,"source":"roadmap_seed_not_yet_persisted_to_local_ledger"}
+   cp=seeds[0];return {"status":"UNPERSISTED_SEED","count":1,"latest_checkpoint":cp["id"],"latest_digest":cp["digest"],"integrity_verified":True,"resume_allowed":False,"resume_blocker":"SIGNATURE_VERIFIER_NOT_CONFIGURED","signature_verification":"NOT_RUN","source":"roadmap_seed_not_yet_persisted_to_local_ledger"}
  latest=rows[-1]["checkpoint"] if rows else None
  return {"status":"PASS" if rows else "EMPTY","count":len(rows),"latest_checkpoint":latest["id"] if latest else None,
          "latest_digest":rows[-1]["digest"] if rows else None,"integrity_verified":bool(rows),
          "signature_status":latest.get("signature_status") if latest else "UNSIGNED",
-         "resume_allowed":bool(latest and latest.get("signature_status")=="SIGNED_VERIFIED")}
+         "signature_verification":"NOT_RUN","resume_allowed":False,
+         "resume_blocker":"SIGNATURE_VERIFIER_NOT_CONFIGURED"}
 def create(path:Path,roadmap_path:Path,cid:str,next_action:str,completed:list[str],blockers:list[str],pending_add:list[str]|None=None,resolve_blockers:list[str]|None=None)->dict[str,Any]:
  if not ID_RE.fullmatch(cid): raise ContinuityError("invalid checkpoint ID")
  if not next_action.strip(): raise ContinuityError("next_action must not be empty")
