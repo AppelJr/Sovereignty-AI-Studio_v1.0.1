@@ -16,7 +16,7 @@
     "ci-cd"
   ],
   "author": "Appel420",
-  "license": "MIT",
+  "license": "Sovereignty-License-2.2.2",
   "engines": {
     "node": ">=16.0.0"
   },

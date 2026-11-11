@@ -1,5 +1,6 @@
 # alembic/env.py
-# MIT License - Copyright (c) 2026 APPEL
+# Sovereignty License 2.2.2 - Copyright (c) 2026 Appel420
+# See LICENSES/SOVEREIGNTY-LICENSE-2.2.2.md
 
 import os
 import sys
@@ -20,7 +21,7 @@ from app.core.database import Base  # noqa: E402
 from app.models.user import User         # noqa: E402
 from app.models.project import Project   # noqa: E402
 from app.models.generation import Generation  # noqa: E402
-from app.models.media import Media       # noqa: E402
+from app.models.media import Media   # noqa: E402
 from app.models.organization import Organization, Membership, OrgProject, ProjectPermission  # noqa: E402
 from app.models.usage import UsageRecord  # noqa: E402
 from app.models.session import UserSession  # noqa: E402

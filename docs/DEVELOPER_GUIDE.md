@@ -177,7 +177,7 @@ logger_config = {
 
 ## 6. License
 
-MIT License
+Sovereignty License 2.2.2 — see [LICENSES/SOVEREIGNTY-LICENSE-2.2.2.md](../LICENSES/SOVEREIGNTY-LICENSE-2.2.2.md). Release candidate; not effective until ownership manifest verification and publication approval. Third-party dependencies retain their original licenses.
 
 ---
 

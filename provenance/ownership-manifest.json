@@ -13,7 +13,7 @@
     "name": "Sovereignty-AI-Studio_v1.0.1",
     "url": "https://github.com/AppelJr/Sovereignty-AI-Studio_v1.0.1",
     "default_branch": "Collaboration",
-    "existing_root_license_observation": "EXISTING_GPL_3.0"
+    "existing_root_license_observation": "SOVEREIGNTY_2.2.2_APPLIED_GPL_3.0_REPLACED"
   },
   "ownership": {
     "licensor": null,
@@ -22,7 +22,9 @@
   },
   "covered_materials": [],
   "excluded_materials": [
-    "All repository contents pending file-level authorship, ownership, contribution, and upstream-license review."
+    "All repository contents pending file-level authorship, ownership, contribution, and upstream-license review.",
+    "external/ directory: upstream vendored projects retain original licenses (GPL-3.0 vocalinux, Apache-2.0 lightning, CERN-OHL-S-2.0 sovereignty_one hardware docs).",
+    "docs/sovereignty_one/README.md: CERN Open Hardware Licence v2 Strongly Reciprocal - third-party, untouched."
   ],
   "third_party_inventory": {
     "status": "NOT_AUDITED",
@@ -35,6 +37,12 @@
   },
   "version_history": {
     "previous_version": null,
-    "previous_digest": null
+    "previous_digest": null,
+    "change_log": [
+      {
+        "date": "2026-11-11",
+        "change": "Root LICENSE.MD GPL-3.0 summary replaced with Sovereignty 2.2.2 pointer. All AppelJr-owned MIT labels flipped to Sovereignty 2.2.2. Upstream/third-party licenses in external/ and docs/sovereignty_one/ preserved per section 15."
+      }
+    ]
   }
 }

@@ -2,7 +2,7 @@
 name = "diamond-core"
 version = "0.1.0"
 edition = "2021"
-license = "MIT"
+license = "Sovereignty-License-2.2.2"
 description = "Contract-first Diamond Lattice 5D sovereign memory core"
 
 [dependencies]

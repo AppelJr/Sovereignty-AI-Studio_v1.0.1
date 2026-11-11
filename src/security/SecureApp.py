@@ -6,7 +6,7 @@ Unified secure module combining:
 3. SQLAlchemy Media Model for file storage
 
 Author: Midas Touch Enhanced
-License: MIT
+License: Sovereignty License 2.2.2 - See LICENSES/SOVEREIGNTY-LICENSE-2.2.2.md
 """
 
 from datetime import datetime, timedelta
@@ -137,27 +137,27 @@ class Media(Base):
 # ---
 
 # User Authentication
-# 	-	Hash Password: get_password_hash("password")
-# 	-	Verify Password: verify_password("password", hashed_pw)
-# 	-	Create JWT: create_access_token({"sub": "username"})
-# 	-	Verify JWT: verify_token(token)
+# \t-\tHash Password: get_password_hash("password")
+# \t-\tVerify Password: verify_password("password", hashed_pw)
+# \t-\tCreate JWT: create_access_token({"sub": "username"})
+# \t-\tVerify JWT: verify_token(token)
 
 # ---
 
 # Redis Cache
-# 	-	Get Client: r = get_redis()
-# 	-	Set Value: r.set("key", "value")
-# 	-	Get Value: r.get("key")
+# \t-\tGet Client: r = get_redis()
+# \t-\tSet Value: r.set("key", "value")
+# \t-\tGet Value: r.get("key")
 
 # ---
 
 # Media ORM Model
-# 	-	Create Record:
+# \t-\tCreate Record:
 # Media(filename="example.png", file_path="/uploads/example.png", file_type="image", mime_type="image/png", file_size=1024)
-# 	-	Print Record: print(media_item)
+# \t-\tPrint Record: print(media_item)
 
 # Attributes: filename - filepath - filetype - mimetype - filesize - width - height - duration - storage_key
 
 # ---
 
-# Author: Midas Touch Enhanced | License: MIT
+# Author: Midas Touch Enhanced | License: Sovereignty License 2.2.2
