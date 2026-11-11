@@ -60,10 +60,36 @@ export SG_ENABLE_REMOTE_NETWORK="0"
 export SG_ALLOW_BACKGROUND_POLLING="0"
 export SG_ENABLE_WEBSOCKET="${SG_ENABLE_WEBSOCKET:-0}"
 export SG_ENABLE_SSE="${SG_ENABLE_SSE:-0}"
+export NO_PROXY="*"
+export no_proxy="*"
 export SG_RUNTIME_OWNER="DevAssist420SGHv119.html"
 export SOVEREIGN_PYTHON_EXECUTABLE="${SOVEREIGN_PYTHON_EXECUTABLE:-$PYTHON_BIN}"
-export SOVEREIGN_STATE_PATH="${SOVEREIGN_STATE_PATH:-$ROOT_DIR/state/canonical.json}"
-export SCAR_PATH="${SCAR_PATH:-$ROOT_DIR/AUDIT/devassist-device.jsonl}"
+: "${HOME:?HOME is required for the sovereign state root}"
+export SOVEREIGN_STATE_ROOT="${SOVEREIGN_STATE_ROOT:-$HOME/Admin/On Device Memory Storage}"
+"$PYTHON_BIN" - "$HOME" "$SOVEREIGN_STATE_ROOT" <<'PY'
+from pathlib import Path
+import sys
+
+home = Path(sys.argv[1]).resolve()
+root = Path(sys.argv[2]).expanduser()
+if not root.is_absolute() or ".." in root.parts:
+    raise SystemExit("Refusing relative or traversal SOVEREIGN_STATE_ROOT.")
+for ancestor in (root, *root.parents):
+    if ancestor.exists() and ancestor.is_symlink():
+        raise SystemExit("Refusing symlink in SOVEREIGN_STATE_ROOT.")
+resolved = root.resolve()
+if resolved in (Path("/"), home):
+    raise SystemExit("Refusing unsafe SOVEREIGN_STATE_ROOT.")
+PY
+umask 077
+mkdir -p -- "$SOVEREIGN_STATE_ROOT/state" "$SOVEREIGN_STATE_ROOT/audit"
+for state_dir in "$SOVEREIGN_STATE_ROOT/state" "$SOVEREIGN_STATE_ROOT/audit"; do
+  [[ -d "$state_dir" && ! -L "$state_dir" ]] || { echo "Unsafe sovereign state directory: $state_dir" >&2; exit 1; }
+  chmod 700 "$state_dir"
+done
+export SOVEREIGN_STATE_PATH="${SOVEREIGN_STATE_PATH:-$SOVEREIGN_STATE_ROOT/state/canonical.json}"
+export SCAR_PATH="${SCAR_PATH:-$SOVEREIGN_STATE_ROOT/audit/devassist-device.jsonl}"
+export SOVEREIGNTY_CONTINUITY_LEDGER="${SOVEREIGNTY_CONTINUITY_LEDGER:-$SOVEREIGN_STATE_ROOT/Sovereignty AI/continuity/checkpoints.jsonl}"
 export CORS_ORIGIN="${CORS_ORIGIN:-http://127.0.0.1:$DASHBOARD_PORT}"
 pids=()
 cleanup() {
@@ -79,14 +105,113 @@ PORT_UNIFIED="$UNIFIED_PORT" NODE_BRIDGE_PORT="$UNIFIED_PORT" UNIFIED_HOST=127.0
 pids+=("$!")
 PORT="$DASHBOARD_PORT" PORT_UNIFIED="$UNIFIED_PORT" DASHBOARD_HOST=127.0.0.1 "$NODE_BIN" "$ROOT_DIR/server_9898.js" &
 pids+=("$!")
-echo "Canonical Sovereignty AI Studio runtime running:"
+# Do not print a green runtime status until all service health contracts answer.
+"$PYTHON_BIN" - "$PY_PORT" "$DASHBOARD_PORT" "$UNIFIED_PORT" "$ROOT_DIR" "$SOVEREIGNTY_CONTINUITY_LEDGER" <<'PY'
+import json
+import subprocess
+import sys
+import time
+import urllib.error
+import urllib.request
+from datetime import datetime, timezone
+from pathlib import Path
+
+python_port, dashboard_port, unified_port = map(int, sys.argv[1:4])
+root_dir = Path(sys.argv[4])
+ledger_path = Path(sys.argv[5])
+roadmap_path = root_dir / "roadmap" / "sovereignty-production-roadmap.json"
+checkpoint_script = root_dir / "scripts" / "continuity_checkpoint.py"
+
+def read_json(url):
+    with urllib.request.build_opener(urllib.request.ProxyHandler({})).open(url, timeout=2) as response:
+        if response.status != 200:
+            raise RuntimeError(f"HTTP {response.status}: {url}")
+        return json.loads(response.read().decode("utf-8"))
+
+def read_ok(url):
+    with urllib.request.build_opener(urllib.request.ProxyHandler({})).open(url, timeout=2) as response:
+        if response.status != 200:
+            raise RuntimeError(f"HTTP {response.status}: {url}")
+        return response.status
+
+last_error = None
+for attempt in range(30):
+    try:
+        python_health = read_json(f"http://127.0.0.1:{python_port}/api/health")
+        dashboard_status = read_ok(f"http://127.0.0.1:{dashboard_port}/")
+        devassist = read_json(f"http://127.0.0.1:{unified_port}/api/devassist/status")
+        break
+    except (OSError, RuntimeError, ValueError, urllib.error.URLError) as exc:
+        last_error = exc
+        if attempt == 29:
+            raise SystemExit(f"BLOCKED: local service health contract did not pass: {type(exc).__name__}")
+        time.sleep(1)
+else:
+    raise SystemExit(f"BLOCKED: local service health contract did not pass: {type(last_error).__name__}")
+
+inference = devassist.get("inference") or {}
+readiness = devassist.get("readiness") or {}
+print("CONTROL_PLANE=ONLINE")
+print(f"PYTHON_BRIDGE={python_health.get('status', 'UNKNOWN').upper()}")
+print(f"DASHBOARD_HTTP={dashboard_status}")
+print(f"DEVASSIST_STATUS={str(devassist.get('status', 'UNKNOWN')).upper()}")
+print(f"INFERENCE={str(inference.get('state', 'UNKNOWN')).upper()}")
+print(f"DEVASSIST_READY={bool(readiness.get('ready'))}")
+blockers = list(readiness.get("blockers") or [])
+if "SIGNATURE_VERIFIER_NOT_CONFIGURED" not in blockers:
+    blockers.append("SIGNATURE_VERIFIER_NOT_CONFIGURED")
+
+verify_command = [
+    sys.executable, str(checkpoint_script), "verify",
+    "--roadmap", str(roadmap_path), "--ledger", str(ledger_path)
+]
+verified = subprocess.run(verify_command, capture_output=True, text=True, check=False)
+try:
+    checkpoint_report = json.loads(verified.stdout)
+except (ValueError, TypeError):
+    raise SystemExit("BLOCKED: continuity checkpoint verification produced no valid JSON")
+
+checkpoint_status = checkpoint_report.get("status")
+if checkpoint_status == "UNPERSISTED_SEED":
+    checkpoint_id = "SOVEREIGNTY-BOOTSTRAP-" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    create_command = [
+        sys.executable, str(checkpoint_script), "create",
+        "--id", checkpoint_id,
+        "--next-action", "Connect the governed runtime and verify owner/device trust anchors before resuming.",
+        "--roadmap", str(roadmap_path), "--ledger", str(ledger_path)
+    ]
+    for blocker in blockers:
+        create_command.extend(["--blocker", str(blocker)])
+    created = subprocess.run(create_command, capture_output=True, text=True, check=False)
+    if created.returncode != 0:
+        raise SystemExit("BLOCKED: initial continuity checkpoint could not be persisted")
+    verified = subprocess.run(verify_command, capture_output=True, text=True, check=False)
+    try:
+        checkpoint_report = json.loads(verified.stdout)
+    except (ValueError, TypeError):
+        raise SystemExit("BLOCKED: persisted continuity checkpoint could not be verified")
+    if verified.returncode != 0 or checkpoint_report.get("status") != "PASS":
+        raise SystemExit("BLOCKED: persisted continuity ledger failed verification")
+    checkpoint_status = "CREATED_AND_VERIFIED"
+elif checkpoint_status == "PASS" and verified.returncode == 0:
+    checkpoint_status = "VERIFIED"
+else:
+    raise SystemExit(f"BLOCKED: continuity checkpoint state is {checkpoint_status or 'UNKNOWN'}")
+
+print("BLOCKERS=" + (",".join(str(item) for item in blockers) if blockers else "NONE"))
+print(f"CHECKPOINT_STATUS={checkpoint_status}")
+print(f"CHECKPOINT_RESUME_ALLOWED={bool(checkpoint_report.get('resume_allowed'))}")
+PY
+
+echo "Canonical Sovereignty AI Studio control plane is online."
 echo "  Python:    ws://127.0.0.1:$PY_PORT"
 echo "  Dashboard: http://127.0.0.1:$DASHBOARD_PORT/"
 echo "  Unified:   http://127.0.0.1:$UNIFIED_PORT"
 echo "  UI WS:     ws://127.0.0.1:$DASHBOARD_PORT/ws/ui"
 echo "  DevAssist: http://127.0.0.1:$UNIFIED_PORT/api/devassist/status"
 echo "  mode:      $SG_DEVICE_MODE / $SG_NETWORK_MODE"
-echo "  diamond:   PASS (startup admitted)"
+echo "  diamond_core: PASS (contract gate executed)"
+echo "  inference:  status reported by the live local bridge; DEGRADED is not PASS"
 echo "Press Ctrl+C to stop."
 wait -n "${pids[@]}"
 exit $?

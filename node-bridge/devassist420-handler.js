@@ -86,16 +86,32 @@ function probePythonWebSocket(timeoutMs = 2000) {
   return new Promise((resolve) => {
     let settled = false;
     const ws = new WebSocket(PYTHON_WS_URL);
-    const finish = (online, detail) => {
+    const finish = (online, detail, inference = null) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
       try { ws.close(); } catch {}
-      resolve({ online, detail });
+      resolve({ online, detail, inference });
     };
     const timer = setTimeout(() => finish(false, 'PYTHON_WS_TIMEOUT'), timeoutMs);
-    ws.once('open', () => finish(true, 'websocket_connected'));
+    ws.once('open', () => ws.send(JSON.stringify({ type: 'status' })));
+    ws.on('message', raw => {
+      if (settled) return;
+      try {
+        const message = JSON.parse(String(raw));
+        // Ignore the bridge's initial handshake_ack and wait for the requested status_response.
+        if (message.type !== 'status_response') return;
+        finish(true, 'status_received', message.inference || {
+          configured: false, loaded: false, ready: false, providers: {}
+        });
+      } catch {
+        finish(false, 'PYTHON_STATUS_RESPONSE_INVALID');
+      }
+    });
     ws.once('error', error => finish(false, error && error.message ? error.message : 'PYTHON_WS_ERROR'));
+    ws.once('close', () => {
+      if (!settled) finish(false, 'PYTHON_WS_CLOSED_BEFORE_STATUS');
+    });
   });
 }
 
@@ -287,28 +303,6 @@ async function executeLocalTool(body, proof) {
   });
 }
 
-function infer(request) {
-  return new Promise((resolve, reject) => {
-    const ws = new WebSocket(PYTHON_WS_URL);
-    let done = false;
-    const finish = (fn, value) => { if (!done) { done = true; clearTimeout(timer); try { ws.close(); } catch {} fn(value); } };
-    const timer = setTimeout(() => finish(reject, new Error('PYTHON_BRIDGE_TIMEOUT')), 45000);
-    ws.once('open', () => ws.send(JSON.stringify({
-      type: 'ai_chat', agent: 'devassist420', message: request.text,
-      context: 'Sovereignty AI Studio / DevAssist420', session: request.session_id,
-      system: 'You are the authorized local Sovereignty AI assistant. Be accurate. Never fabricate access, actions, files, model identity, or evidence.'
-    })));
-    ws.on('message', raw => {
-      try {
-        const msg = JSON.parse(String(raw));
-        if (msg.type === 'ai_response') finish(resolve, msg);
-        else if (msg.type === 'ai_error') finish(reject, new Error(msg.error || 'LOCAL_INFERENCE_FAILED'));
-      } catch (error) { finish(reject, error); }
-    });
-    ws.once('error', error => finish(reject, error));
-  });
-}
-
 async function execute(body, proof) {
   const canonical = loadCanonicalState(STATE_PATH);
   const session = authenticate(proof, canonical, 'ai.inference');
@@ -322,15 +316,39 @@ async function execute(body, proof) {
   }
   authorizations.delete(body.capability_id);
   const p = verifiedPipeline(session.identity_id);
-  try {
-    const response = await infer(request);
-    const evidence = recordVerified(p, { participant: session.identity_id, action: request.action, result: 'ALLOW', details: { route: 'local', transport: PYTHON_WS_URL, response_hash: response.hash || null, request_id: request.request_id, session_id: session.session_id } });
-    if (!evidence || evidence.ok !== true) return { state: 'DENY', reason: 'SCAR_PERSISTENCE_FAILED', agreement: AGREEMENT };
-    return { state: 'EXECUTED', response: response.text || '', agent: response.agent || 'devassist420', hash: response.hash || null, ts: response.ts || Date.now(), evidence, agreement: AGREEMENT };
-  } catch (error) {
-    const evidence = recordVerified(p, { participant: session.identity_id, action: request.action, result: 'FAIL', details: { route: 'local', error: error.message, request_id: request.request_id, session_id: session.session_id } });
-    return { state: 'FAIL', reason: 'LOCAL_INFERENCE_UNAVAILABLE', detail: error.message, evidence, agreement: AGREEMENT };
+  // A local model response is only a candidate. This device route has no
+  // connected three-lane Council, Heavy Judge, or release verifier, so it
+  // must not return candidate text or record an authorized ALLOW.
+  const evidence = recordVerified(p, {
+    participant: session.identity_id,
+    action: request.action,
+    result: 'YANK',
+    details: {
+      route: 'local-candidate-withheld',
+      reason: 'GOVERNED_CHAIN_NOT_CONNECTED',
+      request_id: request.request_id,
+      session_id: session.session_id,
+      council_state: 'NOT_CONNECTED',
+      heavy_judge_state: 'NOT_CONNECTED',
+      release_verifier_state: 'NOT_CONNECTED',
+      output_authorized: false
+    }
+  });
+  if (!evidence || evidence.ok !== true) {
+    return { state: 'DENY', reason: 'SCAR_PERSISTENCE_FAILED', output_authorized: false, agreement: AGREEMENT };
   }
+  return {
+    state: 'YANK',
+    status: 'ESCROW_PENDING_REVIEW',
+    action: 'YANK',
+    reason: 'GOVERNED_CHAIN_NOT_CONNECTED',
+    response: null,
+    output_authorized: false,
+    escrow_required: true,
+    request_id: request.request_id,
+    evidence,
+    agreement: AGREEMENT
+  };
 }
 
 async function handle(body, proof) {
@@ -356,18 +374,29 @@ async function status() {
   let policy;
   try { scar = pipeline(canonical.state && canonical.state.owner_id || 'system').scar.verifyChain(); } catch { scar = { ok: false, reason: 'SCAR_UNAVAILABLE' }; }
   try { policy = loadPolicy(); } catch (error) { policy = null; }
-  const ready = python.online && canonical.allowed && !!scar && scar.ok && !!policy;
+  const inference = python.inference || { configured: false, loaded: false, ready: false, providers: {} };
+  const governedPipeline = { state: 'UNWIRED', ready: false, output_authorized: false };
+  const ready = python.online && canonical.allowed && !!scar && scar.ok && !!policy && inference.ready === true && governedPipeline.ready === true;
   return {
     status: ready ? 'ready' : 'degraded',
     service: 'DevAssist420',
     state_path: STATE_PATH,
     canonical_state: { state: canonical.allowed ? 'VALID' : 'BLOCKED', allowed: canonical.allowed === true, reason: canonical.reason, threat: canonical.threat === true },
     python: { state: python.online ? 'ONLINE' : 'OFFLINE', transport: 'websocket', detail: python.detail },
+    inference: {
+      state: inference.ready ? 'READY' : inference.configured ? 'MODEL_CONFIGURED_NOT_LOADED' : 'UNAVAILABLE',
+      configured: inference.configured === true,
+      loaded: inference.loaded === true,
+      providers: inference.providers || {}
+    },
+    governed_pipeline: governedPipeline,
     provider_policy: { state: policy ? 'VALID' : 'BLOCKED', version: policy && policy.policy_version || null, authority: 'server' },
     scar: { state: scar && scar.ok ? 'VALID' : 'BROKEN', reason: scar && scar.reason },
     readiness: { ready, blockers: [
       ...(!canonical.allowed ? [canonical.reason || 'CANONICAL_STATE_BLOCKED'] : []),
       ...(!python.online ? [python.detail || 'PYTHON_WEBSOCKET_OFFLINE'] : []),
+      ...(python.online && !inference.ready ? [inference.configured ? 'LOCAL_MODEL_NOT_LOADED' : 'LOCAL_MODEL_UNAVAILABLE'] : []),
+      ...(!governedPipeline.ready ? ['GOVERNED_CHAIN_NOT_CONNECTED'] : []),
       ...(!scar || !scar.ok ? ['SCAR_CHAIN_INVALID'] : []),
       ...(!policy ? ['PROVIDER_POLICY_INVALID'] : [])
     ] },

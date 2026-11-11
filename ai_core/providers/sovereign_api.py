@@ -11,6 +11,7 @@ import logging
 import os
 import urllib.error
 import urllib.request
+from urllib.parse import urlsplit
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -36,8 +37,33 @@ class SovereignAPIProvider:
             api_url
             or os.getenv("SOVEREIGN_API_URL", "http://localhost:9898/api/ai")
         ).rstrip("/")
+        self._validate_api_url(self._api_url)
         self._jwt = jwt_token or os.getenv("SOVEREIGN_API_JWT", "")
         self._timeout = timeout
+
+    @staticmethod
+    def _validate_api_url(value: str) -> None:
+        """Restrict this adapter to loopback and named private stack services."""
+        try:
+            parsed = urlsplit(value)
+            host = (parsed.hostname or "").lower().rstrip(".")
+            port = parsed.port or (443 if parsed.scheme == "https" else 80)
+        except ValueError as exc:
+            raise ValueError("Invalid sovereign API URL") from exc
+        allowed_hosts = {"localhost", "127.0.0.1", "::1"}
+        if os.getenv("SOVEREIGN_API_ALLOW_INTERNAL_SERVICES") == "1":
+            allowed_hosts.update({"backend", "node-bridge", "gateway"})
+        allowed_ports = {80, 443, 8002, 9001, 9898, 9899}
+        if (
+            parsed.scheme not in {"http", "https"}
+            or host not in allowed_hosts
+            or port not in allowed_ports
+            or parsed.username is not None
+            or parsed.password is not None
+            or parsed.query
+            or parsed.fragment
+        ):
+            raise ValueError("Sovereign API must use an approved loopback or internal service URL")
 
     def chat(
         self,
@@ -70,7 +96,7 @@ class SovereignAPIProvider:
             method="POST",
         )
         try:
-            with urllib.request.urlopen(req, timeout=self._timeout) as resp:
+            with urllib.request.build_opener(urllib.request.ProxyHandler({})).open(req, timeout=self._timeout) as resp:
                 body = json.loads(resp.read().decode("utf-8"))
         except urllib.error.HTTPError as exc:
             raise RuntimeError(
@@ -90,7 +116,7 @@ class SovereignAPIProvider:
                 f"{self._api_url}/health",
                 method="GET",
             )
-            with urllib.request.urlopen(req, timeout=5) as resp:
+            with urllib.request.build_opener(urllib.request.ProxyHandler({})).open(req, timeout=5) as resp:
                 ok = resp.status == 200
         except Exception as exc:  # noqa: BLE001
             return {"ok": False, "provider": "sovereign_api", "error": str(exc)}

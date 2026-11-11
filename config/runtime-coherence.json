@@ -21,7 +21,10 @@
     "keycloak_http": 8080,
     "keycloak_https": 8443,
     "redis_internal": 6379,
-    "postgres_internal": 5432
+    "postgres_internal": 5432,
+    "production_ingress_https": 9443,
+    "development_http": 9880,
+    "production_ingress_bind": "127.0.0.1"
   },
   "aliases": {
     "start-all.sh": "START_SERVER.sh",

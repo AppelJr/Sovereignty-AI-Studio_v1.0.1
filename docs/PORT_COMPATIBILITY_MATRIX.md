@@ -4,6 +4,8 @@ This matrix separates implemented behavior from the endpoint list in the target 
 
 | Service | Route / protocol | State | Notes |
 |---|---|---|---|
+| 9443 Nginx ingress | HTTPS / WSS | CONFIGURED; DEVICE CHECK PENDING | Production ingress; host bind restricted to 127.0.0.1 |
+| 9880 Nginx ingress | HTTP | CONFIGURED; DEVICE CHECK PENDING | Development only; redirects to HTTPS when TLS is configured; host bind restricted to 127.0.0.1 |
 | 9897 Python | GET /api/health | IMPLEMENTED | Read-only health via WebSocket server process_request |
 | 9897 Python | GET /health | IMPLEMENTED | Same read-only health payload |
 | 9897 Python | WebSocket / | IMPLEMENTED | handshake_ack, ai_chat, memory_query, memory_save, memory_get, token_op, ping, status |

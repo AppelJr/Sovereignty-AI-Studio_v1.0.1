@@ -12,6 +12,8 @@ PORTS = {
     "python_bridge": 9897, "dashboard": 9898, "unified_server": 9899,
     "keycloak_http": 8080, "keycloak_https": 8443,
     "redis_internal": 6379, "postgres_internal": 5432,
+    "production_ingress_https": 9443, "development_http": 9880,
+    "production_ingress_bind": "127.0.0.1",
 }
 
 
@@ -56,6 +58,9 @@ def main() -> int:
         "${PORT_UNIFIED:-${NODE_BRIDGE_PORT:-9899}}",
         '"$ROOT_DIR/python3_bridge.py"', '"$ROOT_DIR/server_9898.js"',
         '"$ROOT_DIR/Unified_Server.js"', "127.0.0.1",
+        "SOVEREIGN_STATE_ROOT", "Admin/On Device Memory Storage",
+        "/api/devassist/status", "CONTROL_PLANE=ONLINE", "INFERENCE=",
+        "CHECKPOINT_STATUS=", "CHECKPOINT_RESUME_ALLOWED=",
     )
     for token in required_tokens:
         if token not in launcher:
@@ -84,6 +89,31 @@ def main() -> int:
         fail("dashboard API proxy must use a fixed loopback upstream")
     if "9899" not in unified_server or "node-bridge/server" not in unified_server:
         fail("Unified Server must own port 9899 and reuse the Node bridge implementation")
+
+    compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+    for token in ('127.0.0.1:9443:443', '127.0.0.1:9880:80', '127.0.0.1:9899:9899'):
+        if token not in compose:
+            fail(f"Docker ingress must be loopback-bound: missing {token}")
+    docker_workflow = (ROOT / ".github" / "workflows" / "docker-publish.yml").read_text(encoding="utf-8")
+    if "packages: write" in docker_workflow or "docker push" in docker_workflow:
+        fail("local-only Docker CI must not publish images or request package write permission")
+    # Parse image registry hosts instead of substring matching so a benign
+    # string containing "ghcr.io" cannot false-positive the check.
+    for line in docker_workflow.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("image:"):
+            ref = stripped.split(":", 1)[1].strip().strip("'\"")
+            registry = ref.split("/")[0] if "/" in ref else ""
+            if registry == "ghcr.io" or registry.endswith(".ghcr.io"):
+                fail("local-only Docker CI must not reference GHCR images")
+
+    handler = (ROOT / "node-bridge" / "devassist420-handler.js").read_text(encoding="utf-8")
+    for token in ("GOVERNED_CHAIN_NOT_CONNECTED", "output_authorized: false", "governedPipeline.ready === true"):
+        if token not in handler:
+            fail(f"DevAssist420 output gate missing required token: {token}")
+    python_bridge = (ROOT / "bridge" / "server.py").read_text(encoding="utf-8")
+    if "GOVERNED_CHAIN_NOT_CONNECTED" not in python_bridge or '"state": "YANK"' not in python_bridge:
+        fail("direct Python WebSocket chat must YANK until the governed chain is connected")
 
     dashboard = (ROOT / canonical["dashboard"]).read_text(encoding="utf-8", errors="ignore")
     if "trimmed for brevity" in dashboard.lower():
