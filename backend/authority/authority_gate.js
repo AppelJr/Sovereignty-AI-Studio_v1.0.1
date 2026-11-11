@@ -28,7 +28,8 @@ const ROOT_ACTIONS = Object.freeze([
   'revoke_root',
   'replace_owner',
   'disable_fail_closed',
-  'bypass_policy'
+  'bypass_policy',
+  'mutate_policy'
 ]);
 
 /**
@@ -76,15 +77,16 @@ function checkAuthority(canonicalResult, identityResult, action, opts) {
     }
     // Permission set gate for non-root actions
     const required = opts && opts.required_permission;
-    if (required) {
-      const perms = identity.permission_set || [];
-      if (!perms.includes(required) && !perms.includes('*')) {
-        return {
-          allowed: false,
-          reason: AUTHORITY_REASON.PERMISSION_DENIED,
-          threat: false
-        };
-      }
+    const perms = Array.isArray(identity.permission_set) ? identity.permission_set : [];
+    // Fail closed: every participant action needs an explicit, action-matching
+    // capability. A missing capability or wildcard grant is never sufficient.
+    if (typeof required !== 'string' || required.length === 0 ||
+        required !== act || !perms.includes(required)) {
+      return {
+        allowed: false,
+        reason: AUTHORITY_REASON.PERMISSION_DENIED,
+        threat: false
+      };
     }
     return {
       allowed: true,
