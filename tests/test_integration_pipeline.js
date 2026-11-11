@@ -59,3 +59,21 @@ setup();
 console.log('PASS integration fail-closed canonical state');
 console.log('PASS integration unknown identity denied');
 console.log('PASS integrated security decisions generate verifiable SCAR');
+
+
+// Runtime SCAR must refuse to extend corrupted history.
+{
+  const { createScarLogger } = require('../backend/audit/scar_logger');
+  const runtimeLog = path.join(root, 'runtime-scar', 'events.jsonl');
+  const logger = createScarLogger(runtimeLog);
+  const record = { participant: 'device', action: 'test', policy: 'test-v1', result: 'ALLOW' };
+  assert.strictEqual(logger.append(record).ok, true);
+  assert.strictEqual(logger.verifyChain().ok, true);
+  fs.appendFileSync(runtimeLog, '{"truncated":');
+  assert.strictEqual(logger.verifyChain().ok, false);
+  assert.strictEqual(logger.append({ ...record, action: 'must-not-append' }).ok, false);
+  fs.writeFileSync(runtimeLog, '{"missing-newline":true}');
+  assert.strictEqual(logger.readAll().ok, false);
+  assert.throws(() => createScarLogger('relative/path.jsonl'), /absolute path/);
+  console.log('PASS runtime SCAR rejects corrupt history and refuses append');
+}

@@ -1,10 +1,8 @@
 'use strict';
 
 /**
- * SCAR Evidence Logger — Step 12
- *
- * Append-only local ledger for security-relevant decisions.
- * Each entry: timestamp, participant, action, policy, result, integrity hash, prev_hash.
+ * SCAR Evidence Logger — fail-closed runtime JSONL ledger.
+ * Hash linkage detects modification; it is not a signature or authorization.
  */
 
 const fs = require('fs');
@@ -18,6 +16,7 @@ const SCAR_REASON = Object.freeze({
   CHAIN_OK: 'CHAIN_OK',
   CHAIN_BROKEN: 'CHAIN_BROKEN'
 });
+const GENESIS_HASH = '0'.repeat(64);
 
 function sha256Hex(text) {
   return crypto.createHash('sha256').update(text, 'utf8').digest('hex');
@@ -36,85 +35,46 @@ function canonicalEntryBody(entry) {
   return JSON.stringify(body);
 }
 
-/**
- * @param {string} logPath
- */
 function createScarLogger(logPath) {
-  if (typeof logPath !== 'string' || !logPath) {
-    throw new Error('logPath required');
+  if (typeof logPath !== 'string' || !logPath || !path.isAbsolute(logPath)) {
+    throw new Error('logPath must be a non-empty absolute path');
   }
 
   function ensureDir() {
-    fs.mkdirSync(path.dirname(logPath), { recursive: true });
-  }
-
-  function lastHash() {
-    if (!fs.existsSync(logPath)) return '0'.repeat(64);
-    const lines = fs.readFileSync(logPath, 'utf8').split('\n').filter(Boolean);
-    if (!lines.length) return '0'.repeat(64);
+    fs.mkdirSync(path.dirname(logPath), { recursive: true, mode: 0o700 });
     try {
-      const last = JSON.parse(lines[lines.length - 1]);
-      return typeof last.hash === 'string' ? last.hash : '0'.repeat(64);
-    } catch {
-      return '0'.repeat(64);
+      if (fs.lstatSync(logPath).isSymbolicLink()) throw new Error('SCAR symlink path refused');
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
     }
-  }
-
-  /**
-   * Append one evidence entry. No update/delete.
-   *
-   * @param {{ participant: string, action: string, policy: string, result: string, details?: object }} ev
-   */
-  function append(ev) {
-    if (!ev || typeof ev !== 'object') {
-      return { ok: false, reason: SCAR_REASON.INVALID, threat: true };
-    }
-    if (typeof ev.participant !== 'string' || !ev.participant) {
-      return { ok: false, reason: SCAR_REASON.INVALID, threat: true };
-    }
-    if (typeof ev.action !== 'string' || !ev.action) {
-      return { ok: false, reason: SCAR_REASON.INVALID, threat: true };
-    }
-    if (typeof ev.policy !== 'string' || !ev.policy) {
-      return { ok: false, reason: SCAR_REASON.INVALID, threat: true };
-    }
-    if (typeof ev.result !== 'string' || !ev.result) {
-      return { ok: false, reason: SCAR_REASON.INVALID, threat: true };
-    }
-
-    ensureDir();
-    const prev_hash = lastHash();
-    const entry = {
-      timestamp: Date.now(),
-      participant: ev.participant,
-      action: ev.action,
-      policy: ev.policy,
-      result: ev.result,
-      prev_hash,
-      details: ev.details && typeof ev.details === 'object' ? ev.details : undefined
-    };
-    entry.hash = sha256Hex(canonicalEntryBody(entry));
-
-    // Append-only: open with flag 'a'
-    fs.appendFileSync(logPath, JSON.stringify(entry) + '\n', { mode: 0o600 });
-    return {
-      ok: true,
-      reason: SCAR_REASON.APPENDED,
-      hash: entry.hash,
-      prev_hash,
-      threat: false
-    };
   }
 
   function readAll() {
-    if (!fs.existsSync(logPath)) {
-      return { ok: true, reason: SCAR_REASON.READ, entries: [] };
+    let raw;
+    try {
+      const st = fs.lstatSync(logPath);
+      if (st.isSymbolicLink() || !st.isFile()) {
+        return { ok: false, reason: SCAR_REASON.CHAIN_BROKEN, entries: [], threat: true };
+      }
+      raw = fs.readFileSync(logPath, 'utf8');
+    } catch (error) {
+      if (error.code === 'ENOENT') return { ok: true, reason: SCAR_REASON.READ, entries: [] };
+      throw error;
     }
-    const lines = fs.readFileSync(logPath, 'utf8').split('\n').filter(Boolean);
+    if (raw.length === 0) return { ok: true, reason: SCAR_REASON.READ, entries: [] };
+    if (!raw.endsWith('\n')) {
+      return { ok: false, reason: SCAR_REASON.CHAIN_BROKEN, entries: [], threat: true };
+    }
+    const lines = raw.slice(0, -1).split('\n');
+    if (lines.some(line => line.length === 0)) {
+      return { ok: false, reason: SCAR_REASON.CHAIN_BROKEN, entries: [], threat: true };
+    }
     const entries = [];
     for (const line of lines) {
       try {
-        entries.push(JSON.parse(line));
+        const entry = JSON.parse(line);
+        if (!entry || typeof entry !== 'object' || Array.isArray(entry)) throw new Error('record must be object');
+        entries.push(entry);
       } catch {
         return { ok: false, reason: SCAR_REASON.CHAIN_BROKEN, entries: [], threat: true };
       }
@@ -125,33 +85,63 @@ function createScarLogger(logPath) {
   function verifyChain() {
     const snap = readAll();
     if (!snap.ok) return snap;
-    let prev = '0'.repeat(64);
+    let prev = GENESIS_HASH;
     for (const entry of snap.entries) {
-      if (entry.prev_hash !== prev) {
+      if (entry.prev_hash !== prev || typeof entry.hash !== 'string') {
         return { ok: false, reason: SCAR_REASON.CHAIN_BROKEN, threat: true };
       }
-      const { hash, ...rest } = entry;
-      const expected = sha256Hex(canonicalEntryBody(rest));
-      if (hash !== expected) {
+      const expected = sha256Hex(canonicalEntryBody(entry));
+      if (entry.hash !== expected) {
         return { ok: false, reason: SCAR_REASON.CHAIN_BROKEN, threat: true };
       }
-      prev = hash;
+      prev = entry.hash;
     }
     return { ok: true, reason: SCAR_REASON.CHAIN_OK, count: snap.entries.length, threat: false };
   }
 
-  // Explicitly no truncate / rewrite / delete methods on the public API.
+  function append(ev) {
+    if (!ev || typeof ev !== 'object' || Array.isArray(ev) ||
+        typeof ev.participant !== 'string' || !ev.participant ||
+        typeof ev.action !== 'string' || !ev.action ||
+        typeof ev.policy !== 'string' || !ev.policy ||
+        typeof ev.result !== 'string' || !ev.result) {
+      return { ok: false, reason: SCAR_REASON.INVALID, threat: true };
+    }
 
-  return Object.freeze({
-    append,
-    readAll,
-    verifyChain,
-    path: logPath,
-    SCAR_REASON
-  });
+    ensureDir();
+    const verified = verifyChain();
+    if (!verified.ok) {
+      return { ok: false, reason: SCAR_REASON.CHAIN_BROKEN, threat: true };
+    }
+    const snap = readAll();
+    const prev_hash = snap.entries.length
+      ? snap.entries[snap.entries.length - 1].hash
+      : GENESIS_HASH;
+    const entry = {
+      timestamp: Date.now(),
+      participant: ev.participant,
+      action: ev.action,
+      policy: ev.policy,
+      result: ev.result,
+      prev_hash
+    };
+    if (ev.details !== undefined) entry.details = ev.details;
+    entry.hash = sha256Hex(canonicalEntryBody(entry));
+
+    const flags = fs.constants.O_WRONLY | fs.constants.O_APPEND |
+      fs.constants.O_CREAT | (fs.constants.O_NOFOLLOW || 0);
+    const fd = fs.openSync(logPath, flags, 0o600);
+    try {
+      if (!fs.fstatSync(fd).isFile()) throw new Error('SCAR ledger is not a regular file');
+      fs.writeFileSync(fd, JSON.stringify(entry) + '\n', { encoding: 'utf8' });
+      fs.fsyncSync(fd);
+    } finally {
+      fs.closeSync(fd);
+    }
+    return { ok: true, reason: SCAR_REASON.APPENDED, hash: entry.hash, prev_hash, threat: false };
+  }
+
+  return Object.freeze({ append, readAll, verifyChain, path: logPath, SCAR_REASON });
 }
 
-module.exports = {
-  SCAR_REASON,
-  createScarLogger
-};
+module.exports = { SCAR_REASON, createScarLogger };
