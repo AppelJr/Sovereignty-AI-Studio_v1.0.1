@@ -46,7 +46,6 @@ services:
       SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY in deployment environment}
       SOVEREIGN_MODEL_PATH: ${SOVEREIGN_MODEL_PATH:-/models/sovereign.gguf}
       SOVEREIGN_ONNX_PATH: ${SOVEREIGN_ONNX_PATH:-/models/sovereign.onnx}
-      SOVEREIGN_API_URL: http://node-bridge:9899/api/ai
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:9898}
       LOG_DIR: /app/logs
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
@@ -66,14 +65,14 @@ services:
   node-bridge:
     build: ./node-bridge
     restart: unless-stopped
-    ports: ["9899:9899"]
+    ports: ["127.0.0.1:9899:9899"]
     environment:
       NODE_BRIDGE_PORT: "9899"
       BACKEND_URL: http://backend:8002
       WEATHER_URL: http://backend:8002
       GATEWAY_URL: http://gateway:9001
       SOVEREIGN_API_URL: http://backend:8002/api/ai
-      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://127.0.0.1:9898}
       RATE_LIMIT_RPM: ${RATE_LIMIT_RPM:-30}
     depends_on:
       backend: {condition: service_healthy}
@@ -87,7 +86,7 @@ services:
   keycloak:
     image: quay.io/keycloak/keycloak:24.0.5
     restart: unless-stopped
-    ports: ["8080:8443"]
+    ports: ["127.0.0.1:8080:8080", "127.0.0.1:8443:8443"]
     environment:
       KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?Set KEYCLOAK_ADMIN_PASSWORD in deployment environment}
@@ -165,7 +164,7 @@ services:
   nginx:
     image: nginx:alpine
     restart: unless-stopped
-    ports: ["443:443"]
+    ports: ["127.0.0.1:9443:443", "127.0.0.1:9880:80"]
     volumes:
       - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ${TLS_CERT:?Set TLS_CERT in deployment environment}:/etc/nginx/ssl/cert.pem:ro

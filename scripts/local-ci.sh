@@ -31,5 +31,6 @@ export no_proxy="*"
 # Production continuity contract and checkpoint integrity regressions.
 "${PYTHON:-python3}" scripts/validate_production_continuity.py
 "${PYTHON:-python3}" -m pytest -q tests/test_production_continuity.py
+"${PYTHON:-python3}" -m pytest -q tests/test_bridge_server.py tests/test_sovereign_api_provider.py tests/test_local_inference_health.py
 
 exec "${PYTHON:-python3}" scripts/run-local-ci.py --ci-name "${SG_CI_NAME:-ara-hardened-unit-ci-local}" "$@"

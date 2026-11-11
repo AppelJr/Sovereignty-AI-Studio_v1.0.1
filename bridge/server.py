@@ -21,7 +21,6 @@ import os
 import pathlib
 import sys
 import time
-import urllib.request
 
 try:
     from websockets.asyncio.server import serve
@@ -39,10 +38,6 @@ else:
 
 PORT = int(os.environ.get("SG_PORT", 9897))
 HOST = os.environ.get("SG_HOST", "localhost")
-SOVEREIGN_API_URL = os.environ.get(
-    "SOVEREIGN_API_URL", "http://localhost:9897/api/ai"
-).rstrip("/")
-
 ROOT_DIR = pathlib.Path(__file__).resolve().parent.parent
 LOGS_DIR = ROOT_DIR / "logs"
 LOGS_DIR.mkdir(exist_ok=True)
@@ -116,6 +111,8 @@ class BridgeServer:
         self.clients: set = set()
         self._server = None
         self._stopping = False
+        self._sovereign_bridge = None
+        self._inference_lock = asyncio.Lock()
 
         # Memory
         MemoryStore, MemoryHydrator = _try_import_memory()
@@ -168,108 +165,73 @@ class BridgeServer:
     # AI routing
     # ------------------------------------------------------------------
 
-    async def _chat_sovereign(self, msg: str, sys_prompt: str, agent: str = "sovereign") -> str:
-        """Route to the local sovereign AI bridge — no external SaaS."""
-        try:
+    def _get_sovereign_bridge(self):
+        """Create one provider registry per server; retain loaded models across requests."""
+        if self._sovereign_bridge is None:
             from ai_core.sovereign_bridge import SovereignBridge
+            self._sovereign_bridge = SovereignBridge()
+        return self._sovereign_bridge
 
-            bridge = SovereignBridge()
+    def _inference_health(self) -> dict:
+        """Report configured and loaded model state without triggering model loads."""
+        try:
+            providers = self._get_sovereign_bridge().health()
+            configured = any(item.get("ok") for item in providers.values())
+            loaded = any(item.get("ok") and item.get("loaded") for item in providers.values())
+            return {
+                "configured": configured,
+                "loaded": loaded,
+                "ready": loaded,
+                "providers": providers,
+            }
+        except Exception as exc:  # noqa: BLE001
+            return {
+                "configured": False,
+                "loaded": False,
+                "ready": False,
+                "providers": {},
+                "error": type(exc).__name__,
+            }
+
+    async def _chat_sovereign(self, msg: str, sys_prompt: str, agent: str = "sovereign") -> str:
+        """Use one cached local provider registry; failure is terminal, with no HTTP fallback."""
+        try:
             messages = []
             if sys_prompt:
                 messages.append({"role": "system", "content": sys_prompt})
             messages.append({"role": "user", "content": msg})
-            return bridge.chat(messages)
-        except Exception as e:  # noqa: BLE001
-            log.warning("Sovereign bridge failed, falling back to HTTP: %s", e)
-
-        # HTTP fallback to the sovereign API endpoint
-        try:
-            messages = [{"role": "user", "content": msg}]
-            if sys_prompt:
-                messages.insert(0, {"role": "system", "content": sys_prompt})
-            body = json.dumps({
-                "messages": messages,
-                "max_tokens": 2048,
-                "context": {"agent": agent},
-            }).encode()
-            req = urllib.request.Request(
-                f"{SOVEREIGN_API_URL}/chat",
-                data=body,
-                headers={"Content-Type": "application/json"},
-                method="POST",
-            )
-            with urllib.request.urlopen(req, timeout=30) as r:
-                data = json.loads(r.read())
-                return (
-                    data.get("text")
-                    or data.get("response")
-                    or (data.get("choices", [{}])[0].get("message", {}).get("content", ""))
-                    or "[no response]"
+            async with self._inference_lock:
+                return await asyncio.to_thread(
+                    self._get_sovereign_bridge().chat,
+                    messages,
+                    context={"agent": agent},
                 )
-        except Exception as e:  # noqa: BLE001
-            log.error("Sovereign API error: %s", e)
-            return f"[Sovereign bridge error: {e}]"
+        except Exception as exc:  # noqa: BLE001
+            # Do not retry through a second endpoint or change transport implicitly.
+            log.error(
+                "Local sovereign inference unavailable; no fallback attempted (%s)",
+                type(exc).__name__,
+            )
+            return f"[Sovereign bridge error: {type(exc).__name__}]"
 
-    async def ai_chat(self, ws, msg: str, agent: str, context: str, system: str = "", session: str = "default"):
-        sys_prompt = system or (
-            "You are a sovereign AI assistant running entirely on self-hosted infrastructure. "
-            "No data leaves the network. Be precise and production-ready. "
-            "Never fabricate data, and cite uncertainty when unsure."
-        )
-
-        # Persist user message to memory (best-effort: init if not yet done)
-        if self.hydrator:
-            try:
-                if self.memory:
-                    await self.memory.ensure_initialized()
-                await self.hydrator.persist_message(session, "user", msg, agent)
-            except Exception as e:
-                log.debug("Memory persist (user) skipped: %s", e)
-
-        reply = await self._chat_sovereign(msg, sys_prompt, agent)
-
-        # Provider failure is a failure, never a successful assistant response.
-        if reply.startswith("[Sovereign bridge error:"):
-            await self.send(ws, {
-                "type": "ai_error",
-                "agent": agent,
-                "error": reply,
-                "ts": int(time.time() * 1000),
-            })
-            return
-
-        # Persist AI reply to memory
-        if self.hydrator:
-            try:
-                await self.hydrator.persist_message(session, "assistant", reply, agent)
-            except Exception as e:
-                log.debug("Memory persist (assistant) skipped: %s", e)
-
-        log.info("%s response: %s...", agent, reply[:50])
-
-        response_payload = {
-            "type": "ai_response",
-            "agent": agent,
-            "text": reply,
-            "context": context,
-            "hash": sha256(reply),
-            "ts": int(time.time() * 1000),
-        }
-        await self.send(ws, response_payload)
-        await self.broadcast_ai_response(agent, reply, context, exclude=ws)
-
-        # Publish to event bus
-        if self.bus:
-            await self.bus.publish("ai_response", {
-                "agent": agent,
-                "text": reply,
-                "session": session,
-                "context": context,
-            })
-
-    # ------------------------------------------------------------------
-    # Message handlers
-    # ------------------------------------------------------------------
+    async def ai_chat(
+        self,
+        ws,
+        msg: str,
+        agent: str = "sovereign",
+        context: str = "",
+        system: str = "",
+        session: str = "default",
+    ) -> None:
+        """Withhold direct chat until the governed output chain is connected."""
+        await self.send(ws, {
+            "type": "ai_error",
+            "error": "GOVERNED_CHAIN_NOT_CONNECTED",
+            "state": "YANK",
+            "action": "YANK",
+            "output_authorized": False,
+            "escrow_required": True,
+        })
 
     async def _handle_memory_query(self, ws, message: dict) -> None:
         """Handle memory_query messages from clients."""
@@ -424,12 +386,11 @@ class BridgeServer:
                 mtype = message.get("type", "")
 
                 if mtype == "ai_chat":
-                    agent = message.get("agent", "claude")
-                    msg = message.get("message", "")
-                    context = message.get("context", "")
-                    system = message.get("system", "")
-                    session = message.get("session", "default")
-                    asyncio.create_task(self.ai_chat(ws, msg, agent, context, system, session))
+                    # Direct chat is not an authorized output path. Until the
+                    # governed Council/Judge/Release chain is bound, withhold.
+                    await self.ai_chat(ws, message.get("message", ""), message.get("agent", "sovereign"),
+                                        message.get("context", ""), message.get("system", ""),
+                                        message.get("session", "default"))
 
                 elif mtype == "memory_query":
                     asyncio.create_task(self._handle_memory_query(ws, message))
@@ -460,6 +421,7 @@ class BridgeServer:
                         "tokens": self.tokens.status() if self.tokens else None,
                         "bus": self.bus.status() if self.bus else None,
                         "bridge_watcher": self.bridge_watcher.status() if self.bridge_watcher else None,
+                        "inference": self._inference_health(),
                         "ts": int(time.time() * 1000),
                     }
                     await self.send(ws, status)

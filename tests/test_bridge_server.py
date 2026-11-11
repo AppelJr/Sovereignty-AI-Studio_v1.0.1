@@ -66,41 +66,24 @@ async def test_broadcast_ai_response_excludes_origin():
 
 
 @pytest.mark.asyncio
-async def test_ai_chat_returns_sovereign_bridge_response(monkeypatch):
-    """ai_chat should return a response routed through the sovereign bridge."""
+async def test_ai_chat_withholds_output_until_governed_chain_is_connected(monkeypatch):
     srv = bridge.BridgeServer()
     ws = WSTransport()
 
-    async def real_sovereign(msg: str, sys_prompt: str, agent: str = "sovereign") -> str:
-        return "sovereign-response"
+    async def forbidden_candidate_generation(*_args, **_kwargs):
+        raise AssertionError("ungoverned candidate generation must not run")
 
-    monkeypatch.setattr(srv, "_chat_sovereign", real_sovereign)
-
+    monkeypatch.setattr(srv, "_chat_sovereign", forbidden_candidate_generation)
     await srv.ai_chat(ws, msg="hi", agent="sovereign", context="c1")
 
     assert len(ws.sent) == 1
     payload = ws.sent[0]
-    assert payload["type"] == "ai_response"
-    assert payload["agent"] == "sovereign"
-    assert payload["text"] == "sovereign-response"
-
-
-@pytest.mark.asyncio
-async def test_ai_chat_routes_through_sovereign_bridge(monkeypatch):
-    """ai_chat should always route through _chat_sovereign regardless of agent name."""
-    srv = bridge.BridgeServer()
-    ws = WSTransport()
-
-    async def real_sovereign(msg: str, sys_prompt: str, agent: str = "sovereign") -> str:
-        assert msg == "route this"
-        assert "sovereign" in sys_prompt.lower()
-        return "from-sovereign"
-
-    monkeypatch.setattr(srv, "_chat_sovereign", real_sovereign)
-
-    await srv.ai_chat(ws, msg="route this", agent="any-agent", context="ctx")
-
-    assert ws.sent[0]["text"] == "from-sovereign"
+    assert payload["type"] == "ai_error"
+    assert payload["state"] == "YANK"
+    assert payload["action"] == "YANK"
+    assert payload["error"] == "GOVERNED_CHAIN_NOT_CONNECTED"
+    assert payload["output_authorized"] is False
+    assert payload["escrow_required"] is True
 
 
 @pytest.mark.asyncio
@@ -119,3 +102,67 @@ async def test_stop_closes_clients_and_server():
     assert srv.clients == set()
     assert srv._server.closed is True
     assert srv._server.waited is True
+
+
+@pytest.mark.asyncio
+async def test_local_provider_failure_does_not_attempt_http_fallback(monkeypatch):
+    from ai_core import sovereign_bridge as sovereign_module
+
+    class FailingLocalBridge:
+        def chat(self, messages, **kwargs):
+            raise RuntimeError("local model unavailable")
+
+    monkeypatch.setattr(sovereign_module, "SovereignBridge", FailingLocalBridge)
+    srv = bridge.BridgeServer()
+    result = await srv._chat_sovereign("hello", "system", agent="devassist420")
+    assert result == "[Sovereign bridge error: RuntimeError]"
+
+
+def test_default_sovereign_provider_order_is_local_only(monkeypatch):
+    import importlib
+    from ai_core import sovereign_bridge as sovereign_module
+
+    monkeypatch.delenv("SOVEREIGN_PROVIDER_ORDER", raising=False)
+    importlib.reload(sovereign_module)
+    assert sovereign_module._DEFAULT_ORDER == ["local_gguf"]
+
+
+@pytest.mark.asyncio
+async def test_local_bridge_is_cached_and_inference_readiness_is_truthful(monkeypatch):
+    from ai_core import sovereign_bridge as sovereign_module
+
+    created = {"count": 0}
+
+    class CachedBridge:
+        def __init__(self):
+            created["count"] += 1
+            self.loaded = False
+
+        def health(self):
+            return {
+                "local_gguf": {
+                    "ok": True,
+                    "loaded": self.loaded,
+                    "provider": "local_gguf",
+                }
+            }
+
+        def chat(self, messages, **kwargs):
+            self.loaded = True
+            return "local-response"
+
+    monkeypatch.setattr(sovereign_module, "SovereignBridge", CachedBridge)
+    srv = bridge.BridgeServer()
+
+    before = srv._inference_health()
+    assert before["configured"] is True
+    assert before["loaded"] is False
+    assert before["ready"] is False
+
+    first = await srv._chat_sovereign("hello", "system")
+    second = await srv._chat_sovereign("again", "system")
+
+    assert first == "local-response"
+    assert second == "local-response"
+    assert created["count"] == 1
+    assert srv._inference_health()["ready"] is True

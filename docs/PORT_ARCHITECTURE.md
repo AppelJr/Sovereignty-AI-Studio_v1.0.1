@@ -4,6 +4,8 @@
 
 The runtime has three application-facing services. Port ownership is exclusive; do not start a second server on an assigned port.
 
+The ingress layer is separate from the three internal application services: production HTTPS/WSS is published on loopback port `9443`; development HTTP is published on loopback port `9880` and redirects to HTTPS when TLS certificates are configured. Neither ingress port is published on all interfaces by default.
+
 | Port | Canonical entrypoint | Service | Responsibility |
 |---:|---|---|---|
 | 9897 | python3_bridge.py | Python Bridge | AI inference adapters, local brain/memory, key lifecycle, audit, STT/TTS and backend WebSocket |
