@@ -53,16 +53,17 @@ jobs:
           python3 scripts/validate_production_continuity.py
           python3 -m pytest -q tests/test_production_continuity.py
 
+      - name: Run durable SCAR persistence and verification tests
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m pytest -q tests/test_scar_ledger.py tests/test_scar_durable.py
+
       - name: Run focused HeavyJudge and dual-gate tests
         shell: bash
         run: |
           set -Eeuo pipefail
-          python3 -m pytest -q \
-            backend/coordination/test_dual_gate_path.py \
-            tests/test_heavy_judge_gate.py \
-            tests/test_judge_composition.py \
-            tests/test_smart_provider_router.py \
-            tests/test_ai_router_dual_gate.py
+          python3 -m pytest -q backend/coordination/test_dual_gate_path.py tests/test_heavy_judge_gate.py tests/test_judge_composition.py tests/test_smart_provider_router.py tests/test_ai_router_dual_gate.py
 
       - name: Run owner-gated Node dispatcher integration tests
         shell: bash
