@@ -178,13 +178,23 @@ class AIRouter:
         if not isinstance(prompt, str) or not prompt.strip():
             raise ValueError("prompt must be a non-empty string")
 
-        # Gate 1 is deliberately before provider selection, health probing, or execution.
+        # Gate 1 checks request-wide capabilities only. Exact provider scope is
+        # checked immediately before each destination dispatch below; requiring
+        # every possible provider here would reject valid single-provider proofs
+        # before the first authorized provider can run.
+        route_scope = tuple(
+            item for item in self._required_scope
+            if item.casefold() == "provider:remote"
+            or not item.casefold().startswith("provider:")
+        )
+        if not route_scope:
+            raise DualGateDenied("pre-route Gate authorization failed: no request-wide scope")
         claims = authorize_before_route(
             authorization_proof,
             verification_key=self._verification_key,
             task_id=task_id,
             owner_id=self._owner_id,
-            required_scope=self._required_scope,
+            required_scope=route_scope,
         )
         self._append_evidence({
             "who": "DevAssist420",
@@ -219,11 +229,18 @@ class AIRouter:
             # Every destination, including a transport fallback, needs its own
             # exact provider + operation scope in the verified Gate proof.
             # A missing destination scope is terminal; it is never skipped.
-            authorize_provider_dispatch(
-                claims,
-                provider_id=provider_name,
-                operation="generate",
-            )
+            try:
+                authorize_provider_dispatch(
+                    claims,
+                    provider_id=provider_name,
+                    operation="generate",
+                )
+            except ProviderLaneDenied as exc:
+                # Keep the denial at the Gate boundary while preserving the
+                # provider-specific cause. This also applies to each fallback.
+                raise DualGateDenied(
+                    "pre-route Gate authorization failed for provider destination"
+                ) from exc
 
             self._append_evidence({
                 "who": "DevAssist420",
@@ -417,7 +434,7 @@ class AIRouter:
                 verification_key=self._verification_key,
                 expected_task_id=task_id,
                 expected_owner_id=self._owner_id,
-                required_scope=self._required_scope,
+                required_scope=route_scope,
                 evidence_sink=self._append_evidence,
                 memory_loaded=memory_loaded,
                 # This router's configured providers are remote APIs; the call used the network.
