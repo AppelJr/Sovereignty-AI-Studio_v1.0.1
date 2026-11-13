@@ -9,6 +9,7 @@ import pytest
 from app.services.ai_router import AIRouter, OutputWithheldError
 from backend.coordination.authorization_proof import issue_gate_authorization_proof
 from backend.coordination.evidence_adapter import SCARLedgerSink
+from backend.policy.provider_lane_policy import ProviderLane, ProviderLaneRegistry
 from backend.coordination.dual_gate_path import EvidenceAppendReceipt
 from sovereign.scar.ledger import SCARLedger
 from sovereign_core.heavy_judge import HeavyJudge
@@ -49,7 +50,8 @@ class ModelBackend:
 
 
 class Provider:
-    def __init__(self, result=None, error=None):
+    def __init__(self, result=None, error=None, name="xai"):
+        self.name = name
         self.result = result or {"text": "Rayleigh scattering explains the blue sky."}
         self.error = error
         self.calls = 0
@@ -89,7 +91,19 @@ def make_router(providers, *, action="PASS", evidence=None, memory_loaded=False,
         behavioral_judge=HeavyJudge(),
         evidence_sink=judge_events.append,
     )
-    router = AIRouter(providers=providers)
+    for provider_name, provider in providers.items():
+        provider.name = provider_name
+    lanes = ProviderLaneRegistry(tuple(
+        ProviderLane(
+            provider_id=name, enabled=True, connector_type="test",
+            credential_ref=f"test-secret://{name}", model_id="fixture-model",
+            allowed_data_classes=("PUBLIC",), allowed_operations=("GENERATE",),
+            allowed_resources=("public:completion",), jurisdiction="TEST",
+            retention_policy="fixture-only",
+        )
+        for name in providers
+    ))
+    router = AIRouter(providers=providers, lane_registry=lanes)
     raw_sink = evidence if evidence is not None else (lambda event: None)
 
     def acknowledged_sink(event):
