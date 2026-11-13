@@ -9,7 +9,7 @@ def test_gguf_health_requires_model_file_and_runtime(tmp_path, monkeypatch):
     assert result["ok"] is False
     assert result["model_exists"] is False
 
-    model = tmp_path / "qwen-test.gguf"
+    model = tmp_path / "devassist420-test.gguf"
     model.write_bytes(b"test-model-placeholder")
     monkeypatch.setattr(importlib.util, "find_spec", lambda name: object() if name == "llama_cpp" else None)
     configured = GGUFProvider(str(model))
