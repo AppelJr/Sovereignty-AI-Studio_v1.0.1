@@ -1,0 +1,57 @@
+{
+  "schema_version": "sovereignty.browser-extension/1.0",
+  "component_id": "duckduckgo-privacy-extension",
+  "display_name": "DuckDuckGo Privacy Extensions",
+  "role": "browser_privacy_extension",
+  "repository": {
+    "owner": "AppelJr",
+    "name": "duckduckgo-privacy-extension",
+    "url": "https://github.com/AppelJr/duckduckgo-privacy-extension",
+    "upstream": "https://github.com/duckduckgo/duckduckgo-privacy-extension",
+    "license_declared_by_upstream": "Apache-2.0",
+    "license_text_verified": false
+  },
+  "classification": "external",
+  "authority": false,
+  "browser_engine": false,
+  "standalone_browser": false,
+  "targets": {
+    "desktop": ["Firefox", "Chrome", "Edge", "Opera"],
+    "safari": {
+      "supported_by_this_repository": false,
+      "separate_upstream_project": "https://github.com/duckduckgo/privacy-essentials-safari"
+    },
+    "ios": {
+      "native_browser_included": false,
+      "deployment_requires": "A separately reviewed iOS Safari extension/app integration"
+    }
+  },
+  "build_requirements": {
+    "node": ">=20.16.0",
+    "npm": ">=10.0.0",
+    "network_dependent_dependencies_present": true,
+    "build_executed_by_sovereignty": false,
+    "dependency_install_authorized": false
+  },
+  "runtime_policy": {
+    "default_state": "BLOCKED",
+    "local_mode_auto_install": false,
+    "remote_updates_auto_fetch": false,
+    "extension_network_egress": "REQUIRE_OWNER_APPROVAL_AND_POLICY_REVIEW",
+    "browser_navigation_authority": false,
+    "identity_authority": false,
+    "gateone_authority": false,
+    "provider_dispatch_authority": false,
+    "may_emit_advisory_privacy_signals": true,
+    "signals_are_untrusted_external_evidence": true
+  },
+  "integration_requirements": [
+    "Verify the exact fork commit and Apache-2.0 license text before packaging or redistribution.",
+    "Review extension permissions, content scripts, service worker behavior, remote endpoints, update channels, and telemetry.",
+    "Bind extension installation and updates to owner-approved browser host policy.",
+    "Keep extension-originated data out of canonical policy and SCAR authority fields.",
+    "Require explicit approval for all network egress in LOCAL mode.",
+    "Do not represent this extension as a standalone browser or as an iOS browser engine."
+  ],
+  "status": "DECLARED_EXTERNAL_NOT_EXECUTABLE"
+}
