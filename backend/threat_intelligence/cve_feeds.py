@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from typing import Any, Callable, Iterable, Mapping, Sequence
 import re
 
-CVE_RE = re.compile(r"CVE-\\d{4}-\\d{4,}", re.I)
+CVE_RE = re.compile(r"CVE-\d{4}-\d{4,}", re.I)
 Fetcher = Callable[[str, str, Mapping[str, str] | None, Mapping[str, Any] | None], Any]
 
 
