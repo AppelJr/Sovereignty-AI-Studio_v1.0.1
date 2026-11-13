@@ -1,9 +1,8 @@
 """
 Sovereignty AI Studio — Sovereign Bridge (Python side)
-Routes all AI requests through self-hosted providers only.
-No external SaaS. No data leaves the infrastructure.
+Routes local inference through the DevAssist420 model participant.
+No external SaaS. Local GGUF is the default and does not use network transport.
 """
-
 from __future__ import annotations
 
 import os
@@ -13,28 +12,16 @@ from typing import Any, Dict, Generator, List, Optional
 
 logger = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------------
-# Provider registry. Default order is local-only; API transport requires explicit configuration.
-# ---------------------------------------------------------------------------
-_DEFAULT_ORDER = os.getenv(
-    "SOVEREIGN_PROVIDER_ORDER", "local_gguf"
-).split(",")
+# Local-only by default. Remote adapters require explicit owner configuration.
+_DEFAULT_ORDER = os.getenv("SOVEREIGN_PROVIDER_ORDER", "local_gguf").split(",")
 
 
 class ProviderError(RuntimeError):
-    """Raised when all providers fail."""
+    """Raised when all configured sovereign providers fail."""
 
 
 class SovereignBridge:
-    """
-    Abstract provider interface that routes AI requests to self-hosted models.
-
-    Instantiate once per application and reuse across requests:
-
-        bridge = SovereignBridge()
-        response = bridge.chat([{"role": "user", "content": "Hello"}],
-                               context={"userId": "u1", "orgId": "o1"})
-    """
+    """Route inference to explicitly configured sovereign model adapters."""
 
     def __init__(
         self,
@@ -46,17 +33,17 @@ class SovereignBridge:
     ):
         self._order = provider_order or _DEFAULT_ORDER
         self._cfg = {
-            "model_path": sovereign_model_path or os.getenv("SOVEREIGN_MODEL_PATH"),
+            "model_path": (
+                sovereign_model_path
+                or os.getenv("SOVEREIGN_DEVASSIST420_MODEL_PATH")
+                or os.getenv("SOVEREIGN_MODEL_PATH")
+            ),
             "onnx_path": sovereign_onnx_path or os.getenv("SOVEREIGN_ONNX_PATH"),
             "api_url": sovereign_api_url or os.getenv(
                 "SOVEREIGN_API_URL", "http://localhost:9898/api/ai"
             ),
         }
         self._providers: Dict[str, Any] = {}
-
-    # ------------------------------------------------------------------
-    # Public API
-    # ------------------------------------------------------------------
 
     def chat(
         self,
@@ -66,71 +53,56 @@ class SovereignBridge:
         max_tokens: int = 1200,
         stream: bool = False,
     ) -> str | Generator[str, None, None]:
-        """
-        Route a chat request through sovereign providers.
-
-        :param messages:   OpenAI-style message list
-                           [{"role": "user", "content": "..."}]
-        :param context:    Injection dict with userId, orgId, projectId
-        :param max_tokens: Response token limit
-        :param stream:     If True, return a string generator
-        :returns:          Full response string or generator of chunks
-        """
+        """Execute in configured order; local GGUF failures never fall back remotely."""
         context = context or {}
-        last_error: Optional[Exception] = None
-
         for provider_name in self._order:
             provider_name = provider_name.strip()
             try:
                 provider = self._get_provider(provider_name)
                 logger.info(
-                    "Trying provider=%s userId=%s orgId=%s",
+                    "Trying provider=%s model=%s",
                     provider_name,
-                    context.get("userId"),
-                    context.get("orgId"),
+                    getattr(provider, "model_id", "unspecified"),
                 )
-                result = provider.chat(
+                return provider.chat(
                     messages,
                     context=context,
                     max_tokens=max_tokens,
                     stream=stream,
                 )
-                return result
             except Exception as exc:  # noqa: BLE001
-                logger.warning("Provider %s failed: %s", provider_name, exc)
-                last_error = exc
-
-        raise ProviderError(
-            f"All sovereign providers exhausted. Last error: {last_error}"
-        )
+                logger.warning("Provider %s failed: %s", provider_name, type(exc).__name__)
+                # A local model failure is terminal: no implicit remote fallback.
+                if provider_name == "local_gguf":
+                    raise ProviderError(
+                        "DevAssist420 local inference unavailable; remote fallback denied"
+                    ) from exc
+                raise ProviderError(
+                    f"Configured sovereign provider {provider_name!r} failed"
+                ) from exc
+        raise ProviderError("No sovereign model providers are configured")
 
     def health(self) -> Dict[str, Any]:
-        """Return health status for all configured providers."""
+        """Report local readiness without downloading weights or probing a network."""
         status: Dict[str, Any] = {}
         for name in self._order:
             name = name.strip()
             try:
-                provider = self._get_provider(name)
-                status[name] = provider.health()
+                status[name] = self._get_provider(name).health()
             except Exception as exc:  # noqa: BLE001
-                status[name] = {"ok": False, "error": str(exc)}
+                status[name] = {"ok": False, "error_type": type(exc).__name__}
         return status
 
-    # ------------------------------------------------------------------
-    # Internal helpers
-    # ------------------------------------------------------------------
-
     def _get_provider(self, name: str) -> Any:
-        """Lazy-load and cache provider instances."""
         if name not in self._providers:
             self._providers[name] = self._load_provider(name)
         return self._providers[name]
 
     def _load_provider(self, name: str) -> Any:
         if name == "local_gguf":
-            from ai_core.providers.local_inference import GGUFProvider
+            from ai_core.providers.devassist420_model import DevAssist420ModelAdapter
 
-            return GGUFProvider(self._cfg["model_path"])
+            return DevAssist420ModelAdapter(self._cfg["model_path"])
         if name == "local_onnx":
             from ai_core.providers.local_inference import ONNXProvider
 
@@ -141,10 +113,6 @@ class SovereignBridge:
             return SovereignAPIProvider(self._cfg["api_url"])
         raise ValueError(f"Unknown sovereign provider: {name!r}")
 
-
-# ---------------------------------------------------------------------------
-# Usage tracking helper (thin wrapper — analytics module does the heavy lift)
-# ---------------------------------------------------------------------------
 
 def track_usage(
     user_id: str,
@@ -168,4 +136,4 @@ def track_usage(
     except ImportError:
         logger.debug("analytics.usage_tracker not available; skipping usage record")
     except Exception as exc:  # noqa: BLE001
-        logger.warning("Usage tracking failed: %s", exc)
+        logger.warning("Usage tracking failed: %s", type(exc).__name__)
