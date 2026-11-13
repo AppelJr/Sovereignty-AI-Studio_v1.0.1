@@ -18,7 +18,7 @@ from sovereign_core.judge_composition import ComposedHeavyJudge
 KEY = b"async-router-test-verification-key"
 OWNER = "owner-420"
 TASK = "task-async-1"
-SCOPE = ("provider:remote",)
+SCOPE = ("provider:remote", "provider:xai", "provider:anthropic", "provider:openai", "operation:generate")
 
 
 class Root:
@@ -312,3 +312,38 @@ def test_scar_adapter_accepts_normalized_dual_gate_event_and_preserves_5w1h():
     assert release.event_type == "OUTENV_RELEASE_AUTHORIZED"
     assert release.metadata["evidence"]["authorization"] == "gate-proof-async-test"
     assert release.metadata["evidence"]["result"] == "PASS"
+
+
+
+def test_provider_scope_is_rechecked_for_each_fallback_destination():
+    first = Provider(error=httpx.ConnectTimeout("network timeout"))
+    second = Provider()
+    router, _ = make_router({"xai": first, "anthropic": second})
+    restricted = issue_gate_authorization_proof(
+        proof_id="xai-only", owner_id=OWNER, task_id=TASK,
+        scope=("provider:xai", "operation:generate"),
+        decision="OWNER_AUTHORIZED", policy_hash="sha256:test-policy",
+        issued_at=100, expires_at=4_000_000_000, secret=KEY,
+    )
+    with pytest.raises(PermissionError, match="does not authorize"):
+        asyncio.run(router.chat(
+            "Explain the sky.", authorization_proof=restricted, task_id=TASK
+        ))
+    assert first.calls == 1
+    assert second.calls == 0
+
+
+def test_unselected_provider_cannot_be_called_without_its_own_scope():
+    provider = Provider()
+    router, _ = make_router({"xai": provider})
+    restricted = issue_gate_authorization_proof(
+        proof_id="no-xai-scope", owner_id=OWNER, task_id=TASK,
+        scope=("provider:anthropic", "operation:generate"),
+        decision="OWNER_AUTHORIZED", policy_hash="sha256:test-policy",
+        issued_at=100, expires_at=4_000_000_000, secret=KEY,
+    )
+    with pytest.raises(PermissionError, match="does not authorize"):
+        asyncio.run(router.chat(
+            "Explain the sky.", authorization_proof=restricted, task_id=TASK
+        ))
+    assert provider.calls == 0
