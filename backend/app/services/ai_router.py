@@ -26,6 +26,7 @@ from backend.coordination.dual_gate_path import (
     verify_before_release,
 )
 from sovereign_core.judge_composition import ComposedHeavyJudge
+from backend.policy.provider_lane_policy import authorize_provider_dispatch
 
 logger = logging.getLogger(__name__)
 PROVIDER_ORDER = ["xai", "anthropic", "openai"]
@@ -200,6 +201,14 @@ class AIRouter:
             provider = self._providers.get(provider_name)
             if provider is None:
                 continue
+            # Every destination, including a transport fallback, needs its own
+            # exact provider + operation scope in the verified Gate proof.
+            # A missing destination scope is terminal; it is never skipped.
+            authorize_provider_dispatch(
+                claims,
+                provider_id=provider_name,
+                operation="generate",
+            )
 
             self._append_evidence({
                 "who": "DevAssist420",
