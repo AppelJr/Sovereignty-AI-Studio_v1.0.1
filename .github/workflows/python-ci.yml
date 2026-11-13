@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - name: Checkout exact commit (native git, no external action)
+      - name: Checkout commit
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
