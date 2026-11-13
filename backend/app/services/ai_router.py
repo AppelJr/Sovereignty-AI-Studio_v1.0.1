@@ -26,7 +26,11 @@ from backend.coordination.dual_gate_path import (
     verify_before_release,
 )
 from sovereign_core.judge_composition import ComposedHeavyJudge
-from backend.policy.provider_lane_policy import authorize_provider_dispatch
+from backend.policy.provider_lane_policy import (
+    ProviderLaneDenied,
+    ProviderLaneRegistry,
+    authorize_provider_dispatch,
+)
 
 logger = logging.getLogger(__name__)
 PROVIDER_ORDER = ["xai", "anthropic", "openai"]
@@ -46,8 +50,10 @@ class AIRouter:
         self,
         *,
         providers: Mapping[str, Any] | None = None,
+        lane_registry: ProviderLaneRegistry | None = None,
     ) -> None:
         self._providers: dict[str, Any] = dict(providers or {})
+        self._lane_registry = lane_registry
         self.judge: ComposedHeavyJudge | None = None
         self._verification_key: bytes | None = None
         self._owner_id: str | None = None
@@ -201,6 +207,15 @@ class AIRouter:
             provider = self._providers.get(provider_name)
             if provider is None:
                 continue
+            # No configured lane registry means no external provider dispatch.
+            if not isinstance(self._lane_registry, ProviderLaneRegistry):
+                raise RuntimeError("Provider lane registry is unavailable; dispatch denied")
+            lane = self._lane_registry.get(provider_name)
+            connector_identity = getattr(provider, "name", None)
+            if not isinstance(connector_identity, str) or connector_identity.casefold() != lane.provider_id.casefold():
+                raise ProviderLaneDenied("connector identity does not match its provider lane")
+            if "GENERATE" not in {item.upper() for item in lane.allowed_operations}:
+                raise ProviderLaneDenied("provider lane policy does not permit generation")
             # Every destination, including a transport fallback, needs its own
             # exact provider + operation scope in the verified Gate proof.
             # A missing destination scope is terminal; it is never skipped.
