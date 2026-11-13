@@ -339,7 +339,7 @@ def test_provider_scope_is_rechecked_for_each_fallback_destination():
         decision="OWNER_AUTHORIZED", policy_hash="sha256:test-policy",
         issued_at=100, expires_at=4_000_000_000, secret=KEY,
     )
-    with pytest.raises(PermissionError, match="does not authorize"):
+    with pytest.raises(PermissionError, match="pre-route Gate authorization failed"):
         asyncio.run(router.chat(
             "Explain the sky.", authorization_proof=restricted, task_id=TASK
         ))
@@ -356,7 +356,7 @@ def test_unselected_provider_cannot_be_called_without_its_own_scope():
         decision="OWNER_AUTHORIZED", policy_hash="sha256:test-policy",
         issued_at=100, expires_at=4_000_000_000, secret=KEY,
     )
-    with pytest.raises(PermissionError, match="does not authorize"):
+    with pytest.raises(PermissionError, match="pre-route Gate authorization failed"):
         asyncio.run(router.chat(
             "Explain the sky.", authorization_proof=restricted, task_id=TASK
         ))
