@@ -1,5 +1,5 @@
 {
-  "version": "1.0.0",
+  "version": "1.0.1",
   "owner": "device-owner",
   "storage_root": "device-local",
   "network": "disabled",
@@ -10,7 +10,8 @@
     {"id":"local.openai_codex","name":"OpenAI ChatGPT Codex","role":"reasoning_and_coding","storage":"OpenAI ChatGPT Codex Local Storage","network":false},
     {"id":"local.grok","name":"X.AI Grok / Ara","role":"adversarial_review","storage":"X.AI Grok Local Storage","network":false},
     {"id":"local.duckai","name":"DuckAI","role":"privacy_research","storage":"DuckAI Local Storage","network":false},
-    {"id":"local.devassist420","name":"DevAssist420","role":"hybrid_coordination","storage":"DevAssist420 Local Hybrid Collaboration","network":false},
+    {"id":"local.devassist420","name":"DevAssist420","role":"device_local_router_policy_watchdog_scar_owner_alerts","storage":"DevAssist420 Local Hybrid Collaboration","network":false},
+    {"id":"local.devassist420_model","name":"DevAssist420 Local Model","role":"local_inference_council_participant","storage":"DevAssist420 Local Hybrid Collaboration","network":false},
     {"id":"local.sovereignty_ai","name":"Sovereignty AI","role":"owner_visible_router_and_council","storage":"Sovereignty AI","network":false}
   ],
   "wake_word": {
