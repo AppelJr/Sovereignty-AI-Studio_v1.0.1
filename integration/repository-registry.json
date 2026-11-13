@@ -156,6 +156,15 @@
       "contract_path": "SOVEREIGNTY_CHAIN_OF_COMMAND_CONSUMER.json"
     },
     {
+      "repository": "AppelJr/duckduckgo-privacy-extension",
+      "role": "browser_privacy_extension",
+      "description": "External DuckDuckGo browser privacy extension; not a browser engine and not an authority source",
+      "visibility": "public",
+      "integration_status": "DECLARED_EXTERNAL_NOT_EXECUTABLE",
+      "test_status": "NOT_RUN",
+      "contract_path": "integration/browser/duckduckgo-privacy-extension.json"
+    },
+    {
       "repository": "AppelJr/marketplace-fedramp-gov-data",
       "role": "compliance_reference_data",
       "description": "Compliance reference data only",
