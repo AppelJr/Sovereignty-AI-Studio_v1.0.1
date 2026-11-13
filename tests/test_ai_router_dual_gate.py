@@ -335,7 +335,7 @@ def test_provider_scope_is_rechecked_for_each_fallback_destination():
     router, _ = make_router({"xai": first, "anthropic": second})
     restricted = issue_gate_authorization_proof(
         proof_id="xai-only", owner_id=OWNER, task_id=TASK,
-        scope=("provider:xai", "operation:generate"),
+        scope=("provider:remote", "provider:xai", "operation:generate"),
         decision="OWNER_AUTHORIZED", policy_hash="sha256:test-policy",
         issued_at=100, expires_at=4_000_000_000, secret=KEY,
     )
@@ -352,7 +352,7 @@ def test_unselected_provider_cannot_be_called_without_its_own_scope():
     router, _ = make_router({"xai": provider})
     restricted = issue_gate_authorization_proof(
         proof_id="no-xai-scope", owner_id=OWNER, task_id=TASK,
-        scope=("provider:anthropic", "operation:generate"),
+        scope=("provider:remote", "provider:anthropic", "operation:generate"),
         decision="OWNER_AUTHORIZED", policy_hash="sha256:test-policy",
         issued_at=100, expires_at=4_000_000_000, secret=KEY,
     )
