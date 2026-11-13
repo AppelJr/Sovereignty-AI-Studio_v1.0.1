@@ -22,7 +22,7 @@ class BrowserIntegrationManifestTests(unittest.TestCase):
         policy = self.data["runtime_policy"]
         self.assertEqual(policy["default_state"], "BLOCKED")
         self.assertFalse(policy["local_mode_auto_install"])
-        self.assertFalse(policy["remote_updates_auto_fetch")
+        self.assertFalse(policy["remote_updates_auto_fetch"])
         self.assertEqual(
             policy["extension_network_egress"],
             "REQUIRE_OWNER_APPROVAL_AND_POLICY_REVIEW",
