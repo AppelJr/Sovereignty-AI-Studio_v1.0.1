@@ -9,6 +9,7 @@ import pytest
 from app.services.ai_router import AIRouter, OutputWithheldError
 from backend.coordination.authorization_proof import issue_gate_authorization_proof
 from backend.coordination.evidence_adapter import SCARLedgerSink
+from backend.policy.provider_lane_policy import ProviderLane, ProviderLaneRegistry
 from backend.coordination.dual_gate_path import EvidenceAppendReceipt
 from sovereign.scar.ledger import SCARLedger
 from sovereign_core.heavy_judge import HeavyJudge
@@ -18,7 +19,7 @@ from sovereign_core.judge_composition import ComposedHeavyJudge
 KEY = b"async-router-test-verification-key"
 OWNER = "owner-420"
 TASK = "task-async-1"
-SCOPE = ("provider:remote",)
+SCOPE = ("provider:remote", "provider:xai", "provider:anthropic", "provider:openai", "operation:generate")
 
 
 class Root:
@@ -49,7 +50,8 @@ class ModelBackend:
 
 
 class Provider:
-    def __init__(self, result=None, error=None):
+    def __init__(self, result=None, error=None, name="xai"):
+        self.name = name
         self.result = result or {"text": "Rayleigh scattering explains the blue sky."}
         self.error = error
         self.calls = 0
@@ -89,7 +91,19 @@ def make_router(providers, *, action="PASS", evidence=None, memory_loaded=False,
         behavioral_judge=HeavyJudge(),
         evidence_sink=judge_events.append,
     )
-    router = AIRouter(providers=providers)
+    for provider_name, provider in providers.items():
+        provider.name = provider_name
+    lanes = ProviderLaneRegistry(tuple(
+        ProviderLane(
+            provider_id=name, enabled=True, connector_type="test",
+            credential_ref=f"test-secret://{name}", model_id="fixture-model",
+            allowed_data_classes=("PUBLIC",), allowed_operations=("GENERATE",),
+            allowed_resources=("public:completion",), jurisdiction="TEST",
+            retention_policy="fixture-only",
+        )
+        for name in providers
+    ))
+    router = AIRouter(providers=providers, lane_registry=lanes)
     raw_sink = evidence if evidence is not None else (lambda event: None)
 
     def acknowledged_sink(event):
@@ -312,3 +326,38 @@ def test_scar_adapter_accepts_normalized_dual_gate_event_and_preserves_5w1h():
     assert release.event_type == "OUTENV_RELEASE_AUTHORIZED"
     assert release.metadata["evidence"]["authorization"] == "gate-proof-async-test"
     assert release.metadata["evidence"]["result"] == "PASS"
+
+
+
+def test_provider_scope_is_rechecked_for_each_fallback_destination():
+    first = Provider(error=httpx.ConnectTimeout("network timeout"))
+    second = Provider()
+    router, _ = make_router({"xai": first, "anthropic": second})
+    restricted = issue_gate_authorization_proof(
+        proof_id="xai-only", owner_id=OWNER, task_id=TASK,
+        scope=("provider:remote", "provider:xai", "operation:generate"),
+        decision="OWNER_AUTHORIZED", policy_hash="sha256:test-policy",
+        issued_at=100, expires_at=4_000_000_000, secret=KEY,
+    )
+    with pytest.raises(PermissionError, match="pre-route Gate authorization failed"):
+        asyncio.run(router.chat(
+            "Explain the sky.", authorization_proof=restricted, task_id=TASK
+        ))
+    assert first.calls == 1
+    assert second.calls == 0
+
+
+def test_unselected_provider_cannot_be_called_without_its_own_scope():
+    provider = Provider()
+    router, _ = make_router({"xai": provider})
+    restricted = issue_gate_authorization_proof(
+        proof_id="no-xai-scope", owner_id=OWNER, task_id=TASK,
+        scope=("provider:remote", "provider:anthropic", "operation:generate"),
+        decision="OWNER_AUTHORIZED", policy_hash="sha256:test-policy",
+        issued_at=100, expires_at=4_000_000_000, secret=KEY,
+    )
+    with pytest.raises(PermissionError, match="pre-route Gate authorization failed"):
+        asyncio.run(router.chat(
+            "Explain the sky.", authorization_proof=restricted, task_id=TASK
+        ))
+    assert provider.calls == 0

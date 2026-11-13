@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sovereignty.invalid/schemas/provider-lane.schema.json",
+  "title": "Sovereignty Independent Provider Lane",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "provider", "connector", "identity", "model", "policy", "limits", "audit"],
+  "properties": {
+    "schema_version": {"const": "sovereignty.provider-lane.v1"},
+    "provider": {
+      "type": "object", "additionalProperties": false,
+      "required": ["provider_id", "organization", "product", "enabled", "admission_status"],
+      "properties": {
+        "provider_id": {"type": "string", "minLength": 1, "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"},
+        "organization": {"type": "string", "minLength": 1},
+        "product": {"type": "string", "minLength": 1},
+        "enabled": {"type": "boolean"},
+        "admission_status": {"enum": ["PENDING", "APPROVED", "DISABLED", "REVOKED"]}
+      }
+    },
+    "connector": {
+      "type": "object", "additionalProperties": false,
+      "required": ["type", "endpoint_ref", "api_version", "connector_version", "timeout_seconds", "tls_required"],
+      "properties": {
+        "type": {"enum": ["api", "local", "custom"]},
+        "endpoint_ref": {"type": "string", "minLength": 1},
+        "api_version": {"type": "string", "minLength": 1},
+        "connector_version": {"type": "string", "minLength": 1},
+        "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 120},
+        "tls_required": {"const": true}
+      }
+    },
+    "identity": {
+      "type": "object", "additionalProperties": false,
+      "required": ["identity_id", "credential_ref", "credential_scope", "tenant_ref", "credential_sharing"],
+      "properties": {
+        "identity_id": {"type": "string", "minLength": 1},
+        "credential_ref": {"type": "string", "minLength": 1},
+        "credential_scope": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "tenant_ref": {"type": "string", "minLength": 1},
+        "credential_sharing": {"const": false}
+      }
+    },
+    "model": {
+      "type": "object", "additionalProperties": false,
+      "required": ["model_id", "capabilities", "max_input_tokens", "max_output_tokens"],
+      "properties": {
+        "model_id": {"type": "string", "minLength": 1},
+        "capabilities": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"enum": ["text", "vision", "audio", "embedding", "tool_proposal"]}},
+        "max_input_tokens": {"type": "integer", "minimum": 1},
+        "max_output_tokens": {"type": "integer", "minimum": 1}
+      }
+    },
+    "policy": {
+      "type": "object", "additionalProperties": false,
+      "required": ["allowed_data_classes", "allowed_operations", "allowed_resources", "denied_operations", "owner_approval_for", "jurisdiction", "retention_policy"],
+      "properties": {
+        "allowed_data_classes": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"enum": ["PUBLIC", "INTERNAL", "CONFIDENTIAL", "RESTRICTED"]}},
+        "allowed_operations": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"enum": ["GENERATE", "READ", "WRITE", "EXECUTE", "DELETE"]}},
+        "allowed_resources": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "denied_operations": {"type": "array", "uniqueItems": true, "items": {"enum": ["AUTHORIZE", "GRANT_PERMISSION", "MODIFY_POLICY", "EXECUTE", "DELETE"]}},
+        "owner_approval_for": {"type": "array", "uniqueItems": true, "items": {"enum": ["WRITE", "EXECUTE", "DELETE"]}},
+        "jurisdiction": {"type": "string", "minLength": 1},
+        "retention_policy": {"type": "string", "minLength": 1}
+      }
+    },
+    "limits": {
+      "type": "object", "additionalProperties": false,
+      "required": ["requests_per_minute", "max_cost_per_request", "retry_limit", "max_response_bytes"],
+      "properties": {
+        "requests_per_minute": {"type": "integer", "minimum": 1},
+        "max_cost_per_request": {"type": "number", "exclusiveMinimum": 0},
+        "retry_limit": {"type": "integer", "minimum": 0, "maximum": 5},
+        "max_response_bytes": {"type": "integer", "minimum": 1, "maximum": 10000000}
+      }
+    },
+    "audit": {
+      "type": "object", "additionalProperties": false,
+      "required": ["record_request_id", "record_provider_identity", "record_model_version", "record_connector_version", "record_policy_decision_id", "record_output_hash", "record_timestamp"],
+      "properties": {
+        "record_request_id": {"const": true},
+        "record_provider_identity": {"const": true},
+        "record_model_version": {"const": true},
+        "record_connector_version": {"const": true},
+        "record_policy_decision_id": {"const": true},
+        "record_output_hash": {"const": true},
+        "record_timestamp": {"const": true}
+      }
+    }
+  }
+}
